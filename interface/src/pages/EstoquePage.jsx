@@ -1,8 +1,12 @@
-export default function EstoquePage() {
+import EstoquePageLayout from "@/layouts/EstoquePageLayout"; 
+
+export default function HomePage() {
   return (
-    <div>
-      <h1>Página Estoque</h1>
-      <p>Bem-vindo ao estoque!</p>
-    </div>
+    <EstoquePageLayout title="Página Inicial">
+      <p>Conteúdo da Página Inicial.</p>
+      <p className="mt-4">
+        Agora o layout que está dentro deste div vai conseguir se esticar.
+      </p>
+    </EstoquePageLayout>
   );
 }

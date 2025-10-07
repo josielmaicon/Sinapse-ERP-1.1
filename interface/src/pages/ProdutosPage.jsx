@@ -1,8 +1,12 @@
-export default function ProdutosPage() {
+import ProdutosPageLayout from "@/layouts/ProdutosPageLayout"; 
+
+export default function ProtudosPage() {
   return (
-    <div>
-      <h1>Página de Produtos</h1>
-      <p>Bem-vindo a página de produtos!</p>
-    </div>
+    <ProdutosPageLayout title="Página Inicial">
+      <p>Conteúdo da Página Inicial.</p>
+      <p className="mt-4">
+        Agora o layout que está dentro deste div vai conseguir se esticar.
+      </p>
+    </ProdutosPageLayout>
   );
 }
