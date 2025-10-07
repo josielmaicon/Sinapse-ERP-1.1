@@ -23,7 +23,7 @@ import { cn } from "@/lib/utils";
 
 export function TopBar() {
   return (
-    <header className="w-full flex h-16 items-center justify-between border-b bg-background px-4 md:px-6">
+    <header className="w-full flex h-16 items-center justify-between px-4 md:px-6">
       {/* Parte Esquerda: Logo/Nome da Empresa */}
       <div className="flex items-center gap-2">
         <span className="text-lg font-semibold">Sinápse</span>
