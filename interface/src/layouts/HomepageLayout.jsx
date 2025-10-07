@@ -1,21 +1,24 @@
-import { Button } from "@/components/ui/button"; // Botão do shadcn
-
-// Este componente recebe um 'título' e 'children' (o conteúdo da página)
-export default function HomePageLayout({ title, children }) {
-  return (
-    <div className="container mx-auto px-4 py-6 md:px-6 md:py-8">
-      {/* Cabeçalho da Página */}
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold tracking-tight">{title}</h1>
-        
-        {/* Exemplo de um botão de ação */}
-        <Button>Adicionar Novo</Button>
-      </div>
-
-      {/* Conteúdo da Página */}
-      <div className="bg-card p-6 rounded-lg border shadow-sm">
-        {children}
-      </div>
-    </div>
-  );
+export default function HomePageLayout({ title, children }) { // Mudei para export nomeado para consistência
+  return (
+    // 1. Adicione o padding (p-2) aqui.
+    // 2. h-full garante que ele pegue a altura do <main>.
+    <div className="flex-1 p-2 flex flex-col">
+      {/* flex-grow faz o grid ocupar o espaço restante DENTRO do padding */}
+      <div className="flex-grow grid grid-cols-[0.6fr_0.4fr] gap-2">
+        {/* Coluna da Esquerda */}
+        <div className="grid grid-rows-[0.6fr_0.4fr] gap-2">
+          <div className="bg-card p-6 rounded-lg border">
+            {children}
+          </div>
+          <div className="bg-card p-6 rounded-lg border">
+            {/* Bloco 2 */}
+          </div>
+        </div>
+        {/* Coluna da Direita */}
+        <div className="bg-card p-6 rounded-lg border">
+          {/* Bloco 3 */}
+        </div>
+      </div>
+    </div>
+  );
 }
