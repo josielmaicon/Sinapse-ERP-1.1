@@ -7,7 +7,7 @@ function Table({
   ...props
 }) {
   return (
-    <div data-slot="table-container" className="relative w-full overflow-x-auto">
+    <div data-slot="table-container" className="relative w-full overflow-x-auto overflow-auto">
       <table
         data-slot="table"
         className={cn("w-full caption-bottom text-sm", className)}
@@ -24,7 +24,7 @@ function TableHeader({
     <thead
       data-slot="table-header"
       className={cn("[&_tr]:border-b", className)}
-      {...props} />
+      {...props} /> 
   );
 }
 

@@ -12,8 +12,8 @@ export default function HomePageLayout({
       <div className="flex-grow grid grid-cols-[0.6fr_0.4fr] gap-2">
         <div className="grid grid-rows-[0.6fr_0.4fr] gap-2">
           <CardContainer
-            title="Operações"
-            subtitle="Resumo geral das atividades"
+            title="Faturamento"
+            subtitle="Geral"
           >
             {TopRight}
           </CardContainer>

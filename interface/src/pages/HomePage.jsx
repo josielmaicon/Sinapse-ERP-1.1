@@ -1,4 +1,5 @@
 import HomePageLayout from "@/layouts/HomepageLayout"
+import BarChart from "@/components/ui/bar-chart"
 import {
   Table,
   TableBody,
@@ -19,7 +20,7 @@ export default function HomePage() {
 
   return (
     <HomePageLayout
-      TopRight={<div>Status Operações</div>}
+      TopRight={<BarChart />}
       BottomLeft={<div>Gráfico 1</div>}
       BottomRight={<div>Gráfico 2</div>}
       SideTop={
