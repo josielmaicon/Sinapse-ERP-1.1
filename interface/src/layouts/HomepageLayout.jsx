@@ -1,40 +1,44 @@
-export default function HomePageLayout({ 
-  title, 
-  TopRight, 
-  BottomLeft, 
-  BottomRight, 
-  SideTop, 
-  SideBottom 
+import CardContainer from "@/components/CardContainer"
+
+export default function HomePageLayout({
+  TopRight,
+  BottomLeft,
+  BottomRight,
+  SideTop,
+  SideBottom,
 }) {
   return (
     <div className="flex-1 p-2 pt-4 flex flex-col">
       <div className="flex-grow grid grid-cols-[0.6fr_0.4fr] gap-2">
-
         <div className="grid grid-rows-[0.6fr_0.4fr] gap-2">
-          <div className="bg-card p-6 rounded-lg border">
+          <CardContainer
+            title="Operações"
+            subtitle="Resumo geral das atividades"
+          >
             {TopRight}
-          </div>
+          </CardContainer>
 
           <div className="grid grid-cols-[1fr_1fr] gap-2">
-            <div className="bg-card p-6 rounded-lg border">
+            <CardContainer title="Gráfico 1" subtitle="Visão de desempenho">
               {BottomLeft}
-            </div>
-            <div className="bg-card p-6 rounded-lg border">
+            </CardContainer>
+
+            <CardContainer title="Gráfico 2" subtitle="Comparativo regional">
               {BottomRight}
-            </div>
+            </CardContainer>
           </div>
         </div>
 
         <div className="grid grid-rows-[1fr_1fr] gap-2">
-          <div className="bg-card p-6 rounded-lg border">
+          <CardContainer title="Resumo Diário" subtitle="Operação Por Operador">
             {SideTop}
-          </div>
-          <div className="bg-card p-6 rounded-lg border">
-            {SideBottom}
-          </div>
-        </div>
+          </CardContainer>
 
+          <CardContainer title="Status Operações" subtitle="Status por Unidade Federativa">
+            {SideBottom}
+          </CardContainer>
+        </div>
       </div>
     </div>
-  );
+  )
 }
