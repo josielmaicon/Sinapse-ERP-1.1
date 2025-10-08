@@ -22,22 +22,20 @@ export default function HomePage() {
     { id: 7, nome: "Lucas Martins", cargo: "Supervisor", status: "Ativo" },
     { id: 8, nome: "Patrícia Melo", cargo: "Financeiro", status: "Ativa" },
     { id: 9, nome: "Ricardo Gomes", cargo: "Operador", status: "Em treinamento" },
-    { id: 10, nome: "Sofia Ribeiro", cargo: "Operadora", status: "Ativa" },
-    { id: 1, nome: "Ana Paula", cargo: "Operadora", status: "Ativa" },
-    { id: 2, nome: "Carlos Souza", cargo: "Supervisor", status: "Em férias" },
-    { id: 3, nome: "Mariana Lima", cargo: "Financeiro", status: "Ativa" },
-    { id: 4, nome: "Jorge Dias", cargo: "Operador", status: "Ativa" },
-    { id: 5, nome: "Beatriz Costa", cargo: "RH", status: "Licença" },
-    { id: 6, nome: "Fernando Alves", cargo: "Operador", status: "Ativa" },
-    { id: 7, nome: "Lucas Martins", cargo: "Supervisor", status: "Ativo" },
-    { id: 8, nome: "Patrícia Melo", cargo: "Financeiro", status: "Ativa" },
-    { id: 9, nome: "Ricardo Gomes", cargo: "Operador", status: "Em treinamento" },
-    { id: 10, nome: "Sofia Ribeiro", cargo: "Operadora", status: "Ativa" },
+    { id: 11, nome: "Ana Paula", cargo: "Operadora", status: "Ativa" },
+    { id: 12, nome: "Carlos Souza", cargo: "Supervisor", status: "Em férias" },
+    { id: 13, nome: "Mariana Lima", cargo: "Financeiro", status: "Ativa" },
+    { id: 14, nome: "Jorge Dias", cargo: "Operador", status: "Ativa" },
+    { id: 15, nome: "Beatriz Costa", cargo: "RH", status: "Licença" },
+    { id: 16, nome: "Fernando Alves", cargo: "Operador", status: "Ativa" },
+    { id: 17, nome: "Lucas Martins", cargo: "Supervisor", status: "Ativo" },
+    { id: 18, nome: "Patrícia Melo", cargo: "Financeiro", status: "Ativa" },
+    { id: 19, nome: "Ricardo Gomes", cargo: "Operador", status: "Em treinamento" },
   ]
 
   return (
     <HomePageLayout
-      TopRight={<div>Gráfico principal</div>}
+      TopRight={<BarChart />}
       BottomLeft={<div>Gráfico 1</div>}
       BottomRight={<div>Gráfico 2</div>}
       SideTop={

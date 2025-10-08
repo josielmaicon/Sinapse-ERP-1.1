@@ -1,5 +1,3 @@
-"use client"
-
 import * as React from "react"
 import { Bar, BarChart, CartesianGrid, XAxis, LabelList } from "recharts"
 import {
@@ -50,7 +48,7 @@ export default function SimpleBarChart() {
       </div>
     
       {/* Gráfico */}
-      <ChartContainer config={chartConfig} className="min-h-[400px] w-full">
+      <ChartContainer config={chartConfig} className="w-full">
         <BarChart
           accessibilityLayer
           data={chartData}

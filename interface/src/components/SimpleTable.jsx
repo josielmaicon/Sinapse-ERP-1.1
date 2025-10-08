@@ -36,7 +36,7 @@ const TableHead = ({ className, ...props }) => (
 
 // A célula comum da tabela
 const TableCell = ({ className, ...props }) => (
-  <td className={cn("px-4 py-3 align-middle", className)} {...props} />
+  <td className={cn("px-4 py-2.5 align-middle", className)} {...props} />
 )
 
 export { Table, TableHeader, TableBody, TableRow, TableHead, TableCell }
