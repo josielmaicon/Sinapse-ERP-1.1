@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button"
 
 export default function CardContainer({ title, subtitle, children, onAction }) {
   return (
-    <div className="bg-card p-6 pt-4 rounded-xl border flex flex-col">
+    <div className="bg-card p-6 pt-4 rounded-xl border flex flex-col min-h-0">
       {/* Header */}
       <div className="flex justify-between items-start mb-4">
         <div>
@@ -25,7 +25,7 @@ export default function CardContainer({ title, subtitle, children, onAction }) {
       <hr className="border-border mb-4" />
 
       {/* Conteúdo principal */}
-      <div className="flex-1">{children}</div>
+      <div className="flex-1 overflow-y-auto h-full min-h-0">{children}</div>
     </div>
   )
 }

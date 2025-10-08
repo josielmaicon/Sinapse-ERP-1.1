@@ -125,4 +125,6 @@
     @apply text-[13px]
   }
 }
-
+    /* * {
+  border: 1px solid red !important;
+} */

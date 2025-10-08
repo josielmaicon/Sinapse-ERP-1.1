@@ -4,9 +4,9 @@ import routes from "@/routes.jsx";
 
 function App() {
   return (
-    <div className="min-h-screen flex flex-col bg-muted/40">
+    <div className="h-screen flex flex-col bg-muted/40">
       <TopBar />
-      <main className="flex-grow h-full flex">
+      <main className="flex-1 flex min-h-0">
         <Routes>
           {routes.map((route) => (
             <Route key={route.path} path={route.path} element={route.component} />

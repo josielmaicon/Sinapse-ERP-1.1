@@ -2,17 +2,13 @@ import * as React from "react"
 
 import { cn } from "@/lib/utils"
 
-function Table({
-  className,
-  ...props
-}) {
+function Table({ className, ...props }) {
   return (
-    <div data-slot="table-container" className="relative w-full h-full overflow-x-auto overflow-auto">
-      <table
-        data-slot="table"
-        className={cn("w-full caption-bottom text-sm", className)}
-        {...props} />
-    </div>
+    <table
+      data-slot="table"
+      className={cn("w-full caption-bottom text-sm", className)}
+      {...props} 
+    />
   );
 }
 
