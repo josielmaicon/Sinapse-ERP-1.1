@@ -45,9 +45,9 @@ export function TopBar() {
                       // A função no className nos dá o estado 'isActive'
                       className={({ isActive }) =>
                         cn(
-                          "group inline-flex h-9 w-max items-center justify-center gap-2 rounded-md bg-background px-4 py-2 text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground focus:outline-none disabled:pointer-events-none disabled:opacity-50",
+                          "group inline-flex h-9 w-max items-center justify-center gap-2 rounded-md px-6 py-2 text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground focus:outline-none disabled:pointer-events-none disabled:opacity-50",
                           // Se estiver ativo, aplique estas classes
-                          isActive && "bg-accent text-accent-foreground"
+                          isActive && "text-accent-foreground font-bold"
                         )
                       }
                     >

@@ -12,7 +12,7 @@ export default function HomePageLayout({
       
       {/* Coluna da Esquerda */}
       <div className="grid grid-rows-[0.6fr_0.4fr] gap-2 min-h-0">
-        <CardContainer title="Faturamento" subtitle="Geral">
+        <CardContainer title="Faturamento" subtitle="Visão Geral Mês/Dia">
           {TopRight}
         </CardContainer>
 
@@ -29,7 +29,7 @@ export default function HomePageLayout({
       {/* Coluna da Direita (AGORA CORRETA E SIMPLES) */}
       <div className="grid grid-rows-2 gap-2 min-h-0">
         {/* O CardContainer agora é robusto o suficiente para ser um filho direto do grid */}
-        <CardContainer title="Resumo Diário" subtitle="Operação Por Operador">
+        <CardContainer title="Pontos de Venda" subtitle="Ativos no momento atual">
           {SideTop}
         </CardContainer>
         
