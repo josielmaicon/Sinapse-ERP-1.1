@@ -22,12 +22,12 @@ import {
 
 // 🧩 MOCK: Novos dados mais realistas para os PDVs
 const pdvData = [
-  { id: 1, name: "Caixa 01", operator: "Ana Paula", revenue: 2150.70, status: "aberto", statusDetail: "Em operação desde 08:02" },
-  { id: 2, name: "Caixa 02", operator: "Carlos Souza", revenue: 1840.25, status: "aberto", statusDetail: "Em operação desde 08:05" },
-  { id: 3, name: "Caixa 03", operator: "Mariana Lima", revenue: 0, status: "fechado", statusDetail: "Fechado desde ontem às 18:00" },
-  { id: 4, name: "Caixa 04", operator: "Jorge Dias", revenue: 1980.50, status: "aberto", statusDetail: "Em operação desde 09:15" },
-  { id: 5, name: "Caixa 05", operator: "N/D", revenue: 0, status: "fechado", statusDetail: "Inativo" },
-  { id: 6, name: "Self-Checkout", operator: "N/D", revenue: 950.80, status: "pausado", statusDetail: "Pausado para manutenção às 13:10" },
+  { id: 1, name: "Caixa 01", operator: "Ana Paula", inregister: 2150.70, status: "aberto", statusDetail: "Em operação desde 08:02" },
+  { id: 2, name: "Caixa 02", operator: "Carlos Souza", inregister: 1840.25, status: "aberto", statusDetail: "Em operação desde 08:05" },
+  { id: 3, name: "Caixa 03", operator: "Mariana Lima", inregister: 0, status: "fechado", statusDetail: "Fechado desde ontem às 18:00" },
+  { id: 4, name: "Caixa 04", operator: "Jorge Dias", inregister: 1980.50, status: "aberto", statusDetail: "Em operação desde 09:15" },
+  { id: 5, name: "Caixa 05", operator: "N/D", inregister: 0, status: "fechado", statusDetail: "Inativo" },
+  { id: 6, name: "Self-Checkout", operator: "N/D", inregister: 950.80, status: "pausado", statusDetail: "Pausado para manutenção às 13:10" },
 ];
 
 export default function PdvStatusTable() {
@@ -46,7 +46,7 @@ export default function PdvStatusTable() {
   }, [filter]);
 
   // Define as colunas da nossa nova tabela
-  const columns = ["PDV", "Operador", "Faturamento (R$)", ""]; // Coluna de status não tem título
+  const columns = ["PDV", "Operador", "Em caixa", ""]; // Coluna de status não tem título
 
   return (
     // TooltipProvider é necessário para os tooltips funcionarem
@@ -78,7 +78,7 @@ export default function PdvStatusTable() {
                 <TableRow key={item.id}>
                   <TableCell className="font-medium">{item.name}</TableCell>
                   <TableCell>{item.operator}</TableCell>
-                  <TableCell>{item.revenue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</TableCell>
+                  <TableCell>{item.inregister.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</TableCell>
                   <TableCell className="text-right">
                     <Tooltip>
                       <TooltipTrigger asChild>
