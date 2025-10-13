@@ -1,5 +1,6 @@
 import HomePageLayout from "@/layouts/HomepageLayout"
-import BarChart from "@/components/ui/bar-chart"
+import PdvRevenueChart from "@/components/PdvChart"
+
 import {
   Table,
   TableHeader,
@@ -35,7 +36,8 @@ export default function HomePage() {
 
   return (
     <HomePageLayout
-      TopRight={<BarChart />}
+      // ✅ Substitua o componente aqui
+      TopRight={<PdvRevenueChart/>}
       BottomLeft={<div>Gráfico 1</div>}
       BottomRight={<div>Gráfico 2</div>}
       SideTop={
