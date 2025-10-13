@@ -16,12 +16,9 @@ export default function HomePageLayout({
           {TopRight}
         </CardContainer>
 
-        <div className="grid grid-cols-2 gap-2 min-h-0">
-          <CardContainer title="Gráfico 1" subtitle="Visão de desempenho">
+        <div className="grid grid-cols-1 gap-2 min-h-0">
+          <CardContainer title="Perdas" subtitle="Níveis de atenção">
             {BottomLeft}
-          </CardContainer>
-          <CardContainer title="Gráfico 2" subtitle="Comparativo regional">
-            {BottomRight}
           </CardContainer>
         </div>
       </div>
@@ -33,7 +30,7 @@ export default function HomePageLayout({
           {SideTop}
         </CardContainer>
         
-        <CardContainer title="Status Operações" subtitle="Status por Unidade Federativa">
+        <CardContainer title="Mais Vendidos" subtitle="Ranking do período atual">
           {SideBottom}
         </CardContainer>
       </div>

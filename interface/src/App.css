@@ -158,3 +158,8 @@
     scrollbar-color: hsl(var(--muted-foreground)) transparent;
   }
 }
+
+.flex, .grid {
+  min-height: 0;
+  min-width: 0;
+}
