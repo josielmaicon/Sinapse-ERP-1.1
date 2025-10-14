@@ -6,12 +6,13 @@ import { ptBR } from "date-fns/locale"
 import { Calendar as CalendarIcon, ArrowUp, ArrowDown } from "lucide-react"
 import {
   Area,
-  AreaChart,
+  ComposedChart, // ✅ MUDANÇA: Usando ComposedChart
   CartesianGrid,
   XAxis,
   YAxis,
   Tooltip,
   ResponsiveContainer,
+  Line,
 } from "recharts"
 
 import { cn } from "@/lib/utils"
@@ -69,7 +70,7 @@ export default function PdvRevenueChart() {
     if (!filteredData || filteredData.length === 0) {
       return { totalRevenue: 0, percentageChange: 0, hasPreviousData: false }
     }
-    const totalRevenue = filteredData.reduce((acc, day) => acc + day.pdv1 + day.pdv2 + day.pdv3, 0)
+    const totalRevenue = filteredData.reduce((acc, day) => acc + (day.pdv1 || 0) + (day.pdv2 || 0) + (day.pdv3 || 0), 0)
     const firstDate = new Date(filteredData[0].date)
     const lastDate = new Date(filteredData[filteredData.length - 1].date)
     const duration = Math.round((lastDate - firstDate) / (1000 * 60 * 60 * 24))
@@ -82,7 +83,7 @@ export default function PdvRevenueChart() {
     if (prevPeriodData.length === 0) {
       return { totalRevenue, percentageChange: 0, hasPreviousData: false }
     }
-    const previousRevenue = prevPeriodData.reduce((acc, day) => acc + day.pdv1 + day.pdv2 + day.pdv3, 0)
+    const previousRevenue = prevPeriodData.reduce((acc, day) => acc + (day.pdv1 || 0) + (day.pdv2 || 0) + (day.pdv3 || 0), 0)
     if (previousRevenue === 0) {
       return { totalRevenue, percentageChange: totalRevenue > 0 ? 100 : 0, hasPreviousData: true }
     }
@@ -97,7 +98,6 @@ export default function PdvRevenueChart() {
 
   return (
     <div className="w-full h-full flex flex-col">
-      {/* ✅ ALTERAÇÃO 1: Título removido e filtros movidos para o cabeçalho */}
       <div className="flex flex-wrap items-center justify-start sm:justify-end gap-2 mb-4">
         <Select value={selectedPdv} onValueChange={setSelectedPdv}>
           <SelectTrigger className="w-[180px] h-9">
@@ -145,27 +145,26 @@ export default function PdvRevenueChart() {
       
       <div className="flex-grow flex flex-col min-w-0">
         
-        {/* ✅ ALTERAÇÃO 2: Título do faturamento removido e valor principal com mais destaque */}
-        <div className="flex items-baseline gap-2">
-          <p className="text-5xl font-regular tracking-tighter pl-5">
-            {stats.totalRevenue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-          </p>
-          {stats.hasPreviousData && (
-            <div className={cn(
-              "flex items-center text-sm font-semibold",
-              stats.percentageChange >= 0 ? "text-green-500" : "text-red-500"
-            )}>
-              {stats.percentageChange >= 0 ? <ArrowUp className="h-4 w-4" /> : <ArrowDown className="h-4 w-4" />}
-              <span>{stats.percentageChange.toFixed(1)}%</span>
-            </div>
-          )}
+        <div className="pl-5 pb-5">
+          <p className="text-sm text-muted-foreground">Faturamento Geral</p>
+          <div className="flex items-baseline gap-2">
+            <p className="text-6xl font-regular tracking-tighter">
+              {stats.totalRevenue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+            </p>
+            {stats.hasPreviousData && (
+              <div className={cn("flex items-center text-sm font-semibold", stats.percentageChange >= 0 ? "text-green-500" : "text-red-500")}>
+                {stats.percentageChange >= 0 ? <ArrowUp className="h-4 w-4" /> : <ArrowDown className="h-4 w-4" />}
+                <span>{stats.percentageChange.toFixed(1)}%</span>
+              </div>
+            )}
+          </div>
         </div>
         
-        <div className="w-full flex-grow relative mt-2">
+        <div className="w-full flex-grow relative">
           <ResponsiveContainer width="100%" height="100%">
-            {/* ✅ ALTERAÇÃO 3: Adicionamos aspect-auto para forçar a distorção do gráfico */}
             <ChartContainer config={chartConfig} className="h-full w-full aspect-auto">
-              <AreaChart data={filteredData} margin={{ top: 0, right: 10, left: -10, bottom: 0 }}>
+              {/* ✅ MUDANÇA: Usando ComposedChart para combinar Area e Line */}
+              <ComposedChart data={filteredData} margin={{ top: 5, right: 10, left: -20, bottom: 0 }}>
                 <defs>
                   {Object.keys(chartConfig).map((key) => (
                     <linearGradient key={key} id={`fill${key}`} x1="0" y1="0" x2="0" y2="1" >
@@ -176,10 +175,33 @@ export default function PdvRevenueChart() {
                 </defs>
                 <CartesianGrid vertical={false} />
                 <XAxis dataKey="date" tickLine={false} axisLine={false} tickMargin={8} tickFormatter={(value) => format(new Date(value), "dd/MM")} />
-                <YAxis tickFormatter={(value) => value.toLocaleString("pt-BR")} />
-                <Tooltip content={ <ChartTooltipContent formatter={(value, name) => [ value.toLocaleString("pt-BR", {style: "currency", currency: "BRL"}), chartConfig[name].label, ]} labelFormatter={(label) => format(new Date(label), "PPP", { locale: ptBR })} indicator="dot" /> } />
-                {pdvsToDisplay.map((pdvKey) => ( <Area key={pdvKey} dataKey={pdvKey} type="natural" fill={`url(#fill${pdvKey})`} stroke={chartConfig[pdvKey].color} stackId="a" /> ))}
-              </AreaChart>
+                <YAxis tickFormatter={(value) => value.toLocaleString("pt-BR")} tickLine={false} axisLine={false}/>
+                <Tooltip 
+                  cursor={false} 
+                  content={ <ChartTooltipContent 
+                    formatter={(value, name) => [ value.toLocaleString("pt-BR", {style: "currency", currency: "BRL"}), chartConfig[name].label ]} 
+                    labelFormatter={(label) => format(new Date(label), "PPP", { locale: ptBR })}
+                  /> } 
+                />
+                
+                {pdvsToDisplay.map((pdvKey) => [
+                  <Area
+                    key={`${pdvKey}-area`} // Key única para a área
+                    type="linear"
+                    dataKey={pdvKey}
+                    fill={`url(#fill${pdvKey})`}
+                    stroke="none"
+                  />,
+                  <Line
+                    key={`${pdvKey}-line`} // Key única para a linha
+                    type="linear"
+                    dataKey={pdvKey}
+                    stroke={chartConfig[pdvKey].color}
+                    strokeWidth={2}
+                    dot={false}
+                  />
+                ])}
+              </ComposedChart>
             </ChartContainer>
           </ResponsiveContainer>
         </div>

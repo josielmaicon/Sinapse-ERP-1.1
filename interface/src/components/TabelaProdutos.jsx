@@ -3,7 +3,7 @@
 "use client"
 
 import * as React from "react"
-import { ChevronDown, Pencil, Trash2 } from "lucide-react"
+import { ChevronDown, Filter, Pencil, Trash2 } from "lucide-react"
 import {
   flexRender,
   getCoreRowModel,
@@ -18,6 +18,12 @@ import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
   DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import {
@@ -27,7 +33,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-// ✅ 1. Importe os componentes da Menubar
 import {
   Menubar,
   MenubarContent,
@@ -51,7 +56,40 @@ import {
   PaginationLink,
   PaginationNext,
   PaginationPrevious,
+  PaginationEllipsis,
 } from "@/components/ui/pagination"
+
+// Helper para criar o range de paginação inteligente
+const DOTS = '...';
+const usePaginationRange = ({ totalPageCount, siblingCount = 1, currentPage }) => {
+  return React.useMemo(() => {
+    const totalPageNumbers = siblingCount + 5;
+    if (totalPageNumbers >= totalPageCount) {
+      return Array.from({ length: totalPageCount }, (_, i) => i + 1);
+    }
+    const leftSiblingIndex = Math.max(currentPage - siblingCount, 1);
+    const rightSiblingIndex = Math.min(currentPage + siblingCount, totalPageCount);
+    const shouldShowLeftDots = leftSiblingIndex > 2;
+    const shouldShowRightDots = rightSiblingIndex < totalPageCount - 2;
+    const firstPageIndex = 1;
+    const lastPageIndex = totalPageCount;
+
+    if (!shouldShowLeftDots && shouldShowRightDots) {
+      let leftItemCount = 3 + 2 * siblingCount;
+      let leftRange = Array.from({ length: leftItemCount }, (_, i) => i + 1);
+      return [...leftRange, DOTS, totalPageCount];
+    }
+    if (shouldShowLeftDots && !shouldShowRightDots) {
+      let rightItemCount = 3 + 2 * siblingCount;
+      let rightRange = Array.from({ length: rightItemCount }, (_, i) => totalPageCount - rightItemCount + i + 1);
+      return [firstPageIndex, DOTS, ...rightRange];
+    }
+    if (shouldShowLeftDots && shouldShowRightDots) {
+      let middleRange = Array.from({ length: rightSiblingIndex - leftSiblingIndex + 1 }, (_, i) => leftSiblingIndex + i);
+      return [firstPageIndex, DOTS, ...middleRange, DOTS, lastPageIndex];
+    }
+  }, [totalPageCount, siblingCount, currentPage]);
+};
 
 export function ProductDataTable({ columns, data }) {
   const [sorting, setSorting] = React.useState([])
@@ -70,15 +108,9 @@ export function ProductDataTable({ columns, data }) {
     getFilteredRowModel: getFilteredRowModel(),
     onRowSelectionChange: setRowSelection,
     onColumnVisibilityChange: setColumnVisibility,
-    state: {
-      sorting,
-      columnFilters,
-      rowSelection,
-      columnVisibility,
-    },
+    state: { sorting, columnFilters, rowSelection, columnVisibility },
   })
 
-  // ✅ 2. Lógica para controlar o estado dos menus com base na seleção
   const numSelected = Object.keys(rowSelection).length;
   const canEdit = numSelected === 1;
   const canActOnSelection = numSelected > 0;
@@ -87,64 +119,93 @@ export function ProductDataTable({ columns, data }) {
     const uniqueCategories = new Set(data.map(item => item.category));
     return ["Todas", ...Array.from(uniqueCategories)];
   }, [data]);
+  
+  const currentPage = table.getState().pagination.pageIndex + 1;
+  const totalPages = table.getPageCount();
+  const paginationRange = usePaginationRange({
+    totalPageCount: totalPages,
+    currentPage,
+  });
 
-  const handleAction = (action) => {
-    alert(`Ação: ${action}`);
-    // Futuramente, aqui você implementará a lógica de cada ação
-  };
+  const handleAction = (action) => { alert(`Ação: ${action}`) };
+  const handleFilter = (filter) => { alert(`Filtro selecionado: ${filter}`) };
 
   return (
     <div className="w-full h-full flex flex-col">
-      {/* ✅ 3. BARRA DE COMANDO COMPLETA (MENUBAR + FILTROS) */}
-      <div className="flex flex-col gap-4 py-4">
-        {/* ---- LINHA 1: MENUBAR ---- */}
+      <div className="flex flex-col items-start gap-4 py-2">
         <Menubar className="rounded-md border">
+          <MenubarMenu>
+            <MenubarTrigger>Arquivo</MenubarTrigger>
+            <MenubarContent>
+              <MenubarItem onClick={() => handleAction("Importar")}>Importar de Planilha...</MenubarItem>
+              <MenubarItem onClick={() => handleAction("Exportar CSV")}>Exportar para CSV...</MenubarItem>
+              <MenubarItem onClick={() => handleAction("Exportar PDF")}>Exportar para PDF...</MenubarItem>
+            </MenubarContent>
+          </MenubarMenu>
           <MenubarMenu>
             <MenubarTrigger>Produto</MenubarTrigger>
             <MenubarContent>
               <MenubarItem onClick={() => handleAction("Novo Produto")}>Novo Produto...</MenubarItem>
               <MenubarSeparator />
-              <MenubarItem disabled={!canEdit} onClick={() => handleAction("Editar")}>Editar</MenubarItem>
+              <MenubarItem disabled={!canEdit} onClick={() => handleAction("Editar")}>Editar...</MenubarItem>
+              <MenubarItem disabled={!canEdit} onClick={() => handleAction("Ver Histórico")}>Ver Histórico...</MenubarItem>
+              <MenubarItem disabled={!canEdit} onClick={() => handleAction("Duplicar")}>Duplicar...</MenubarItem>
             </MenubarContent>
           </MenubarMenu>
           <MenubarMenu>
             <MenubarTrigger>Ações em Lote</MenubarTrigger>
             <MenubarContent>
+              <MenubarItem disabled={!canActOnSelection} onClick={() => handleAction("Reajustar Preço")}>Reajustar Preço...</MenubarItem>
               <MenubarItem disabled={!canActOnSelection} onClick={() => handleAction("Criar Promoção")}>Criar Promoção...</MenubarItem>
               <MenubarItem disabled={!canActOnSelection} onClick={() => handleAction("Gerar Etiquetas")}>Gerar Etiqueta(s)</MenubarItem>
               <MenubarSeparator />
               <MenubarItem disabled={!canActOnSelection} className="text-red-500" onClick={() => handleAction("Excluir")}>Excluir Selecionado(s)</MenubarItem>
             </MenubarContent>
           </MenubarMenu>
-          <MenubarMenu>
-            <MenubarTrigger>Arquivo</MenubarTrigger>
-            <MenubarContent>
-              <MenubarItem>Exportar para CSV...</MenubarItem>
-            </MenubarContent>
-          </MenubarMenu>
         </Menubar>
 
-        {/* ---- LINHA 2: FILTROS ---- */}
-        <div className="flex items-center gap-4">
+        <div className="flex w-full items-center gap-2">
           <Input
             placeholder="Filtrar por nome..."
             value={(table.getColumn("name")?.getFilterValue()) ?? ""}
             onChange={(event) => table.getColumn("name")?.setFilterValue(event.target.value)}
             className="max-w-xs"
           />
-          <Select
-            onValueChange={(value) => {
+          <Select onValueChange={(value) => {
               const filterValue = value === "Todas" ? "" : value;
               table.getColumn("category")?.setFilterValue(filterValue);
             }}
           >
             <SelectTrigger className="w-[180px]">
-              <SelectValue placeholder="Filtrar por categoria" />
+              <SelectValue placeholder="Categoria" />
             </SelectTrigger>
             <SelectContent>
               {categories.map(category => (<SelectItem key={category} value={category}>{category}</SelectItem>))}
             </SelectContent>
           </Select>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" >
+                <Filter className="h-4 w-4 mr-2" />
+                Filtros
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start">
+              <DropdownMenuLabel>Filtros Avançados</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onSelect={() => handleFilter("Vencidos")}>Vencidos</DropdownMenuItem>
+              <DropdownMenuSub>
+                <DropdownMenuSubTrigger>Vão vencer</DropdownMenuSubTrigger>
+                <DropdownMenuSubContent>
+                  <DropdownMenuItem onSelect={() => handleFilter("Vence em 7 dias")}>Nos próximos 7 dias</DropdownMenuItem>
+                  <DropdownMenuItem onSelect={() => handleFilter("Vence em 15 dias")}>Nos próximos 15 dias</DropdownMenuItem>
+                  <DropdownMenuItem onSelect={() => handleFilter("Vence em 30 dias")}>Nos próximos 30 dias</DropdownMenuItem>
+                </DropdownMenuSubContent>
+              </DropdownMenuSub>
+              <DropdownMenuItem onSelect={() => handleFilter("Adicionados Recentemente")}>Adicionados Recentemente</DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline" className="ml-auto">
@@ -167,21 +228,24 @@ export function ProductDataTable({ columns, data }) {
         </div>
       </div>
 
+      {/* ---- AQUI COMEÇA A TABELA PREENCHIDA ---- */}
       <div className="flex-grow rounded-md border overflow-y-auto">
         <Table>
           <TableHeader>
             {table.getHeaderGroups().map((headerGroup) => (
               <TableRow key={headerGroup.id}>
-                {headerGroup.headers.map((header) => (
-                  <TableHead key={header.id}>
-                    {header.isPlaceholder
-                      ? null
-                      : flexRender(
-                          header.column.columnDef.header,
-                          header.getContext()
-                        )}
-                  </TableHead>
-                ))}
+                {headerGroup.headers.map((header) => {
+                  return (
+                    <TableHead key={header.id}>
+                      {header.isPlaceholder
+                        ? null
+                        : flexRender(
+                            header.column.columnDef.header,
+                            header.getContext()
+                          )}
+                    </TableHead>
+                  )
+                })}
               </TableRow>
             ))}
           </TableHeader>
@@ -194,10 +258,7 @@ export function ProductDataTable({ columns, data }) {
                 >
                   {row.getVisibleCells().map((cell) => (
                     <TableCell key={cell.id}>
-                      {flexRender(
-                        cell.column.columnDef.cell,
-                        cell.getContext()
-                      )}
+                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
                     </TableCell>
                   ))}
                 </TableRow>
@@ -216,10 +277,11 @@ export function ProductDataTable({ columns, data }) {
         </Table>
       </div>
 
+      {/* ---- AQUI COMEÇA O FOOTER PREENCHIDO ---- */}
       <div className="flex items-center justify-between py-4">
-        {/* ... O Footer continua igual, MAS OS BOTÕES DE AÇÃO FORAM REMOVIDOS DAQUI ... */}
         <div className="flex-1 text-sm text-muted-foreground">
-          {numSelected} de {table.getFilteredRowModel().rows.length} linha(s) selecionada(s).
+          {Object.keys(rowSelection).length} de{" "}
+          {table.getFilteredRowModel().rows.length} linha(s) selecionada(s).
         </div>
         <div className="flex-1">
           <Pagination>
@@ -229,30 +291,41 @@ export function ProductDataTable({ columns, data }) {
                   href="#"
                   onClick={(e) => { e.preventDefault(); table.previousPage(); }}
                   disabled={!table.getCanPreviousPage()}
-                />
+                  isActive={table.getCanPreviousPage()}
+                >
+                  Anterior
+                </PaginationPrevious>
               </PaginationItem>
-              {/* Lógica para mostrar os números das páginas (simplificada) */}
-              {[...Array(table.getPageCount()).keys()].map(page => (
-                 <PaginationItem key={page}>
+              {paginationRange.map((pageNumber, index) => {
+                if (pageNumber === DOTS) {
+                  return <PaginationItem key={`dots-${index}`}><PaginationEllipsis /></PaginationItem>;
+                }
+                return (
+                  <PaginationItem key={pageNumber}>
                     <PaginationLink 
                       href="#" 
-                      onClick={(e) => { e.preventDefault(); table.setPageIndex(page); }}
-                      isActive={table.getState().pagination.pageIndex === page}
+                      onClick={(e) => { e.preventDefault(); table.setPageIndex(pageNumber - 1); }}
+                      isActive={currentPage === pageNumber}
                     >
-                      {page + 1}
+                      {pageNumber}
                     </PaginationLink>
-                 </PaginationItem>
-              ))}
+                  </PaginationItem>
+                );
+              })}
               <PaginationItem>
                 <PaginationNext
                   href="#"
                   onClick={(e) => { e.preventDefault(); table.nextPage(); }}
                   disabled={!table.getCanNextPage()}
-                />
+                  isActive={table.getCanNextPage()}
+                >
+                  Próximo
+                </PaginationNext>
               </PaginationItem>
             </PaginationContent>
-          </Pagination></div>
-        <div className="flex-1" /> {/* Div vazia para manter o alinhamento de 3 colunas */}
+          </Pagination>
+        </div>
+        <div className="flex-1" />
       </div>
     </div>
   )

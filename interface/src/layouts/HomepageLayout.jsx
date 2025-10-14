@@ -1,3 +1,4 @@
+import CardBodyNoTitle from "@/components/CardBodyNoTitle"
 import CardContainer from "@/components/CardContainer"
 
 export default function HomePageLayout({
@@ -12,9 +13,9 @@ export default function HomePageLayout({
       
       {/* Coluna da Esquerda */}
       <div className="grid grid-rows-[0.6fr_0.4fr] gap-2 min-h-0">
-        <CardContainer title="Faturamento" subtitle="Visão Geral Mês/Dia">
+        <CardBodyNoTitle>
           {TopRight}
-        </CardContainer>
+        </CardBodyNoTitle>
 
         <div className="grid grid-cols-1 gap-2 min-h-0">
           <CardContainer title="Perdas" subtitle="Níveis de atenção">
