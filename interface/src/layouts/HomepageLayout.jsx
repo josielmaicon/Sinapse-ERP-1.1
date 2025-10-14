@@ -35,7 +35,6 @@ export default function HomePageLayout({
           {SideBottom}
         </CardContainer>
       </div>
-
     </div>
   )
 }
