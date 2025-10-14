@@ -1,5 +1,6 @@
 import CardBody from "@/components/CardBody";
 import CardInfo from "@/components/CardInfo";
+import CardBodyNoTitle from "@/components/CardBodyNoTitle";
 
 export default function ProdutosPageLayout({ title, children, Card1, Card2, Card3, Card4, TabelaProdutos }) { // Mudei para export nomeado para consistência
   return (
@@ -12,7 +13,7 @@ export default function ProdutosPageLayout({ title, children, Card1, Card2, Card
                 <CardInfo mainvalue="16,02%" description="Descrição do container" subvalue="+16%">{Card4}</CardInfo>
             </div>
             <div className="flex-grow grid grid-cols-[2.5fr_1.5fr] gap-2">
-                <CardBody title="Container" subtitle="Descrição do container">{TabelaProdutos}</CardBody>
+                <CardBodyNoTitle title="Container" subtitle="Descrição do container">{TabelaProdutos}</CardBodyNoTitle>
             <div className="flex-grow grid grid-rows-[1fr_1fr] gap-2">
                 <CardBody title="Container" subtitle="Descrição do container"></CardBody>
                 <CardBody title="Container" subtitle="Descrição do container"></CardBody>

@@ -3,7 +3,7 @@
 "use client"
 
 import * as React from "react"
-import { Pencil, Trash2 } from "lucide-react" 
+import { ChevronDown, Pencil, Trash2 } from "lucide-react"
 import {
   flexRender,
   getCoreRowModel,
@@ -15,6 +15,28 @@ import {
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+// ✅ 1. Importe os componentes da Menubar
+import {
+  Menubar,
+  MenubarContent,
+  MenubarItem,
+  MenubarMenu,
+  MenubarSeparator,
+  MenubarTrigger,
+} from "@/components/ui/menubar"
+import {
   Table,
   TableBody,
   TableCell,
@@ -22,22 +44,20 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-// ✅ 1. Importe os componentes de paginação
 import {
   Pagination,
   PaginationContent,
-  PaginationEllipsis,
   PaginationItem,
   PaginationLink,
   PaginationNext,
   PaginationPrevious,
 } from "@/components/ui/pagination"
 
-
 export function ProductDataTable({ columns, data }) {
   const [sorting, setSorting] = React.useState([])
   const [columnFilters, setColumnFilters] = React.useState([])
   const [rowSelection, setRowSelection] = React.useState({})
+  const [columnVisibility, setColumnVisibility] = React.useState({})
 
   const table = useReactTable({
     data,
@@ -49,37 +69,102 @@ export function ProductDataTable({ columns, data }) {
     getSortedRowModel: getSortedRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
     onRowSelectionChange: setRowSelection,
+    onColumnVisibilityChange: setColumnVisibility,
     state: {
       sorting,
       columnFilters,
       rowSelection,
+      columnVisibility,
     },
   })
 
-  const numSelected = table.getFilteredSelectedRowModel().rows.length
+  // ✅ 2. Lógica para controlar o estado dos menus com base na seleção
+  const numSelected = Object.keys(rowSelection).length;
+  const canEdit = numSelected === 1;
+  const canActOnSelection = numSelected > 0;
 
-  const handleDelete = () => {
-    const selectedRows = table.getFilteredSelectedRowModel().rows;
-    const idsToDelete = selectedRows.map(row => row.original.id);
-    alert(`Excluir itens com IDs: ${idsToDelete.join(", ")}`);
-  }
-  
-  const handleEdit = () => {
-    const selectedRow = table.getFilteredSelectedRowModel().rows[0];
-    alert(`Editar item com ID: ${selectedRow.original.id}`);
-  }
+  const categories = React.useMemo(() => {
+    const uniqueCategories = new Set(data.map(item => item.category));
+    return ["Todas", ...Array.from(uniqueCategories)];
+  }, [data]);
+
+  const handleAction = (action) => {
+    alert(`Ação: ${action}`);
+    // Futuramente, aqui você implementará a lógica de cada ação
+  };
 
   return (
     <div className="w-full h-full flex flex-col">
-      <div className="flex items-center py-4">
-        <Input
-          placeholder="Filtrar por nome..."
-          value={(table.getColumn("name")?.getFilterValue()) ?? ""}
-          onChange={(event) =>
-            table.getColumn("name")?.setFilterValue(event.target.value)
-          }
-          className="max-w-sm"
-        />
+      {/* ✅ 3. BARRA DE COMANDO COMPLETA (MENUBAR + FILTROS) */}
+      <div className="flex flex-col gap-4 py-4">
+        {/* ---- LINHA 1: MENUBAR ---- */}
+        <Menubar className="rounded-md border">
+          <MenubarMenu>
+            <MenubarTrigger>Produto</MenubarTrigger>
+            <MenubarContent>
+              <MenubarItem onClick={() => handleAction("Novo Produto")}>Novo Produto...</MenubarItem>
+              <MenubarSeparator />
+              <MenubarItem disabled={!canEdit} onClick={() => handleAction("Editar")}>Editar</MenubarItem>
+            </MenubarContent>
+          </MenubarMenu>
+          <MenubarMenu>
+            <MenubarTrigger>Ações em Lote</MenubarTrigger>
+            <MenubarContent>
+              <MenubarItem disabled={!canActOnSelection} onClick={() => handleAction("Criar Promoção")}>Criar Promoção...</MenubarItem>
+              <MenubarItem disabled={!canActOnSelection} onClick={() => handleAction("Gerar Etiquetas")}>Gerar Etiqueta(s)</MenubarItem>
+              <MenubarSeparator />
+              <MenubarItem disabled={!canActOnSelection} className="text-red-500" onClick={() => handleAction("Excluir")}>Excluir Selecionado(s)</MenubarItem>
+            </MenubarContent>
+          </MenubarMenu>
+          <MenubarMenu>
+            <MenubarTrigger>Arquivo</MenubarTrigger>
+            <MenubarContent>
+              <MenubarItem>Exportar para CSV...</MenubarItem>
+            </MenubarContent>
+          </MenubarMenu>
+        </Menubar>
+
+        {/* ---- LINHA 2: FILTROS ---- */}
+        <div className="flex items-center gap-4">
+          <Input
+            placeholder="Filtrar por nome..."
+            value={(table.getColumn("name")?.getFilterValue()) ?? ""}
+            onChange={(event) => table.getColumn("name")?.setFilterValue(event.target.value)}
+            className="max-w-xs"
+          />
+          <Select
+            onValueChange={(value) => {
+              const filterValue = value === "Todas" ? "" : value;
+              table.getColumn("category")?.setFilterValue(filterValue);
+            }}
+          >
+            <SelectTrigger className="w-[180px]">
+              <SelectValue placeholder="Filtrar por categoria" />
+            </SelectTrigger>
+            <SelectContent>
+              {categories.map(category => (<SelectItem key={category} value={category}>{category}</SelectItem>))}
+            </SelectContent>
+          </Select>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" className="ml-auto">
+                Visualizar <ChevronDown className="ml-2 h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              {table.getAllColumns().filter((column) => column.getCanHide()).map((column) => (
+                <DropdownMenuCheckboxItem
+                  key={column.id}
+                  className="capitalize"
+                  checked={column.getIsVisible()}
+                  onCheckedChange={(value) => column.toggleVisibility(!!value)}
+                >
+                  {column.id}
+                </DropdownMenuCheckboxItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
       </div>
 
       <div className="flex-grow rounded-md border overflow-y-auto">
@@ -131,15 +216,11 @@ export function ProductDataTable({ columns, data }) {
         </Table>
       </div>
 
-      {/* ✅ 4. O footer foi completamente reconstruído */}
       <div className="flex items-center justify-between py-4">
-        {/* Esquerda: Itens selecionados */}
+        {/* ... O Footer continua igual, MAS OS BOTÕES DE AÇÃO FORAM REMOVIDOS DAQUI ... */}
         <div className="flex-1 text-sm text-muted-foreground">
-          {numSelected} de{" "}
-          {table.getFilteredRowModel().rows.length} linha(s) selecionada(s).
+          {numSelected} de {table.getFilteredRowModel().rows.length} linha(s) selecionada(s).
         </div>
-
-        {/* Centro: Nova Paginação */}
         <div className="flex-1">
           <Pagination>
             <PaginationContent>
@@ -170,22 +251,8 @@ export function ProductDataTable({ columns, data }) {
                 />
               </PaginationItem>
             </PaginationContent>
-          </Pagination>
-        </div>
-
-        {/* Direita: Botões de Ação Contextuais */}
-        <div className="flex-1 flex justify-end items-center gap-2">
-          {numSelected > 0 && (
-            <>
-              <Button variant="outline" size="sm" disabled={numSelected !== 1} onClick={handleEdit}>
-                <Pencil className="h-4 w-4 mr-2" /> Editar
-              </Button>
-              <Button variant="destructive" size="sm" onClick={handleDelete}>
-                <Trash2 className="h-4 w-4 mr-2" /> Excluir
-              </Button>
-            </>
-          )}
-        </div>
+          </Pagination></div>
+        <div className="flex-1" /> {/* Div vazia para manter o alinhamento de 3 colunas */}
       </div>
     </div>
   )
