@@ -91,7 +91,7 @@ const usePaginationRange = ({ totalPageCount, siblingCount = 1, currentPage }) =
   }, [totalPageCount, siblingCount, currentPage]);
 };
 
-export function ProductDataTable({ columns, data }) {
+export function ProductDataTable({ columns, data, onProductSelect }) {
   const [sorting, setSorting] = React.useState([])
   const [columnFilters, setColumnFilters] = React.useState([])
   const [rowSelection, setRowSelection] = React.useState({})
@@ -126,6 +126,19 @@ export function ProductDataTable({ columns, data }) {
     totalPageCount: totalPages,
     currentPage,
   });
+
+    React.useEffect(() => {
+    const selectedRows = table.getFilteredSelectedRowModel().rows;
+    if (onProductSelect) {
+      if (selectedRows.length === 1) {
+        // Se UMA linha for selecionada, envia os dados dela para o pai
+        onProductSelect(selectedRows[0].original);
+      } else {
+        // Se NENHUMA ou MAIS DE UMA for selecionada, envia 'null'
+        onProductSelect(null);
+      }
+    }
+  }, [rowSelection, table, onProductSelect]);
 
   const handleAction = (action) => { alert(`Ação: ${action}`) };
   const handleFilter = (filter) => { alert(`Filtro selecionado: ${filter}`) };
