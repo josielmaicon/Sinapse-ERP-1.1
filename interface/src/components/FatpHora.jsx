@@ -1,6 +1,6 @@
 "use client"
 
-import { Area, AreaChart, CartesianGrid, XAxis } from "recharts"
+import { Area, AreaChart, CartesianGrid, XAxis, YAxis} from "recharts"
 import {
   ChartContainer,
   ChartTooltip,
@@ -85,13 +85,13 @@ export default function HourlyRevenueChart() {
             minTickGap={24}
             />
 
-            {/* Eixo X */}
             <YAxis
-            dataKey="hour"
             tickLine={false}
             axisLine={false}
             tickMargin={8}
-            minTickGap={24}
+            tickFormatter={(value) =>
+                value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })
+            }
             />
 
             {/* Tooltip */}
