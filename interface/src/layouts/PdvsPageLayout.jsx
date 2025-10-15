@@ -18,7 +18,7 @@ export default function PdvsPageLayout({ HoldPrincipal, StatCard1, StatCard2, Hi
                 <CardBodyNoTitle title="Container" subtitle="Descrição do container">
                     <div className="grid grid-cols-[2fr_1fr] gap-2 h-full min-h-0">
                         <div className="grid grid-rows-[3fr_1fr] gap-2 min-h-0">
-                            <div className="bg-muted rounded-md flex items-center justify-center">
+                            <div className="rounded-md flex items-center justify-center">
                                 {HoldPrincipal}
                             </div>
                             <div className="grid grid-cols-[1fr_1fr] gap-2 min-h-0">
@@ -30,7 +30,7 @@ export default function PdvsPageLayout({ HoldPrincipal, StatCard1, StatCard2, Hi
                                 </div>
                             </div>
                         </div>
-                            <div className="bg-muted rounded-md flex items-center justify-center">
+                            <div className="border rounded-md flex items-center justify-center p-4">
                                 {HistoricoVendas}
                             </div>
                     </div>
