@@ -29,12 +29,13 @@ export default function ProductDossier({ product }) {
     : 0;
 
   return (
-    <div className="h-full flex flex-col gap-4">
-      
-      <h3 className="text-lg font-semibold">{product.name}</h3>
+    <div className="h-full flex flex-col gap-4 p-4">
 
-
-      <Separator />
+      <div className="flex-shrink-0">
+        <h3 className="text-lg font-semibold">{product.name}</h3>
+        <p className="text-sm text-muted-foreground">Descrição do Produto</p>
+        <Separator className="my-4" />
+      </div>
 
       <div className="flex flex-col gap-2">
           <h4 className="font-semibold text-md mb-1">Financeiro</h4>

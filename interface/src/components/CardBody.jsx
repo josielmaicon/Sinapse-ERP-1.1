@@ -14,7 +14,7 @@ export default function CardBody({ title, subtitle, children, onAction }) {
       <hr className="border-border mb-4" />
 
       {/* Conteúdo principal */}
-      <div className="flex-1">{children}</div>
+      <div className="flex-1 relative min-h-0">{children}</div>
     </div>
   )
 }
