@@ -11,6 +11,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Pagination, PaginationContent, PaginationItem, PaginationNext, PaginationPrevious } from "@/components/ui/pagination"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
+import { useNavigate } from "react-router-dom";
 
 // Importe as colunas
 import { pdvColumns } from "./ColunasPDV"
@@ -23,6 +24,7 @@ export function PdvDataTable({ data: pdvsData, operatorData, onPdvSelect }) {
     const [viewMode, setViewMode] = React.useState("pdvs");
     const [sorting, setSorting] = React.useState([]);
     const [selectedRow, setSelectedRow] = React.useState(null);
+    const navigate = useNavigate();
 
     const { columns, data } = React.useMemo(() => {
         return viewMode === "pdvs" 
@@ -54,6 +56,11 @@ export function PdvDataTable({ data: pdvsData, operatorData, onPdvSelect }) {
     const isCurrentMachineSelected = viewMode === "pdvs" && selectedRow?.id === CURRENT_MACHINE_PDV_ID;
     const numSelected = selectedRow ? 1 : 0;
     const buttonsDisabled = viewMode === "operadores" || numSelected === 0;
+
+    const handleOpenInterface = () => {
+            // A função 'navigate' nos leva para a rota definida no seu routes.jsx
+            navigate("/pontovenda");
+        };
 
     return (
         <TooltipProvider>
@@ -142,7 +149,7 @@ export function PdvDataTable({ data: pdvsData, operatorData, onPdvSelect }) {
                 {/* BOTÕES DE AÇÃO */}
                 <div className="flex-shrink-0 flex items-center justify-end gap-2 mt-2">
                   {isCurrentMachineSelected && (
-                    <Button size="sm" onClick={() => alert("Navegando...")}>
+                    <Button size="sm" onClick={handleOpenInterface}>
                       <ExternalLink className="h-4 w-4 mr-2" />
                       Abrir Interface
                     </Button>

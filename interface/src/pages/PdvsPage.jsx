@@ -1,5 +1,3 @@
-// src/pages/PdvsPage.jsx
-
 "use client"
 
 import * as React from "react"
