@@ -12,7 +12,7 @@ export default function HomePageLayout({
     <div className="flex-1 p-2 pt-4 grid grid-cols-[0.6fr_0.4fr] gap-2 min-h-0">
       
       {/* Coluna da Esquerda */}
-      <div className="grid grid-rows-[0.6fr_0.4fr] gap-2 min-h-0">
+      <div className="grid grid-rows-[0.7fr_0.3fr] gap-2 min-h-0">
         <CardBodyNoTitle>
           {TopRight}
         </CardBodyNoTitle>
