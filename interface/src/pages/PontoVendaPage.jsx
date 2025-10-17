@@ -5,6 +5,7 @@ import PosHeaderStatus from "@/components/Header2";
 import SaleResume from "@/components/subtotal";
 import PosSidePanel from "@/components/PainelLateral";
 import PosFooterStatus from "@/components/rodape";
+import Logo from "@/components/Logo";
 
 const mockCartItems = [
     { id: "7891000315517", name: "Leite Integral 1L", quantity: 2, unitPrice: 5.99, totalPrice: 11.98 },
@@ -20,7 +21,7 @@ export default function PontoVenda() {
 
   return (
     <ComprasPageLayout
-      Header1={<div>Nome e Versão</div>}
+      Header1={<Logo variant="full" size="180px" />}
       Header2={<PosHeaderStatus />}
       
       SidePanel={<PosSidePanel lastItem={lastItem} />}
