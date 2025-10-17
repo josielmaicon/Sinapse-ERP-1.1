@@ -9,7 +9,7 @@ export default function ComprasPageLayout({
   Resume
 }) {
   return (
-    <div className="font-mono flex-1 p-2 pt-4 flex flex-col h-full bg-muted">
+    <div className="font-mono flex-1 p-2 pt-4 flex flex-col h-full bg-[#0b5077]">
       <div className="grid flex-grow grid-rows-[0.2fr_1fr_0.2fr] gap-2 h-full min-h-0">
         <div className="grid flex-grow grid-cols-[4fr_6fr] gap-2 h-full min-h-0">
           <div className="bg-card p-4 flex items-center justify-center">
