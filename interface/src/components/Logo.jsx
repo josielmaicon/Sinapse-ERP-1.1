@@ -4,15 +4,20 @@ import clsx from "clsx"
 export default function Logo({
   variant = "full",
   color = "#055078",
-  size = "auto",
+  size = "auto", // compatibilidade antiga
+  width,         // controle de largura
+  height,        // controle de altura
   className,
   ...props
 }) {
+  const computedWidth = width || (size !== "auto" ? size : "auto")
+  const computedHeight = height || (size !== "auto" ? undefined : "auto")
+
   const commonProps = {
     xmlns: "http://www.w3.org/2000/svg",
     fill: color,
-    width: size,
-    height: size,
+    width: computedWidth,
+    height: computedHeight,
     className: clsx("select-none", className),
     ...props,
   }

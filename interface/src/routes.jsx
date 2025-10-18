@@ -11,6 +11,9 @@ const routes = [
   // { path: '/estoque', name: 'Estoque', component: <EstoquePage />, icon: Boxes, showInNav: true },
   { path: '/produtos', name: 'Produtos', component: <ProdutosPage />,showInNav: true },
   { path: '/pdvs', name: 'PDVs', component: <PdvsPage />, showInNav: true },
+  { path: '/pdvs', name: 'Fiscal', component: <PdvsPage />, showInNav: true },
+  { path: '/pdvs', name: 'Fornecedores', component: <PdvsPage />, showInNav: true },
+  { path: '/pdvs', name: 'Crediário', component: <PdvsPage />, showInNav: true },
   { path: '/pontovenda', name: 'Ponto de Venda', component: <PontoVendaPage />, showInNav: false },
 ];
 
