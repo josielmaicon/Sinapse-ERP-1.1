@@ -14,6 +14,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import Logo from "@/components/Logo";
 
 // 1. Importe seu arquivo de rotas
 import routes from "@/routes.jsx"; // Ajuste o caminho se necessário
@@ -45,13 +46,12 @@ export function TopBar() {
                       // A função no className nos dá o estado 'isActive'
                       className={({ isActive }) =>
                         cn(
-                          "group inline-flex h-9 w-max items-center justify-center gap-2 rounded-md px-6 py-2 text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground focus:outline-none disabled:pointer-events-none disabled:opacity-50",
+                          "group inline-flex h-9 w-max items-center justify-center gap-2 rounded-md px-6 py-2 text-[13px] font-medium transition-colors hover:bg-accent hover:text-accent-foreground focus:outline-none disabled:pointer-events-none disabled:opacity-50",
                           // Se estiver ativo, aplique estas classes
-                          isActive && "text-accent-foreground font-bold"
+                          isActive && "text-accent-foreground"
                         )
                       }
                     >
-                      <route.icon className="h-4 w-4" />
                       {route.name}
                     </NavLink>
                   </NavLink>
