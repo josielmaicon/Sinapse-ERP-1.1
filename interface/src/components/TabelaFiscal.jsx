@@ -132,7 +132,7 @@ export default function FiscalDataTable({ columns, data }) {
           {numSelected > 0 ? (
             <Button onClick={handleEmitSelected}>Emitir {numSelected} Selecionada(s)</Button>
           ) : (
-            <Button onClick={handleEmitAllPending}>Emitir Todas Pendentes</Button>
+            <Button onClick={handleEmitAllPending} className="min-h-0 min-w-0">Emitir Todas Pendentes</Button>
           )}
         </div>
       </div>

@@ -1,4 +1,5 @@
 import CardBody from "@/components/CardBody";
+import CardBodyNoTitle from "@/components/CardBodyNoTitle";
 import CardInfo from "@/components/CardInfo";
 
 export default function CrediarioPageLayout({ Card1, Card2, Card3, TabelaCredito, PainelLateral1, PainelLateral2 }) { // Mudei para export nomeado para consistência
@@ -12,9 +13,9 @@ export default function CrediarioPageLayout({ Card1, Card2, Card3, TabelaCredito
             </div>
             <div className="flex-grow grid grid-cols-[2.5fr_1.5fr] gap-2">
                 <CardBody title="Container" subtitle="Descrição do container">{TabelaCredito}</CardBody>
-            <div className="flex-grow grid grid-rows-[1fr_1fr] gap-2">
-                <CardBody title="Container" subtitle="Descrição do container">{PainelLateral1}</CardBody>
-                <CardBody title="Container" subtitle="Descrição do container">{PainelLateral2}</CardBody>
+            <div className="flex-grow grid grid-rows-[5fr_3fr] gap-2">
+                <CardBodyNoTitle>{PainelLateral1}</CardBodyNoTitle>
+                <CardBodyNoTitle>{PainelLateral2}</CardBodyNoTitle>
             </div>
             </div>
         </div>
