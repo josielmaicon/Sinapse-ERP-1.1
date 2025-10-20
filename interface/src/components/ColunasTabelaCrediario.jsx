@@ -6,11 +6,10 @@ import { ArrowUpDown } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Checkbox } from "@/components/ui/checkbox"
-import { format, isPast, parseISO } from "date-fns"
+import { format, isPast } from "date-fns"
 
 // Componente auxiliar para a Badge de status
 const StatusBadge = ({ status }) => {
-  // Supondo que você tenha uma variante 'success' na sua badge. Se não, use 'default'.
   const variant = status === "Em Dia" ? "success" : "destructive";
   return <Badge variant={variant}>{status}</Badge>;
 };
@@ -26,7 +25,6 @@ export const crediarioColumns = [
         }
         onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
         aria-label="Select all"
-        className="translate-y-[2px]"
       />
     ),
     cell: ({ row }) => (
@@ -34,7 +32,8 @@ export const crediarioColumns = [
         checked={row.getIsSelected()}
         onCheckedChange={(value) => row.toggleSelected(!!value)}
         aria-label="Select row"
-        className="translate-y-[2px]"
+        // ✅ Impede que o clique no checkbox acione o onClick da linha
+        onClick={(e) => e.stopPropagation()}
       />
     ),
     enableSorting: false,
@@ -56,10 +55,10 @@ export const crediarioColumns = [
   {
     accessorKey: "dueValue",
     header: ({ column }) => (
-      <Button variant="ghost" onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}>
-        Valor Devedor
-        <ArrowUpDown className="ml-2 h-4 w-4" />
-      </Button>
+        <Button variant="ghost" onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}>
+            Valor Devedor
+            <ArrowUpDown className="ml-2 h-4 w-4" />
+        </Button>
     ),
     cell: ({ row }) => {
       const amount = parseFloat(row.getValue("dueValue"))
@@ -69,14 +68,13 @@ export const crediarioColumns = [
   {
     accessorKey: "dueDate",
     header: ({ column }) => (
-      <Button variant="ghost" onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}>
-        Vencimento
-        <ArrowUpDown className="ml-2 h-4 w-4" />
-      </Button>
+        <Button variant="ghost" onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}>
+            Vencimento
+            <ArrowUpDown className="ml-2 h-4 w-4" />
+        </Button>
     ),
     cell: ({ row }) => {
         const date = new Date(row.getValue("dueDate"));
-        // Adiciona um dia à data de vencimento para a lógica de "vence hoje" vs "atrasado"
         const adjustedDate = new Date(date.valueOf() + 1000 * 3600 * 24); 
         const isOverdue = isPast(adjustedDate) && row.original.status !== "Em Dia";
         return (
