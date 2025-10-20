@@ -8,7 +8,7 @@ export default function PdvsPageLayout({ HoldPrincipal, StatCard1, StatCard2, St
                 <div>{StatCard1}</div>
                 <CardBodyNoTitle title="Lista PDVs" subtitle="Descrição do container">{ListaPDVs}</CardBodyNoTitle>
             </div>
-        <div className="flex-grow grid grid-rows-[1fr_3fr] gap-2">
+        <div className="flex-grow grid grid-rows-[1fr_4fr] gap-2">
             <div className="flex-grow grid grid-cols-[1fr_1fr] gap-2">
                 <div>{StatCard2}</div>
                 <div>{StatCard3}</div>
