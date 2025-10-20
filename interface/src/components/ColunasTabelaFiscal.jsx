@@ -11,7 +11,7 @@ import { format } from "date-fns"
 const StatusBadge = ({ status }) => {
   switch (status) {
     case "emitida":
-      return <Badge variant="success">Emitida</Badge>;
+      return <Badge variant="success" className="bg-green-500/80">Emitida</Badge>; // Supondo que você tenha uma variante 'success'
     case "pendente":
       return (
         <Badge variant="secondary" className="flex items-center gap-1">
@@ -22,7 +22,9 @@ const StatusBadge = ({ status }) => {
     case "nao_declarar":
       return <Badge variant="outline">Não Declarar</Badge>;
     case "rejeitada":
-        return <Badge variant="destructive">Rejeitada</Badge>;
+      return <Badge variant="destructive">Rejeitada</Badge>;
+    case "cancelada":
+        return <Badge variant="destructive" className="bg-orange-500/80">Cancelada</Badge>;
     default:
       return <Badge variant="secondary">{status}</Badge>;
   }
