@@ -24,7 +24,7 @@ const StatusBadge = ({ status }) => {
     case "rejeitada":
       return <Badge variant="destructive">Rejeitada</Badge>;
     case "cancelada":
-        return <Badge variant="destructive" className="bg-orange-500/80">Cancelada</Badge>;
+        return <Badge variant="destructive" className="bg-red-500/80">Cancelada</Badge>;
     default:
       return <Badge variant="secondary">{status}</Badge>;
   }
