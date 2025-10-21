@@ -88,7 +88,7 @@ export default function FiscalSummaryChart() {
 
             <Bar
               dataKey="issuedValue"
-              fill="hsl(var(--primary))"
+              fill="var(--chart-1)"
               radius={[4, 4, 0, 0]}
               maxBarSize={20}
             >

@@ -5,7 +5,7 @@ export default function CardInfo({ description, subvalue, children, mainvalue })
         <div>
         {description && (<p className="text-sm text-muted-foreground ">{description}</p>)}
             <div className="flex items-center gap-2 mt-1">
-                <h2 className="text-5xl font-bold leading-none">{mainvalue}</h2>
+                <h2 className="text-4xl font-bold tracking-tighter text-primary">{mainvalue}</h2>
                 {subvalue && (
                 <span className="text-lx text-base text-muted-foreground leading-none">
                     {subvalue}

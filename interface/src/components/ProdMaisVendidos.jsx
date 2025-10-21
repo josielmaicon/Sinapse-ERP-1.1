@@ -62,7 +62,7 @@ export default function TopProductsChart() {
               {/* ✅ Aqui a cor vem do ChartContainer */}
               <Bar
                 dataKey="totalSales"
-                fill="var(--color-totalSales)"
+                fill="var(--chart-1)"
                 radius={4}
                 barSize={25}
               >
@@ -70,7 +70,7 @@ export default function TopProductsChart() {
                   dataKey="name"
                   position="insideLeft"
                   offset={8}
-                  className="fill-[hsl(var(--primary-foreground))]"
+                  className="fill-background"
                   fontSize={12}
                 />
                 <LabelList

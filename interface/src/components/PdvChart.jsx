@@ -182,7 +182,7 @@ export default function PdvRevenueChart() {
       <div className="pl-5 pb-5">
         <p className="text-sm text-muted-foreground">Faturamento Geral</p>
         <div className="flex items-baseline gap-2">
-          <p className="text-6xl font-regular tracking-tighter">
+          <p className="text-4xl font-bold tracking-tighter text-primary">
             {stats.totalRevenue.toLocaleString("pt-BR", {
               style: "currency",
               currency: "BRL",

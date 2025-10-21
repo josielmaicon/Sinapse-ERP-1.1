@@ -10,7 +10,7 @@ export default function StatCard({ title, value, icon: Icon, description }) {
         <span>{title}</span>
       </div>
       <div className="text-center">
-        <div className="text-6xl font-bold tracking-tighter">
+        <div className="text-4xl font-bold tracking-tighter text-primary">
           {value}
         </div>
         <p className="text-xs text-muted-foreground mt-1">

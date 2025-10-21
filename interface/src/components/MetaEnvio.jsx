@@ -56,7 +56,7 @@ export default function MetaEnvio({ totalPurchased = 200000, totalIssued = 15000
       {/* SEÇÃO 1: VALOR COMPRADO (Sempre visível) */}
       <div>
         <p className="text-sm text-muted-foreground">Valor Comprado no Mês</p>
-        <p className="text-4xl font-bold tracking-tighter">
+        <p className="text-4xl font-bold tracking-tighter text-primary">
           {totalPurchased.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
         </p>
       </div>
