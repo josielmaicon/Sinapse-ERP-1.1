@@ -5,6 +5,7 @@ import PdvsPage from "@/pages/PdvsPage";
 import PontoVendaPage from "@/pages/PontoVendaPage";
 import FiscalPage from "./pages/FiscalPage";
 import CrediarioPage from "./pages/CrediarioPage";
+import LoginPage from "./pages/LoginPage";
 
 const routes = [
   // 2. Substitua a string pelo componente importado
@@ -15,6 +16,7 @@ const routes = [
   { path: '/fiscal', name: 'Fiscal', component: <FiscalPage />, showInNav: true },
   { path: '/crediario', name: 'Crediário', component: <CrediarioPage />, showInNav: true },
   { path: '/pontovenda', name: 'Ponto de Venda', component: <PontoVendaPage />, showInNav: false },
+  { path: '/login', name: 'Login', component: <LoginPage />, showInNav: false },
 ];
 
 export default routes;

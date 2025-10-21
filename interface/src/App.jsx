@@ -13,6 +13,7 @@ import PdvsPage from "@/pages/PdvsPage";
 import PontoVendaPage from "@/pages/PontoVendaPage";
 import FiscalPage from "./pages/FiscalPage";
 import CrediarioPage from "./pages/CrediarioPage";
+import LoginPage from "./pages/LoginPage";
 
 function App() {
   return (
@@ -29,6 +30,7 @@ function App() {
       {/* Grupo de rotas que usam o LAYOUT DE TELA CHEIA (sem TopBar) */}
       <Route element={<FullScreenLayout />}>
         <Route path="/pontovenda" element={<PontoVendaPage />} />
+        <Route path="/login" element={<LoginPage />} />
       </Route>
     </Routes>
   );
