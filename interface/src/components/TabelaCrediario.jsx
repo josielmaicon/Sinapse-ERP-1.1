@@ -3,18 +3,44 @@
 "use client"
 
 import * as React from "react"
-import { useReactTable, getCoreRowModel, getFilteredRowModel, getPaginationRowModel, getSortedRowModel, flexRender } from "@tanstack/react-table"
+import {
+  useReactTable,
+  getCoreRowModel,
+  getFilteredRowModel,
+  getPaginationRowModel,
+  getSortedRowModel,
+  flexRender,
+} from "@tanstack/react-table"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Pagination, PaginationContent, PaginationItem, PaginationNext, PaginationPrevious } from "@/components/ui/pagination"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table"
+import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationNext,
+  PaginationPrevious,
+} from "@/components/ui/pagination"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { XCircle } from "lucide-react"
 
 export function CrediarioDataTable({ columns, data, onClientSelect }) {
-  const [sorting, setSorting] = React.useState([]);
-  const [columnFilters, setColumnFilters] = React.useState([]);
-  const [rowSelection, setRowSelection] = React.useState({});
+  const [sorting, setSorting] = React.useState([])
+  const [columnFilters, setColumnFilters] = React.useState([])
+  const [rowSelection, setRowSelection] = React.useState({})
 
   const table = useReactTable({
     data,
@@ -27,74 +53,110 @@ export function CrediarioDataTable({ columns, data, onClientSelect }) {
     getFilteredRowModel: getFilteredRowModel(),
     onRowSelectionChange: setRowSelection,
     state: { sorting, columnFilters, rowSelection },
-  });
+  })
 
-  const isFiltered = table.getState().columnFilters.length > 0;
+  const isFiltered = table.getState().columnFilters.length > 0
 
+  // 🔁 Atualiza o cliente selecionado externamente
   React.useEffect(() => {
-    const selectedRows = table.getFilteredSelectedRowModel().rows;
+    const selectedRows = table.getFilteredSelectedRowModel().rows
     if (onClientSelect) {
-      onClientSelect(selectedRows.length === 1 ? selectedRows[0].original : null);
+      onClientSelect(selectedRows.length === 1 ? selectedRows[0].original : null)
     }
-  }, [rowSelection, onClientSelect, table]);
+  }, [rowSelection, onClientSelect, table])
+
+  // 🧠 Clique fora da tabela limpa a seleção
+  React.useEffect(() => {
+    const handleClickOutside = (event) => {
+      const clickedInsideTable = event.target.closest(".crediario-table-container")
+      const clickedInsidePanel = event.target.closest(".client-detail-panel")
+
+      // só limpa se não for na tabela nem no painel lateral
+      if (!clickedInsideTable && !clickedInsidePanel) {
+        table.resetRowSelection()
+      }
+    }
+
+    document.addEventListener("click", handleClickOutside)
+    return () => document.removeEventListener("click", handleClickOutside)
+  }, [table])
+
 
   return (
     <div className="w-full h-full flex flex-col">
-      {/* Barra de Ferramentas com Filtros */}
+      {/* 🔍 Barra de Filtros */}
       <div className="flex items-center gap-2 py-4">
         <Input
           placeholder="Buscar por nome ou CPF..."
-          value={(table.getColumn("clientName")?.getFilterValue()) ?? ""}
+          value={table.getColumn("clientName")?.getFilterValue() ?? ""}
           onChange={(event) =>
             table.getColumn("clientName")?.setFilterValue(event.target.value)
           }
           className="max-w-sm"
         />
-        <Select onValueChange={(value) => table.getColumn("status")?.setFilterValue(value === "todos" ? "" : value)}>
-            <SelectTrigger className="w-[180px]">
-                <SelectValue placeholder="Filtrar por Situação" />
-            </SelectTrigger>
-            <SelectContent>
-                <SelectItem value="todos">Todas as Situações</SelectItem>
-                <SelectItem value="Em Dia">Em Dia</SelectItem>
-                <SelectItem value="Atrasado">Atrasado</SelectItem>
-            </SelectContent>
+        <Select
+          onValueChange={(value) =>
+            table.getColumn("status")?.setFilterValue(value === "todos" ? "" : value)
+          }
+        >
+          <SelectTrigger className="w-[180px]">
+            <SelectValue placeholder="Filtrar por Situação" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="todos">Todas as Situações</SelectItem>
+            <SelectItem value="Em Dia">Em Dia</SelectItem>
+            <SelectItem value="Atrasado">Atrasado</SelectItem>
+          </SelectContent>
         </Select>
-        {/* Aqui você poderia adicionar o filtro por valor no futuro */}
 
         {isFiltered && (
-            <Button variant="ghost" onClick={() => table.resetColumnFilters()} className="h-10 px-2 lg:px-3">
-                Limpar Filtros
-                <XCircle className="ml-2 h-4 w-4" />
-            </Button>
+          <Button
+            variant="ghost"
+            onClick={() => table.resetColumnFilters()}
+            className="h-10 px-2 lg:px-3"
+          >
+            Limpar Filtros
+            <XCircle className="ml-2 h-4 w-4" />
+          </Button>
         )}
       </div>
 
-      <div className="flex-grow rounded-md border overflow-y-auto">
+      {/* 📋 Tabela de Clientes */}
+      <div className="crediario-table-container flex-grow rounded-md border overflow-y-auto">
         <Table>
           <TableHeader>
             {table.getHeaderGroups().map((headerGroup) => (
               <TableRow key={headerGroup.id}>
                 {headerGroup.headers.map((header) => (
                   <TableHead key={header.id}>
-                    {flexRender(header.column.columnDef.header, header.getContext())}
+                    {flexRender(
+                      header.column.columnDef.header,
+                      header.getContext()
+                    )}
                   </TableHead>
                 ))}
               </TableRow>
             ))}
           </TableHeader>
+
           <TableBody>
             {table.getRowModel().rows?.length ? (
               table.getRowModel().rows.map((row) => (
                 <TableRow
                   key={row.id}
                   data-state={row.getIsSelected() && "selected"}
-                  className="cursor-pointer"
-                  onClick={() => row.toggleSelected()}
+                  className="cursor-pointer select-none"
+                  onClick={() => {
+                    table.resetRowSelection() // limpa tudo
+                    row.toggleSelected(true)  // marca apenas essa
+                  }}
                 >
                   {row.getVisibleCells().map((cell) => (
                     <TableCell key={cell.id}>
-                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                      {flexRender(
+                        cell.column.columnDef.cell,
+                        cell.getContext()
+                      )}
                     </TableCell>
                   ))}
                 </TableRow>
@@ -110,23 +172,33 @@ export function CrediarioDataTable({ columns, data, onClientSelect }) {
         </Table>
       </div>
 
+      {/* 📄 Rodapé com Paginação */}
       <div className="flex items-center justify-between space-x-2 py-4">
         <div className="flex-1 text-sm text-muted-foreground">
-            {Object.keys(rowSelection).length} de{" "}
-            {table.getFilteredRowModel().rows.length} linha(s) selecionada(s).
+          {Object.keys(rowSelection).length} de{" "}
+          {table.getFilteredRowModel().rows.length} linha(s) selecionada(s).
         </div>
+
         <Pagination>
           <PaginationContent>
             <PaginationItem>
-              <PaginationPrevious href="#" onClick={() => table.previousPage()} disabled={!table.getCanPreviousPage()} />
+              <PaginationPrevious
+                href="#"
+                onClick={() => table.previousPage()}
+                disabled={!table.getCanPreviousPage()}
+              />
             </PaginationItem>
-            {/* Adicione a lógica de paginação com elipses aqui se necessário */}
+
             <PaginationItem>
-              <PaginationNext href="#" onClick={() => table.nextPage()} disabled={!table.getCanNextPage()} />
+              <PaginationNext
+                href="#"
+                onClick={() => table.nextPage()}
+                disabled={!table.getCanNextPage()}
+              />
             </PaginationItem>
           </PaginationContent>
         </Pagination>
       </div>
     </div>
-  );
+  )
 }
