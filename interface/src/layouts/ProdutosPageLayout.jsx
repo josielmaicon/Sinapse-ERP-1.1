@@ -2,7 +2,7 @@ import CardBody from "@/components/CardBody";
 import CardInfo from "@/components/CardInfo";
 import CardBodyNoTitle from "@/components/CardBodyNoTitle";
 
-export default function ProdutosPageLayout({ Card1, Card2, Card3, Card4, TabelaProdutos, PainelLateral1, PainelLateral2 }) { // Mudei para export nomeado para consistência
+export default function ProdutosPageLayout({ Card1, Card2, Card3, Card4, TabelaProdutos, PainelLateral, PainelLateral2 }) { // Mudei para export nomeado para consistência
   return (
     <div className="flex-1 p-2 pt-4 flex flex-col">  
         <div className="flex-grow grid grid-rows-[0.2fr_0.8fr] gap-2">
@@ -14,10 +14,7 @@ export default function ProdutosPageLayout({ Card1, Card2, Card3, Card4, TabelaP
             </div>
             <div className="flex-grow grid grid-cols-[2.5fr_1.5fr] gap-2">
                 <CardBodyNoTitle title="Container" subtitle="Descrição do container">{TabelaProdutos}</CardBodyNoTitle>
-            <div className="flex-grow grid grid-rows-[1fr_1fr] gap-2">
-                <CardBodyNoTitle title="Container" subtitle="Descrição do container">{PainelLateral1}</CardBodyNoTitle>
-                <CardBodyNoTitle title="Container" subtitle="Descrição do container">{PainelLateral2}</CardBodyNoTitle>
-            </div>
+                <CardBodyNoTitle title="Container" subtitle="Descrição do container">{PainelLateral}</CardBodyNoTitle>
             </div>
         </div>
     </div>

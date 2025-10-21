@@ -6,6 +6,7 @@ import ProductDossier from "@/components/DossieProduto";
 import MovementLog from "@/components/Movimentacoes";
 import { Divide } from "lucide-react";
 import MiniChart from "@/components/MiniChart";
+import ProductDetailPanel from "@/components/PainelDetalheProduto";
 
 const productData = [
   { id: "PROD-001", name: "Leite Integral 1L", category: "Laticínios", quantity: 150, daysUntilExpiry: 15, costPrice: 3.50, salePrice: 5.99, location: "Corredor 2, Prateleira 1" },
@@ -58,8 +59,8 @@ export default function ProtudosPage() {
             onProductSelect={setSelectedProduct}
           />
         </div>}
-      PainelLateral1={<ProductDossier product={selectedProduct} />}
-      PainelLateral2={<MovementLog product={selectedProduct} />}
+      PainelLateral={<ProductDetailPanel product={selectedProduct} />}
+      // PainelLateral2={<MovementLog product={selectedProduct} />}
       Card1={<MiniChart/>}
       Card2={<MiniChart/>}
       Card3={<MiniChart/>}
