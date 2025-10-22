@@ -14,9 +14,11 @@ import PontoVendaPage from "@/pages/PontoVendaPage";
 import FiscalPage from "./pages/FiscalPage";
 import CrediarioPage from "./pages/CrediarioPage";
 import LoginPage from "./pages/LoginPage";
+import { Toaster } from "sonner";
 
 function App() {
   return (
+  <div>
     <Routes>
       {/* Grupo de rotas que usam o LAYOUT PRINCIPAL (com TopBar) */}
       <Route element={<MainLayout />}>
@@ -33,6 +35,8 @@ function App() {
         <Route path="/login" element={<LoginPage />} />
       </Route>
     </Routes>
+    <Toaster richColors position="top-center" />  
+  </div>
   );
 }
 
