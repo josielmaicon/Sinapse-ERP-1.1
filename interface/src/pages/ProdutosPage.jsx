@@ -47,6 +47,15 @@ export default function ProtudosPage() {
   const [selectedProduct, setSelectedProduct] = React.useState(null);
   const [rowSelection, setRowSelection] = React.useState({});
 
+  const refetchData = async () => {
+    const data = await fetchProductsFromApi();
+    setProductData(data);
+  };
+
+  React.useEffect(() => {
+    refetchData();
+  }, []);
+
   return (
     <ProdutosPageLayout
       TabelaProdutos={
@@ -57,6 +66,7 @@ export default function ProtudosPage() {
             rowSelection={rowSelection}
             onRowSelectionChange={setRowSelection}
             onProductSelect={setSelectedProduct}
+            refetchData={refetchData}
           />
         </div>}
       PainelLateral={<ProductDetailPanel product={selectedProduct} />}

@@ -46,16 +46,9 @@ const usePaginationRange = ({ totalPageCount, siblingCount = 1, currentPage }) =
   }, [totalPageCount, siblingCount, currentPage]);
 };
 
-const handleAction = (action) => {
-    // ✅ 3. O botão "Novo Produto" agora abre o modal
-    if (action === "Novo Produto") {
-      setIsModalOpen(true);
-    } else {
-      alert(`Ação: ${action}`);
-    }
-  };
 
-export function ProductDataTable({ columns, data, onProductSelect }) {
+
+export function ProductDataTable({ columns, data, onProductSelect, refetchData }) {
   const [sorting, setSorting] = React.useState([])
   const [columnFilters, setColumnFilters] = React.useState([])
   const [rowSelection, setRowSelection] = React.useState({})
@@ -105,7 +98,15 @@ export function ProductDataTable({ columns, data, onProductSelect }) {
     }
   }, [rowSelection, table, onProductSelect]);
 
-  const handleAction = (action) => { alert(`Ação: ${action}`) };
+  const handleAction = (action) => {
+      // ✅ 3. O botão "Novo Produto" agora abre o modal
+      if (action === "Novo Produto") {
+        setIsModalOpen(true);
+      } else {
+        alert(`Ação: ${action}`);
+      }
+    };
+
   const handleFilter = (filter) => { alert(`Filtro selecionado: ${filter}`) };
 
   return (
@@ -310,7 +311,6 @@ export function ProductDataTable({ columns, data, onProductSelect }) {
       <ProductForm 
         open={isModalOpen} 
         onOpenChange={setIsModalOpen} 
-        onProductCreated={refetchData}
       />
     </div>
   )
