@@ -111,77 +111,80 @@ export function ProductForm({ open, onOpenChange, onProductCreated }) {
   const calculatedSalePrice = React.useMemo(() => {
     const custo = parseFloat(formData.preco_custo) || 0;
     const margem = parseFloat(formData.margem) || 0;
-    if (custo > 0 && priceMode === 'percentual') {
+    if (custo > 0 && priceMode === 'percentual' && margem > 0) {
       const precoVenda = custo / (1 - (margem / 100));
       return precoVenda.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
     }
-    return null;
+    return "R$ 0,00";
   }, [formData.preco_custo, formData.margem, priceMode]);
 
-const handleSubmit = async (event) => {
+  const handleSubmit = async (event) => {
     event.preventDefault();
-    // ... (Sua lógica de validação continua perfeita aqui)
     const newErrors = {};
     if (!formData.nome) newErrors.nome = true;
     if (!formData.quantidade_estoque) newErrors.quantidade_estoque = true;
-    if (priceMode === 'valor' && !formData.preco_venda) {
-      newErrors.preco_venda = true;
-    } else if (priceMode === 'percentual' && !formData.margem) {
-      newErrors.margem = true;
-    }
+    if (priceMode === 'valor' && !formData.preco_venda) newErrors.preco_venda = true;
+    if (priceMode === 'percentual' && !formData.margem) newErrors.margem = true;
+    
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
-      // ✅ BÔNUS: Troquei o alert por um toast de erro para manter o padrão
-      toast.error("Existem campos obrigatórios não preenchidos.");
+      toast.error("Por favor, preencha os campos obrigatórios.");
       return;
     }
 
     setErrors({});
     setIsLoading(true);
 
+    const custo = parseFloat(formData.preco_custo) || 0;
+    let precoVendaFinal = parseFloat(formData.preco_venda) || 0;
+
+    if (priceMode === 'percentual') {
+      const margem = parseFloat(formData.margem) || 0;
+      if (custo > 0 && margem > 0) {
+        precoVendaFinal = custo / (1 - (margem / 100));
+      }
+    }
+
     const submissionData = {
-      ...formData,
-      preco_venda: parseFloat(formData.preco_venda) || 0,
-      preco_custo: parseFloat(formData.preco_custo) || 0,
-      quantidade_estoque: parseInt(formData.quantidade_estoque, 10) || 0,
+      nome: formData.nome,
+      codigo_barras: formData.codigo_barras,
+      categoria: formData.categoria,
+      quantidade_estoque: parseInt(formData.quantidade_estoque, 10),
+      preco_custo: custo,
+      preco_venda: precoVendaFinal,
+      unidade_medida: formData.unidade_medida,
+      ncm: formData.ncm,
+      cfop: formData.cfop,
+      cst: formData.cst,
       vencimento: formData.vencimento ? format(formData.vencimento, 'yyyy-MM-dd') : null,
     };
-
-    const url = isExistingProduct ? `http://localhost:8000/api/produtos/entrada-estoque` : 'http://localhost:8000/api/produtos';
-    const method = isExistingProduct ? 'PUT' : 'POST';
+    
+    const isUpdate = isExistingProduct;
+    const url = isUpdate ? `http://localhost:8000/api/produtos/entrada-estoque` : 'http://localhost:8000/api/produtos';
+    const method = isUpdate ? 'PUT' : 'POST';
 
     try {
       const response = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(submissionData) });
-
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(errorData.detail || 'Falha na requisição');
       }
-
-      // ✅ CORREÇÃO AQUI: Guardamos a resposta em 'newProduct'
       const newProduct = await response.json();
-      
-      // Agora a variável 'newProduct' existe e pode ser usada no toast
-      toast.success(`Produto "${newProduct.nome}" cadastrado com sucesso.`, {
-              action: {
-                label: "Desfazer",
-                onClick: () => console.log("Ação Desfazer foi clicada!"),
-              },
-            });
-
+      toast.success(`Sucesso!`, {
+        description: `Produto "${newProduct.nome}" foi salvo.`,
+        action: {
+          label: "Desfazer",
+          onClick: () => console.log("Ação Desfazer foi clicada!"),
+        },
+      });
       onOpenChange(false);
       onProductCreated();
-
     } catch (error) {
-      console.error("Erro:", error);
-      // ✅ BÔNUS: Usando um toast de erro aqui também
-      toast.error("Não foi possível salvar o produto.", {
-        description: error.message,
-      });
+      toast.error("Erro ao salvar", { description: error.message });
     } finally {
       setIsLoading(false);
     }
-};
+  };
 
   React.useEffect(() => {
     if (!open) {
@@ -272,6 +275,7 @@ const handleSubmit = async (event) => {
               <Label htmlFor="ncm" className="text-right">NCM</Label>
               <Input id="ncm" ref={refs.ncm} value={formData.ncm} onChange={handleChange} onKeyDown={(e) => handleKeyDown(e, refs.submit)} disabled={isExistingProduct} className="col-span-3" />
             </div>
+            {/* Adicione CFOP e CST da mesma forma se necessário */}
           </form>
         </ScrollArea>
         <DialogFooter>

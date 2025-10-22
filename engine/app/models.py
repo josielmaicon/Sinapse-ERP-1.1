@@ -41,6 +41,7 @@ class Produto(Base):
     # --- Estoque e Venda ---
     quantidade_estoque = Column(Integer, default=0)
     unidade_medida = Column(String(20), default="UN") # Ex: UN, KG, CX
+    estoque_minimo = Column(Integer, default=5)
     
     # --- Financeiro ---
     preco_custo = Column(Float)

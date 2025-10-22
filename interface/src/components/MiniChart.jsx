@@ -2,7 +2,7 @@
 
 "use client"
 
-import { Line, LineChart } from "recharts"
+import { Line, LineChart, ResponsiveContainer } from "recharts"
 import { ChartContainer } from "@/components/ui/chart"
 
 // 🧩 MOCK DE DADOS (PARA TESTE):
@@ -27,12 +27,12 @@ export default function MiniChart({
   data = defaultChartData, 
   dataKey = "value", 
   lineColor = "var(--color-primary)", // Cor da linha, padrão para primary do shadcn
-  fillColor = "hsl(var(--primary) / 0.1)", // Cor da área preenchida abaixo da linha
+  fillColor = "var(--color-primary)", // Cor da área preenchida abaixo da linha
   chartConfig = defaultChartConfig,
-  height = 100, // Altura padrão do gráfico, pode ser sobrescrita
 }) {
   return (
-    <ChartContainer config={chartConfig} className="w-full" style={{ height: `${height}px` }}>
+  <ResponsiveContainer width="100%" height="100%">
+    <ChartContainer config={chartConfig} className="w-full h-full pt-3">
       <LineChart
         accessibilityLayer
         data={data}
@@ -43,19 +43,17 @@ export default function MiniChart({
           bottom: 0,
         }}
       >
-        {/* ✅ REMOVIDO: CartesianGrid */}
-        {/* ✅ REMOVIDO: ChartTooltip */}
-        
         <Line
           dataKey={dataKey}
-          type="linear" // Curva suave
+          type="natural" // Curva suave
           stroke={lineColor}
           strokeWidth={2}
-          activeDot={true} // Desabilita o dot ativo ao passar o mouse
-          dot={true}       // Remove todos os dots estáticos
-          fill={fillColor}  // Preenche a área abaixo da linha
+          activeDot={true}
+          dot={false}      
+          fill={fillColor}
         />
       </LineChart>
     </ChartContainer>
+  </ResponsiveContainer>
   )
 }

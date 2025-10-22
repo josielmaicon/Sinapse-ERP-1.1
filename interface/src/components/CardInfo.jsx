@@ -1,4 +1,4 @@
-export default function CardInfo({ description, subvalue, children, mainvalue }) {
+  export default function CardInfo({ description, subvalue, children, mainvalue }) {
   return (
     <div className="bg-card p-4 pt-3 rounded-xl border flex flex-col">
       <div className="flex justify-between items-start mb-4">
@@ -14,8 +14,9 @@ export default function CardInfo({ description, subvalue, children, mainvalue })
             </div>
         </div>
       </div>
-      <div className="flex-1">{children}</div>
+      <div className="flex-grow relative mt-4">
+          {children}
+      </div>
     </div>
   )
 }
-
