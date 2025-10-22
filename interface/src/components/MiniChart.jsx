@@ -2,7 +2,7 @@
 
 "use client"
 
-import { Line, LineChart, ResponsiveContainer } from "recharts"
+import { Area, AreaChart } from "recharts"
 import { ChartContainer } from "@/components/ui/chart"
 
 // 🧩 MOCK DE DADOS (PARA TESTE):
@@ -31,29 +31,31 @@ export default function MiniChart({
   chartConfig = defaultChartConfig,
 }) {
   return (
-  <ResponsiveContainer width="100%" height="100%">
-    <ChartContainer config={chartConfig} className="w-full h-full pt-3">
-      <LineChart
-        accessibilityLayer
-        data={data}
-        margin={{
-          top: 0,    // Sem margens
-          left: 0,
-          right: 0,
-          bottom: 0,
-        }}
-      >
-        <Line
-          dataKey={dataKey}
-          type="natural" // Curva suave
-          stroke={lineColor}
-          strokeWidth={2}
-          activeDot={true}
-          dot={false}      
-          fill={fillColor}
-        />
-      </LineChart>
-    </ChartContainer>
-  </ResponsiveContainer>
-  )
-}
+    <ChartContainer config={chartConfig} className="w-full h-full">
+          <AreaChart
+            accessibilityLayer
+            data={data}
+            margin={{ top: 5, right: 5, left: 5, bottom: 5 }}
+          >
+            {/* ✅ 3. Adicionado um gradiente para o preenchimento */}
+            <defs>
+                <linearGradient id="fillGradient" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor={lineColor} stopOpacity={0.8}/>
+                    <stop offset="95%" stopColor={lineColor} stopOpacity={0.1}/>
+                </linearGradient>
+            </defs>
+            
+            {/* ✅ 4. Trocado <Line> por <Area> */}
+            <Area
+              dataKey={dataKey}
+              type="monotone"
+              stroke={lineColor}
+              strokeWidth={2}
+              fill="url(#fillGradient)" // Usa o gradiente definido acima
+              dot={false}
+              activeDot={{ r: 4 }} // Mostra um ponto maior ao passar o mouse
+            />
+          </AreaChart>
+        </ChartContainer>
+      )
+    }

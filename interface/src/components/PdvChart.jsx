@@ -209,7 +209,7 @@ export default function PdvRevenueChart() {
       </div>
 
       {/* 🔸 Gráfico */}
-      <div className="flex-grow w-full relative">
+      <div className="flex-grow w-full relative overflow-hidden">
         <ResponsiveContainer width="100%" height="100%">
           <ChartContainer config={chartConfig} className="h-full w-full aspect-auto">
             <ComposedChart
@@ -261,14 +261,14 @@ export default function PdvRevenueChart() {
               {pdvsToDisplay.map((pdvKey) => [
                 <Area
                   key={`${pdvKey}-area`}
-                  type="linear"
+                  type="natural"
                   dataKey={pdvKey}
                   fill={`url(#fill${pdvKey})`}
                   stroke="none"
                 />,
                 <Line
                   key={`${pdvKey}-line`}
-                  type="linear"
+                  type="natural"
                   dataKey={pdvKey}
                   stroke={`var(--color-${pdvKey})`}
                   strokeWidth={2}

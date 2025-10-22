@@ -1,6 +1,6 @@
 export default function CardBody({ title, subtitle, children, onAction }) {
   return (
-    <div className="bg-card p-6 pt-4 rounded-xl border flex flex-col">
+    <div className="bg-card p-6 pt-4 rounded-xl border flex flex-col ">
       {/* Header */}
       <div className="flex justify-between items-start mb-4">
         <div>
