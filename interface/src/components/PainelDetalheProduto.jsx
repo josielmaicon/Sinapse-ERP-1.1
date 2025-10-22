@@ -35,20 +35,20 @@ export default function ProductDetailPanel({ product }) {
   const isLoading = !product
 
   // Mesmo sem produto, os campos permanecem visíveis com placeholders
-  const name = product?.name ?? "Nome do Produto"
-  const description = product ? "Descrição do Produto" : "Descrição do Produto"
-  const costPrice = product?.costPrice?.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) ?? "--"
-  const salePrice = product?.salePrice?.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) ?? "--"
+  const name = product?.nome ?? "Nome do Produto";
+  const description = product?.descricao;
+  const costPrice = product?.preco_custo?.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) ?? "--";
+  const salePrice = product?.preco_venda?.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) ?? "--";
   const margin =
-    product && product.salePrice && product.costPrice
-      ? ((product.salePrice - product.costPrice) / product.salePrice) * 100
-      : null
-  const marginDisplay = margin !== null ? `${margin.toFixed(2)}%` : "--"
+    product && product.preco_venda && product.preco_custo
+      ? ((product.preco_venda - product.preco_custo) / product.preco_venda) * 100
+      : null;
+  const marginDisplay = margin !== null ? `${margin.toFixed(2)}%` : "--";
 
-  const quantity = product?.quantity ?? "--"
-  const sku = product?.id ?? "--"
-  const category = product?.category ?? "--"
-  const location = product?.location ?? "--"
+  const quantity = product?.quantidade_estoque ?? "--";
+  const sku = product?.codigo_barras ?? "--"; // Usando 'codigo_barras'
+  const category = product?.categoria ?? "--";
+  const location = product?.localizacao ?? "--"; // 'localizacao' seria um bom campo para adicionar ao seu 'models.py'
 
   return (
     <div className="h-full flex flex-col gap-4 p-4">

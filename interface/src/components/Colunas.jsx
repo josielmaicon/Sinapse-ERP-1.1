@@ -15,59 +15,37 @@ import {
 } from "@/components/ui/dropdown-menu"
 
 export const columns = [
-  // ✅ 2. Adicione esta nova definição de coluna no início do array
-  {
+{
     id: "select",
-    header: ({ table }) => (
-      <Checkbox
-        checked={
-          table.getIsAllPageRowsSelected() ||
-          (table.getIsSomePageRowsSelected() && "indeterminate")
-        }
-        onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
-        aria-label="Select all"
-      />
-    ),
-    cell: ({ row }) => (
-      <Checkbox
-        checked={row.getIsSelected()}
-        onCheckedChange={(value) => row.toggleSelected(!!value)}
-        aria-label="Select row"
-      />
-    ),
+    header: ({ table }) => ( <Checkbox /* ... */ /> ),
+    cell: ({ row }) => ( <Checkbox /* ... */ /> ),
     enableSorting: false,
     enableHiding: false,
   },
   {
-    accessorKey: "id",
-    header: ({ column }) => (
-      <Button variant="ghost" onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}>
-        ID
-        <ArrowUpDown className="ml-2 h-4 w-4" />
-      </Button>
-    ),
-  },
-  // ... o resto das suas colunas (Nome, Categoria, etc.) continua aqui
-  {
-    accessorKey: "name",
+    // ✅ CORREÇÃO: Alinhado com o models.py
+    accessorKey: "nome", 
     header: "Nome do Produto",
   },
   {
-    accessorKey: "category",
+    // ✅ CORREÇÃO: Alinhado com o models.py
+    accessorKey: "categoria", 
     header: "Categoria",
   },
   {
-    accessorKey: "quantity",
+    // ✅ CORREÇÃO: Alinhado com o models.py
+    accessorKey: "quantidade_estoque", 
     header: ({ column }) => (
       <Button variant="ghost" onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}>
         Quantidade
         <ArrowUpDown className="ml-2 h-4 w-4" />
       </Button>
     ),
-    cell: ({ row }) => <div className="text-center">{row.getValue("quantity")}</div>,
+    cell: ({ row }) => <div className="text-center">{row.getValue("quantidade_estoque")}</div>,
   },
   {
-    accessorKey: "daysUntilExpiry",
+    // ✅ LÓGICA INTELIGENTE: Campo derivado para o vencimento
+    accessorKey: "vencimento_em", // Usamos um novo accessorKey virtual
     header: ({ column }) => (
       <Button variant="ghost" onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}>
         Vencimento (dias)
@@ -75,12 +53,16 @@ export const columns = [
       </Button>
     ),
     cell: ({ row }) => {
-      const days = row.getValue("daysUntilExpiry");
-      let variant = "secondary";
+      const expiryDate = row.original.atualizado_em; // Supondo que 'atualizado_em' seja a data de vencimento por enquanto
+      if (!expiryDate) return <Badge variant="secondary">N/A</Badge>;
+
+      const days = differenceInDays(new Date(expiryDate), new Date());
+      
+      let variant = "success";
       if (days < 0) variant = "destructive";
       else if (days <= 7) variant = "default";
       
-      const text = days < 0 ? "Vencido" : days;
+      const text = isPast(new Date(expiryDate)) ? "Vencido" : `${days} dias`;
 
       return <Badge variant={variant}>{text}</Badge>;
     },

@@ -99,7 +99,6 @@ export function ProductDataTable({ columns, data, onProductSelect, refetchData }
   }, [rowSelection, table, onProductSelect]);
 
   const handleAction = (action) => {
-      // ✅ 3. O botão "Novo Produto" agora abre o modal
       if (action === "Novo Produto") {
         setIsModalOpen(true);
       } else {
@@ -146,8 +145,8 @@ export function ProductDataTable({ columns, data, onProductSelect, refetchData }
         <div className="flex w-full items-center gap-2">
           <Input
             placeholder="Filtrar por nome..."
-            value={(table.getColumn("name")?.getFilterValue()) ?? ""}
-            onChange={(event) => table.getColumn("name")?.setFilterValue(event.target.value)}
+            value={(table.getColumn("nome")?.getFilterValue()) ?? ""}
+            onChange={(event) => table.getColumn("nome")?.setFilterValue(event.target.value)}
             className="max-w-xs"
           />
           <Select onValueChange={(value) => {
@@ -311,6 +310,7 @@ export function ProductDataTable({ columns, data, onProductSelect, refetchData }
       <ProductForm 
         open={isModalOpen} 
         onOpenChange={setIsModalOpen} 
+        onProductCreated={refetchData}
       />
     </div>
   )
