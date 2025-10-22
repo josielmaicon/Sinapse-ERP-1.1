@@ -233,8 +233,11 @@ export function ProductDataTable({ columns, data, onProductSelect, refetchData }
                 <TableRow
                   key={row.id}
                   data-state={row.getIsSelected() && "selected"}
-                  onClick={() => row.toggleSelected()}
                   className="cursor-pointer"
+                  onClick={() => {
+                    table.resetRowSelection(); 
+                    row.toggleSelected(true); 
+                  }}
                 >
                   {row.getVisibleCells().map((cell) => (
                     <TableCell key={cell.id}>
