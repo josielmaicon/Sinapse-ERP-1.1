@@ -4,60 +4,15 @@
 
 import * as React from "react"
 import { ChevronDown, Filter, Pencil, Trash2 } from "lucide-react"
-import {
-  flexRender,
-  getCoreRowModel,
-  getFilteredRowModel,
-  getPaginationRowModel,
-  getSortedRowModel,
-  useReactTable,
-} from "@tanstack/react-table"
+import { flexRender, getCoreRowModel, getFilteredRowModel, getPaginationRowModel, getSortedRowModel, useReactTable,} from "@tanstack/react-table"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import {
-  DropdownMenu,
-  DropdownMenuCheckboxItem,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuSub,
-  DropdownMenuSubContent,
-  DropdownMenuSubTrigger,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
-import {
-  Menubar,
-  MenubarContent,
-  MenubarItem,
-  MenubarMenu,
-  MenubarSeparator,
-  MenubarTrigger,
-} from "@/components/ui/menubar"
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table"
-import {
-  Pagination,
-  PaginationContent,
-  PaginationItem,
-  PaginationLink,
-  PaginationNext,
-  PaginationPrevious,
-  PaginationEllipsis,
-} from "@/components/ui/pagination"
+import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuSub, DropdownMenuSubContent, DropdownMenuSubTrigger, DropdownMenuTrigger,} from "@/components/ui/dropdown-menu"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue,} from "@/components/ui/select"
+import { Menubar, MenubarContent, MenubarItem, MenubarMenu, MenubarSeparator, MenubarTrigger,} from "@/components/ui/menubar"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow,} from "@/components/ui/table"
+import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious, PaginationEllipsis,} from "@/components/ui/pagination"
+import { ProductForm } from "./FormularioCadastroProduto"
 
 // Helper para criar o range de paginação inteligente
 const DOTS = '...';
@@ -91,11 +46,21 @@ const usePaginationRange = ({ totalPageCount, siblingCount = 1, currentPage }) =
   }, [totalPageCount, siblingCount, currentPage]);
 };
 
+const handleAction = (action) => {
+    // ✅ 3. O botão "Novo Produto" agora abre o modal
+    if (action === "Novo Produto") {
+      setIsModalOpen(true);
+    } else {
+      alert(`Ação: ${action}`);
+    }
+  };
+
 export function ProductDataTable({ columns, data, onProductSelect }) {
   const [sorting, setSorting] = React.useState([])
   const [columnFilters, setColumnFilters] = React.useState([])
   const [rowSelection, setRowSelection] = React.useState({})
   const [columnVisibility, setColumnVisibility] = React.useState({})
+  const [isModalOpen, setIsModalOpen] = React.useState(false);
 
   const table = useReactTable({
     data,
@@ -342,6 +307,11 @@ export function ProductDataTable({ columns, data, onProductSelect }) {
         </div>
         <div className="flex-1" />
       </div>
+      <ProductForm 
+        open={isModalOpen} 
+        onOpenChange={setIsModalOpen} 
+        onProductCreated={refetchData}
+      />
     </div>
   )
 }

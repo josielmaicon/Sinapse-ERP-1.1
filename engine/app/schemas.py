@@ -1,11 +1,24 @@
+# app/schemas.py
 from pydantic import BaseModel
 
-# Este é o formato de um Produto que a API irá retornar
-class Product(BaseModel):
-    id: int
-    name: str
-    quantity: int
-    sale_price: float
+# --- Esquema para o Produto ---
+class ProdutoBase(BaseModel):
+    nome: str
+    quantidade_estoque: int
+    preco_venda: float
+    # Adicione outros campos que virão do formulário
+    codigo_barras: str | None = None
+    preco_custo: float | None = None
+    categoria: str | None = None
 
+# Schema para a criação
+class ProdutoCreate(ProdutoBase):
+    pass
+
+# Schema para a leitura (retorno da API)
+class Produto(ProdutoBase):
+    id: int
+    # criado_em: datetime # Podemos adicionar depois
+    
     class Config:
-        orm_mode = True # Permite que o Pydantic leia dados do SQLAlchemy
+        orm_mode = True

@@ -1,16 +1,13 @@
+# app/routers/products.py
 from typing import List
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-
 from .. import models, schemas
 from ..database import SessionLocal, engine
 
-# Cria as tabelas no banco de dados se elas não existirem
 models.Base.metadata.create_all(bind=engine)
-
 router = APIRouter()
 
-# Função auxiliar para obter a sessão do banco de dados
 def get_db():
     db = SessionLocal()
     try:
@@ -18,10 +15,16 @@ def get_db():
     finally:
         db.close()
 
-@router.get("/products", response_model=List[schemas.Product])
+@router.post("/produtos", response_model=schemas.Produto)
+def create_product(produto: schemas.ProdutoCreate, db: Session = Depends(get_db)):
+    # Usamos os nomes em português que definimos no models.py
+    db_produto = models.Produto(**produto.dict())
+    db.add(db_produto)
+    db.commit()
+    db.refresh(db_produto)
+    return db_produto
+
+@router.get("/produtos", response_model=List[schemas.Produto])
 def get_all_products(db: Session = Depends(get_db)):
-    """
-    Este endpoint busca todos os produtos no banco de dados.
-    """
-    products = db.query(models.Product).all()
-    return products
+    produtos = db.query(models.Produto).all()
+    return produtos
