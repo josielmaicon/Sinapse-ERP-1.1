@@ -111,7 +111,7 @@ export default function FiscalDataTable({ columns, data }) {
           placeholder="Buscar por Nº da Nota..."
           value={(table.getColumn("nfNumber")?.getFilterValue()) ?? ""}
           onChange={(event) => table.getColumn("nfNumber")?.setFilterValue(event.target.value)}
-          className="max-w-xs"
+          className="max-w-fit"
         />
         <Select onValueChange={(value) => table.getColumn("status")?.setFilterValue(value === 'todos' ? '' : value)}>
           <SelectTrigger className="w-[180px]">
