@@ -3,17 +3,13 @@ from typing import List
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from .. import models, schemas
-from ..database import SessionLocal, engine
+from ..database import get_db, engine
 
 models.Base.metadata.create_all(bind=engine)
-router = APIRouter()
-
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
+router = APIRouter(
+    prefix="/api/produtos",
+    tags=["Produtos"]
+)
 
 @router.post("/produtos", response_model=schemas.Produto)
 def create_product(produto: schemas.ProdutoCreate, db: Session = Depends(get_db)):
@@ -29,7 +25,16 @@ def get_all_products(db: Session = Depends(get_db)):
     produtos = db.query(models.Produto).all()
     return produtos
 
-@router.get("/produtos/barcode/{barcode}", response_model=schemas.Produto)
+@router.delete("/{produto_id}")
+def delete_produto(produto_id: int, db: Session = Depends(get_db)):
+    db_produto = db.query(models.Produto).filter(models.Produto.id == produto_id).first()
+    if db_produto is None:
+        raise HTTPException(status_code=404, detail="Produto não encontrado")
+    db.delete(db_produto)
+    db.commit()
+    return {"ok": True, "message": "Produto excluído com sucesso"}  
+
+@router.get("/barcode/{barcode}", response_model=schemas.Produto)
 def get_product_by_barcode(barcode: str, db: Session = Depends(get_db)):
     """
     Busca um único produto pelo seu código de barras.

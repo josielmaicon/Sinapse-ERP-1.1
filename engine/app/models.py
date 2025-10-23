@@ -16,9 +16,10 @@ class Usuario(Base):
     criado_em = Column(DateTime, default=datetime.utcnow)
     atualizado_em = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
-    # Relações (as "pontas" que se conectam ao modelo Produto)
     produtos_criados = relationship("Produto", foreign_keys="[Produto.criado_por_id]", back_populates="criador")
     produtos_atualizados = relationship("Produto", foreign_keys="[Produto.atualizado_por_id]", back_populates="atualizador")
+    vendas = relationship("Venda", back_populates="operador")
+    movimentacoes_caixa = relationship("MovimentacaoCaixa", back_populates="operador")
 
 class Fornecedor(Base):
     __tablename__ = "fornecedores"
@@ -36,7 +37,6 @@ class Produto(Base):
     id = Column(Integer, primary_key=True)
     nome = Column(String(100), nullable=False, index=True)
     codigo_barras = Column(String(50), unique=True, index=True)
-    descricao = Column(String(255))
     
     # --- Estoque e Venda ---
     quantidade_estoque = Column(Integer, default=0)
@@ -68,6 +68,7 @@ class Produto(Base):
     fornecedor = relationship("Fornecedor", back_populates="produtos")
     criador = relationship("Usuario", foreign_keys=[criado_por_id], back_populates="produtos_criados")
     atualizador = relationship("Usuario", foreign_keys=[atualizado_por_id], back_populates="produtos_atualizados")
+    itens_vendidos = relationship("VendaItem", back_populates="produto")
 
 class Cliente(Base):
     __tablename__ = "clientes"
@@ -87,6 +88,9 @@ class Pdv(Base):
     status = Column(String(50), default="fechado") # Ex: "aberto", "fechado", "pausado"
     
     # Relação: Um PDV pode ter várias vendas e movimentações
+    vendas = relationship("Venda", back_populates="pdv")
+    movimentacoes_caixa = relationship("MovimentacaoCaixa", back_populates="pdv")
+    operador_atual = relationship("Usuario", uselist=False) 
     vendas = relationship("Venda", back_populates="pdv")
     movimentacoes_caixa = relationship("MovimentacaoCaixa", back_populates="pdv")
 
@@ -141,22 +145,3 @@ class MovimentacaoCaixa(Base):
     # Relações
     pdv = relationship("Pdv", back_populates="movimentacoes_caixa")
     operador = relationship("Usuario", back_populates="movimentacoes_caixa")
-
-class Pdv(Base):
-    __tablename__ = "pdvs"
-
-    id = Column(Integer, primary_key=True)
-    nome = Column(String(50), unique=True, nullable=False) # Ex: "Caixa 01", "Self-Checkout"
-    
-    # O estado atual do PDV
-    status = Column(String(50), default="fechado", nullable=False) # "aberto", "fechado", "pausado"
-    
-    # Conexão para saber qual operador está logado neste caixa AGORA
-    operador_atual_id = Column(Integer, ForeignKey("usuarios.id"), nullable=True)
-
-    # Relações para acessar o histórico
-    vendas = relationship("Venda", back_populates="pdv")
-    movimentacoes_caixa = relationship("MovimentacaoCaixa", back_populates="pdv")
-    
-    # Relação para acessar o objeto do operador atual
-    operador_atual = relationship("Usuario")
