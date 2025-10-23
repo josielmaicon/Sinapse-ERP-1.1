@@ -1,6 +1,5 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from .routers import products
 from .routers import products, usuarios, vendas
 
 app = FastAPI(title="Sinapse ERP API")

@@ -1,4 +1,4 @@
-from sqlalchemy import (Column, Integer, String, Float, DateTime, ForeignKey, Boolean, Enum)
+from sqlalchemy import (Column, Integer, String, Date, Float, DateTime, ForeignKey, Boolean, Enum)
 from sqlalchemy.orm import relationship
 from .database import Base
 from datetime import datetime
@@ -42,6 +42,7 @@ class Produto(Base):
     quantidade_estoque = Column(Integer, default=0)
     unidade_medida = Column(String(20), default="UN") # Ex: UN, KG, CX
     estoque_minimo = Column(Integer, default=5)
+    vencimento = Column(Date, nullable=True)
     
     # --- Financeiro ---
     preco_custo = Column(Float)
@@ -88,6 +89,7 @@ class Pdv(Base):
     status = Column(String(50), default="fechado") # Ex: "aberto", "fechado", "pausado"
     
     # Relação: Um PDV pode ter várias vendas e movimentações
+    operador_atual_id = Column(Integer, ForeignKey("usuarios.id"), nullable=True)
     vendas = relationship("Venda", back_populates="pdv")
     movimentacoes_caixa = relationship("MovimentacaoCaixa", back_populates="pdv")
     operador_atual = relationship("Usuario", uselist=False) 

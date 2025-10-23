@@ -1,32 +1,107 @@
 # app/schemas.py
+
 from pydantic import BaseModel
-from datetime import date
+from datetime import date, datetime
 from typing import List, Optional
 
-# --- Esquema para o Produto ---
+# --- SCHEMAS DE USUÁRIO ---
+class UsuarioBase(BaseModel):
+    nome: str
+    funcao: Optional[str] = "operador"
+
+class UsuarioCreate(UsuarioBase):
+    senha_hash: str # No futuro, aqui virá a senha em texto plano
+
+class Usuario(UsuarioBase):
+    id: int
+    class Config:
+        from_attributes = True # Sintaxe correta do Pydantic V2
+
+# --- SCHEMAS DE FORNECEDOR ---
+class FornecedorBase(BaseModel):
+    nome: str
+    cnpj: Optional[str] = None
+
+class FornecedorCreate(FornecedorBase):
+    pass
+
+class Fornecedor(FornecedorBase):
+    id: int
+    class Config:
+        from_attributes = True
+
+# --- SCHEMAS DE CLIENTE ---
+class ClienteBase(BaseModel):
+    nome: str
+    cpf: Optional[str] = None
+    limite_credito: Optional[float] = 0.0
+
+class ClienteCreate(ClienteBase):
+    pass
+
+class Cliente(ClienteBase):
+    id: int
+    saldo_devedor: float
+    status_conta: str
+    class Config:
+        from_attributes = True
+
+# --- SCHEMAS DE PRODUTO ---
 class ProdutoBase(BaseModel):
     nome: str
-    quantidade_estoque: int
     preco_venda: float
-    codigo_barras: str | None = None
-    preco_custo: float | None = None
-    categoria: str | None = None
-    vencimento: date | None = None
-    ncm: str | None = None
-    cfop: str | None = None
-    cst: str | None = None
-
-# Schema para a criação
+    quantidade_estoque: Optional[float] = 0
+    codigo_barras: Optional[str] = None
+    categoria: Optional[str] = None
+    preco_custo: Optional[float] = 0.0
+    unidade_medida: Optional[str] = "UN"
+    vencimento: Optional[date] = None
+    
 class ProdutoCreate(ProdutoBase):
     pass
 
-# Schema para a leitura (retorno da API)
 class Produto(ProdutoBase):
     id: int
-    # criado_em: datetime # Podemos adicionar depois
+    fornecedor: Optional[Fornecedor] = None
+    criador: Optional[Usuario] = None
+
+    class Config:
+        from_attributes = True
+
+# --- SCHEMAS DE VENDA ---
+class VendaItemBase(BaseModel):
+    produto_id: int
+    quantidade: float
+
+class VendaItemCreate(VendaItemBase):
+    pass
+
+class VendaItem(VendaItemBase):
+    id: int
+    preco_unitario_na_venda: float
+    produto: Produto
+
+    class Config:
+        from_attributes = True
+
+class VendaBase(BaseModel):
+    cliente_id: Optional[int] = None
+    operador_id: int
+    pdv_id: int
+
+class VendaCreate(VendaBase):
+    itens: List[VendaItemCreate]
+
+class Venda(VendaBase):
+    id: int
+    valor_total: float
+    data_hora: datetime
+    status: str
+    status_fiscal: str
+    itens: List[VendaItem] = []
     
     class Config:
-        orm_mode = True 
+        from_attributes = True
 
 class ProdutoUpdate(BaseModel):
     nome: Optional[str] = None
@@ -34,3 +109,4 @@ class ProdutoUpdate(BaseModel):
     preco_venda: Optional[float] = None
     preco_custo: Optional[float] = None
     categoria: Optional[str] = None
+    vencimento: Optional[date] = None

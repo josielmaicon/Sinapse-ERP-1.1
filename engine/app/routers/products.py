@@ -11,7 +11,7 @@ router = APIRouter(
     tags=["Produtos"]
 )
 
-@router.post("/produtos", response_model=schemas.Produto)
+@router.post("/", response_model=schemas.Produto)
 def create_product(produto: schemas.ProdutoCreate, db: Session = Depends(get_db)):
     # Usamos os nomes em português que definimos no models.py
     db_produto = models.Produto(**produto.dict())
@@ -20,7 +20,7 @@ def create_product(produto: schemas.ProdutoCreate, db: Session = Depends(get_db)
     db.refresh(db_produto)
     return db_produto
 
-@router.get("/produtos", response_model=List[schemas.Produto])
+@router.get("/", response_model=List[schemas.Produto])
 def get_all_products(db: Session = Depends(get_db)):
     produtos = db.query(models.Produto).all()
     return produtos
