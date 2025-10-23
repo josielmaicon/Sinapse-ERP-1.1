@@ -30,8 +30,8 @@ export const columns = [
         aria-label="Select all"
       />
     ),
-    cell: ({ row }) => (
-      // ✅ 2. CÓDIGO DO CHECKBOX DA LINHA RESTAURADO
+    cell: ({row}) => (
+
       <Checkbox
         checked={row.getIsSelected()}
         onCheckedChange={(value) => row.toggleSelected(!!value)}
@@ -98,8 +98,9 @@ export const columns = [
   {
     // ✅ 3. CÓDIGO DO MENU DE AÇÕES POR LINHA RESTAURADO
     id: "actions",
-    cell: ({ row }) => {
+    cell: ({ row, table }) => {
       const product = row.original;
+      const triggerDelete = table.options.meta?.triggerDelete;
       return (
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -117,7 +118,7 @@ export const columns = [
               Duplicar
             </DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem className="text-red-500">Excluir</DropdownMenuItem>
+            <DropdownMenuItem className="text-red-500" onClick={() => triggerDelete?.([product])}>Excluir</DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       )
