@@ -52,3 +52,21 @@ def get_product_by_barcode(barcode: str, db: Session = Depends(get_db)):
     # 3. O Retorno de Sucesso
     # Se o produto foi encontrado, nós o retornamos.
     return db_product
+
+@router.put("/{produto_id}", response_model=schemas.Produto)
+def update_produto(produto_id: int, produto_update: schemas.ProdutoUpdate, db: Session = Depends(get_db)):
+    db_produto = db.query(models.Produto).filter(models.Produto.id == produto_id).first()
+    if db_produto is None:
+        raise HTTPException(status_code=404, detail="Produto não encontrado")
+
+    # Pega os dados do update e converte para um dicionário
+    update_data = produto_update.dict(exclude_unset=True)
+    
+    # Itera sobre os dados recebidos e atualiza o objeto do banco
+    for key, value in update_data.items():
+        setattr(db_produto, key, value)
+
+    db.add(db_produto)
+    db.commit()
+    db.refresh(db_produto)
+    return db_produto

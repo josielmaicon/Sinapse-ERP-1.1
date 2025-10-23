@@ -1,6 +1,7 @@
 # app/schemas.py
 from pydantic import BaseModel
 from datetime import date
+from typing import List, Optional
 
 # --- Esquema para o Produto ---
 class ProdutoBase(BaseModel):
@@ -26,3 +27,10 @@ class Produto(ProdutoBase):
     
     class Config:
         orm_mode = True 
+
+class ProdutoUpdate(BaseModel):
+    nome: Optional[str] = None
+    quantidade_estoque: Optional[float] = None
+    preco_venda: Optional[float] = None
+    preco_custo: Optional[float] = None
+    categoria: Optional[str] = None

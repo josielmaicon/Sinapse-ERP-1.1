@@ -59,6 +59,7 @@ const usePaginationRange = ({ totalPageCount, siblingCount = 1, currentPage }) =
 };
 
 export function ProductDataTable({ columns, data, onProductSelect, refetchData }) {
+  const [editingProduct, setEditingProduct] = React.useState(null);
   const [sorting, setSorting] = React.useState([])
   const [columnFilters, setColumnFilters] = React.useState([])
   const [rowSelection, setRowSelection] = React.useState({})
@@ -128,10 +129,8 @@ export function ProductDataTable({ columns, data, onProductSelect, refetchData }
     if (productsToDelete.length === 0) return;
     try {
       for (const product of productsToDelete) {
-        console.log(`Simulando exclusão do produto ID: ${product.id}`);
-        // Lógica real da API:
-        // const response = await fetch(`http://localhost:8000/api/produtos/${product.id}`, { method: 'DELETE' });
-        // if (!response.ok) throw new Error(`Falha ao excluir ${product.nome}`);
+        const response = await fetch(`http://localhost:8000/api/produtos/${product.id}`, { method: 'DELETE' });
+        if (!response.ok) throw new Error(`Falha ao excluir ${product.nome}`);
       }
       toast.success(`${productsToDelete.length} produto(s) excluído(s) com sucesso.`);
       setProductsToDelete([]);
@@ -260,7 +259,12 @@ export function ProductDataTable({ columns, data, onProductSelect, refetchData }
         <div className="flex-1" />
       </div>
 
-      <ProductForm open={isModalOpen} onOpenChange={setIsModalOpen} onProductCreated={refetchData} />
+      <ProductForm 
+        open={isModalOpen} 
+        onOpenChange={setIsModalOpen} 
+        onProductCreated={refetchData}
+        productToEdit={editingProduct} // Passa o produto para o formulário
+      />
 
       <AlertDialog open={productsToDelete.length > 0} onOpenChange={(open) => !open && setProductsToDelete([])}>
         <AlertDialogContent>
