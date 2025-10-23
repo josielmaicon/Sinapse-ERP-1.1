@@ -127,7 +127,6 @@ export function ProductDataTable({ columns, data, onProductSelect, refetchData }
               <MenubarSeparator />
               <MenubarItem disabled={!canEdit} onClick={() => handleAction("Editar")}>Editar...</MenubarItem>
               <MenubarItem disabled={!canEdit} onClick={() => handleAction("Ver Histórico")}>Ver Histórico...</MenubarItem>
-              <MenubarItem disabled={!canEdit} onClick={() => handleAction("Duplicar")}>Duplicar...</MenubarItem>
             </MenubarContent>
           </MenubarMenu>
           <MenubarMenu>

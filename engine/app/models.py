@@ -1,4 +1,4 @@
-from sqlalchemy import (Column, Integer, String, Float, DateTime, ForeignKey, Boolean, Enum)
+from sqlalchemy import (Column, Integer, Date, String, Float, DateTime, ForeignKey, Boolean, Enum)
 from sqlalchemy.orm import relationship
 from .database import Base
 from datetime import datetime
@@ -20,6 +20,7 @@ class Usuario(Base):
     produtos_criados = relationship("Produto", foreign_keys="[Produto.criado_por_id]", back_populates="criador")
     produtos_atualizados = relationship("Produto", foreign_keys="[Produto.atualizado_por_id]", back_populates="atualizador")
 
+
 class Fornecedor(Base):
     __tablename__ = "fornecedores"
     id = Column(Integer, primary_key=True)
@@ -29,6 +30,7 @@ class Fornecedor(Base):
     # Relação
     produtos = relationship("Produto", back_populates="fornecedor")
 
+
 class Produto(Base):
     __tablename__ = "produtos"
 
@@ -36,7 +38,6 @@ class Produto(Base):
     id = Column(Integer, primary_key=True)
     nome = Column(String(100), nullable=False, index=True)
     codigo_barras = Column(String(50), unique=True, index=True)
-    descricao = Column(String(255))
     
     # --- Estoque e Venda ---
     quantidade_estoque = Column(Integer, default=0)
@@ -53,6 +54,7 @@ class Produto(Base):
     cst = Column(String(10))
     
     # --- Auditoria e Timestamps ---
+    vencimento = Column(Date, nullable=True)
     criado_em = Column(DateTime, default=datetime.utcnow)
     atualizado_em = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     

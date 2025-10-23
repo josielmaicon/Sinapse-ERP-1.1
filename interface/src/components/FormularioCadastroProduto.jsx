@@ -19,6 +19,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Calendar as CalendarIcon, Upload, Loader2 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { toast } from "sonner"
+import { Switch } from "@/components/ui/switch"
 
 // Componente placeholder para o XML Dropzone
 const XMLDropzone = () => (
@@ -41,6 +42,7 @@ export function ProductForm({ open, onOpenChange, onProductCreated }) {
   const [isExistingProduct, setIsExistingProduct] = React.useState(false);
   const [isLoading, setIsLoading] = React.useState(false);
   const [errors, setErrors] = React.useState({});
+  const [showAdvancedFiscal, setShowAdvancedFiscal] = React.useState(false);
 
   // Refs para a navegação com "Enter"
   const refs = {
@@ -195,7 +197,7 @@ export function ProductForm({ open, onOpenChange, onProductCreated }) {
     }
   }, [open]);
 
-  return (
+return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-xl">
         <DialogHeader>
@@ -275,7 +277,33 @@ export function ProductForm({ open, onOpenChange, onProductCreated }) {
               <Label htmlFor="ncm" className="text-right">NCM</Label>
               <Input id="ncm" ref={refs.ncm} value={formData.ncm} onChange={handleChange} onKeyDown={(e) => handleKeyDown(e, refs.submit)} disabled={isExistingProduct} className="col-span-3" />
             </div>
-            {/* Adicione CFOP e CST da mesma forma se necessário */}
+            
+            {/* ✅ CORREÇÃO APLICADA AQUI: O Switch foi embrulhado no padrão grid-cols-4 */}
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="advanced-fiscal" className="text-right">Avançado</Label>
+              <div className="col-span-3 flex items-center space-x-2">
+                <Switch
+                    id="advanced-fiscal"
+                    checked={showAdvancedFiscal}
+                    onCheckedChange={setShowAdvancedFiscal}
+                    disabled={isExistingProduct}
+                />
+                <Label htmlFor="advanced-fiscal" className="font-normal text-muted-foreground">Exibir campos fiscais (CFOP, CST)</Label>
+              </div>
+            </div>
+
+            {showAdvancedFiscal && (
+              <>
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="cfop" className="text-right">CFOP</Label>
+                  <Input id="cfop" value={formData.cfop} onChange={handleChange} disabled={isExistingProduct} className="col-span-3" />
+                </div>
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="cst" className="text-right">CST</Label>
+                  <Input id="cst" value={formData.cst} onChange={handleChange} disabled={isExistingProduct} className="col-span-3" />
+                </div>
+              </>
+            )}
           </form>
         </ScrollArea>
         <DialogFooter>

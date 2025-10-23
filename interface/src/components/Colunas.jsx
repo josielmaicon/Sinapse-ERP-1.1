@@ -14,7 +14,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { format, differenceInDays, isPast } from "date-fns" // Importe as funções de data
+import { format, differenceInDays, isPast, startOfToday } from "date-fns"
 
 export const columns = [
   {
@@ -63,7 +63,7 @@ export const columns = [
     cell: ({ row }) => <div className="text-center">{row.getValue("quantidade_estoque")}</div>,
   },
   {
-    accessorKey: "atualizado_em", // Mantenha este se for a sua data de vencimento
+    accessorKey: "vencimento", // Mantenha este se for a sua data de vencimento
     header: ({ column }) => (
       <Button variant="ghost" onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}>
         Vencimento (dias)
@@ -71,17 +71,28 @@ export const columns = [
       </Button>
     ),
     cell: ({ row }) => {
-      const expiryDate = row.original.atualizado_em;
-      if (!expiryDate) return <Badge variant="secondary">N/A</Badge>;
+          // ✅ CORREÇÃO: Usando row.getValue() para consistência
+          const expiryDateString = row.getValue("vencimento");
 
-      const days = differenceInDays(new Date(expiryDate), new Date());
-      let variant = "success";
-      if (days < 0) variant = "destructive";
-      else if (days <= 7) variant = "default";
-      
-      const text = isPast(new Date(expiryDate)) ? "Vencido" : `${days} dias`;
+          if (!expiryDateString) {
+            return <Badge variant="secondary">N/A</Badge>;
+          }
 
-      return <Badge variant={variant}>{text}</Badge>;
+          const expiryDate = new Date(expiryDateString);
+          const today = startOfToday();
+
+          const days = differenceInDays(expiryDate, today);
+          
+          let variant = "success";
+          if (days < 0) {
+            variant = "destructive";
+          } else if (days <= 7) {
+            variant = "default";
+          }
+          
+          const text = days < 0 ? "Vencido" : `${days} dias`;
+
+          return <Badge variant={variant}>{text}</Badge>;
     },
   },
   {
