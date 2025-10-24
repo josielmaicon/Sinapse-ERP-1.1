@@ -37,29 +37,42 @@ export const fiscalColumns = [
     cell: ({ row }) => ( <Checkbox checked={row.getIsSelected()} onCheckedChange={(value) => row.toggleSelected(!!value)} aria-label="Select row" /> ),
   },
   {
-    accessorKey: "status",
+    // ✅ CORREÇÃO: O campo no modelo é 'status_fiscal'
+    accessorKey: "status_fiscal",
     header: "Status Fiscal",
-    cell: ({ row }) => <StatusBadge status={row.getValue("status")} />,
+    // ✅ CORREÇÃO: O 'getValue' agora usa a chave correta
+    cell: ({ row }) => <StatusBadge status={row.getValue("status_fiscal")} />,
   },
   {
-    accessorKey: "nfNumber",
+    accessorKey: "nota_fiscal_saida", // Acessa o objeto aninhado
     header: "Nº da Nota",
+    cell: ({ row }) => {
+      // Lê o objeto aninhado e exibe o ID dele (ou 'chave_acesso' se preferir)
+      const nota = row.original.nota_fiscal_saida;
+      return nota ? nota.id : "---"; // Exibe '---' se não houver nota
+    },
   },
   {
-    accessorKey: "saleDate",
+    // ✅ CORREÇÃO: O campo no modelo é 'data_hora'
+    accessorKey: "data_hora",
     header: ({ column }) => ( <Button variant="ghost" onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}>Data da Venda<ArrowUpDown className="ml-2 h-4 w-4" /></Button> ),
-    cell: ({ row }) => format(new Date(row.getValue("saleDate")), "dd/MM/yyyy"),
+    cell: ({ row }) => format(new Date(row.getValue("data_hora")), "dd/MM/yy HH:mm"),
   },
   {
-    accessorKey: "issueDate",
+    id: "data_emissao", // ID virtual, pois o dado é aninhado
     header: "Data de Emissão",
-    cell: ({ row }) => row.getValue("issueDate") ? format(new Date(row.getValue("issueDate")), "dd/MM/yyyy") : "---",
+    cell: ({ row }) => {
+      // ✅ CORREÇÃO: Lendo o dado aninhado que vem da API
+      const issueDate = row.original.nota_fiscal_saida?.data_hora_autorizacao;
+      return issueDate ? format(new Date(issueDate), "dd/MM/yy HH:mm") : "---";
+    },
   },
   {
-    accessorKey: "saleValue",
+    // ✅ CORREÇÃO: O campo no modelo é 'valor_total'
+    accessorKey: "valor_total",
     header: () => <div className="text-right">Valor da Venda</div>,
     cell: ({ row }) => {
-      const amount = parseFloat(row.getValue("saleValue"))
+      const amount = parseFloat(row.getValue("valor_total"))
       return <div className="text-right font-medium">{amount.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</div>
     },
   },

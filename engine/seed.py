@@ -2,7 +2,7 @@ import bcrypt
 from datetime import date, datetime, timedelta
 from random import choice, randint, uniform
 from app.database import SessionLocal, engine
-from app.models import Base, Usuario, Fornecedor, Produto, Cliente, Pdv, Venda, VendaItem, MovimentacaoCaixa, NotaFiscalSaida
+from app.models import Base, Usuario, NotaFiscalEntrada, Fornecedor, Produto, Cliente, Pdv, Venda, VendaItem, MovimentacaoCaixa, NotaFiscalSaida
 
 # --- 1. APAGA E RECRIA O BANCO DE DADOS ---
 print("Recriando o banco de dados...")
@@ -123,6 +123,16 @@ try:
             chave_acesso=f"NF{randint(100000,999999)}{venda.id}",
         )
         db.add(nota_fiscal)
+        db.commit()
+
+        for fornecedor in [fornecedor_laticinios, fornecedor_hortifruti, fornecedor_bebidas]:
+            for dia in [20, 21, 22]:
+                nota = NotaFiscalEntrada(
+                    fornecedor_id=fornecedor.id,
+                    data_emissao=datetime(2025, 10, dia),
+                    valor_total=randint(50, 200)  # valor aleatório de compra
+                )
+                db.add(nota)
         db.commit()
 
     print("-> Vendas e notas fiscais criadas com sucesso.")

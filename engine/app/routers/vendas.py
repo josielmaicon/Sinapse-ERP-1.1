@@ -3,7 +3,7 @@ from typing import List, Dict
 from datetime import date
 from sqlalchemy import func
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from .. import models, schemas
 from ..database import get_db
 
@@ -165,3 +165,14 @@ def get_resumo_hoje_por_hora(db: Session = Depends(get_db)):
         dados_agrupados[row.sale_hour].faturamento_total_hora += row.hourly_total
             
     return list(dados_agrupados.values())
+
+@router.get("/", response_model=List[schemas.Venda])
+def get_all_vendas(db: Session = Depends(get_db)):
+    # ✅ 2. A CORREÇÃO ESTÁ AQUI
+    # Usamos '.options(joinedload(...))' para forçar o JOIN
+    # e trazer os dados da nota fiscal de saída junto com a venda.
+    vendas = db.query(models.Venda).options(
+        joinedload(models.Venda.nota_fiscal_saida)
+    ).order_by(models.Venda.data_hora.desc()).all()
+    
+    return vendas

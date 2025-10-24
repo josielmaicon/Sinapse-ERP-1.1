@@ -7,45 +7,48 @@ import FiscalDataTable from "@/components/TabelaFiscal"
 import { fiscalColumns } from "@/components/ColunasTabelaFiscal";
 import FiscalSummaryChart from "@/components/AnaliseEnvioFiscal";
 
-const fiscalData = [
-    { id: "VENDA-001", nfNumber: null, saleDate: "2025-10-15T14:15:00", issueDate: null, status: "pendente", saleValue: 45.50 },
-    { id: "VENDA-002", nfNumber: "NFe-12345", saleDate: "2025-10-14T10:30:00", issueDate: "2025-10-14T11:00:00", status: "emitida", saleValue: 150.00 },
-    { id: "VENDA-003", nfNumber: null, saleDate: "2025-10-13T09:00:00", issueDate: null, status: "nao_declarar", saleValue: 12.00 },
-    { id: "VENDA-004", nfNumber: null, saleDate: "2025-10-12T16:45:00", issueDate: null, status: "pendente", saleValue: 88.75 },
-    { id: "VENDA-005", nfNumber: "NFe-12344", saleDate: "2025-10-11T11:20:00", issueDate: "2025-10-11T11:30:00", status: "cancelada", saleValue: 25.00 },
-];
-
 export default function FiscalPage() {
 
-// ✅ 1. ESTADO PARA GUARDAR OS DADOS DO PAINEL
+// ✅ 1. ESTADO CENTRALIZADO PARA TODOS OS DADOS DA PÁGINA
     const [summaryData, setSummaryData] = React.useState({
         total_comprado_mes: 0,
         total_emitido_mes: 0,
+        resumo_diario: [],
+        notas_rejeitadas: 0,
+        pendentes_antigas: 0,
     });
+    const [tableData, setTableData] = React.useState([]); // Novo estado para a tabela
     const [isLoading, setIsLoading] = React.useState(true);
 
-    // ✅ 2. FUNÇÃO PARA BUSCAR OS DADOS DA API
-    const fetchSummary = async () => {
+    // ✅ 2. FUNÇÃO ÚNICA PARA BUSCAR TODOS OS DADOS
+    const fetchData = async () => {
         setIsLoading(true);
         try {
-            const response = await fetch('http://localhost:8000/api/fiscal/summary');
-            if (!response.ok) {
-                throw new Error("Falha ao buscar resumo fiscal");
-            }
-            const data = await response.json();
-            setSummaryData(data);
+            // Busca os dados do summary
+            const summaryResponse = await fetch('http://localhost:8000/api/fiscal/summary');
+            if (!summaryResponse.ok) throw new Error("Falha ao buscar resumo fiscal");
+            const summary = await summaryResponse.json();
+            setSummaryData(summary);
+            
+            // Busca os dados da tabela (lista de vendas)
+            // Usamos a rota de Vendas que já criamos
+            const tableResponse = await fetch('http://localhost:8000/vendas/'); 
+            if (!tableResponse.ok) throw new Error("Falha ao buscar dados da tabela");
+            const table = await tableResponse.json();
+            setTableData(table);
+
         } catch (error) {
-            console.error("Erro no resumo fiscal:", error);
-            // Aqui você poderia usar um toast.error
+            console.error("Erro ao buscar dados fiscais:", error);
+            // toast.error("Erro ao carregar dados", { description: error.message });
         } finally {
             setIsLoading(false);
         }
     };
 
     // ✅ 3. CHAMA A FUNÇÃO QUANDO A PÁGINA CARREGA
-    React.useEffect(() => {
-        fetchSummary();
-    }, []); // Array vazio garante que rode apenas uma vez
+        React.useEffect(() => {
+            fetchData();
+        }, []); // Array vazio garante que rode apenas uma vez
 
   return (
     <FiscalPageLayout
@@ -55,7 +58,13 @@ export default function FiscalPage() {
                 totalIssued={summaryData.total_emitido_mes}
             />
         }
-        TabelaFiscal={<FiscalDataTable columns={fiscalColumns} data={fiscalData} />}
+        TabelaFiscal={
+            // ✅ 3. PASSA OS DADOS REAIS (do estado) PARA A TABELA
+            <FiscalDataTable 
+                columns={fiscalColumns} 
+                data={tableData} // Em vez de 'fiscalData'
+            />
+        }
         HistoricoEnvio={
             <FiscalSummaryChart 
                 dailyData={summaryData.resumo_diario}
@@ -64,5 +73,5 @@ export default function FiscalPage() {
                 isLoading={isLoading}
             />
         }/>
-  );
+    );
 }
