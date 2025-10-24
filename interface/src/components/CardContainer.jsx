@@ -1,7 +1,17 @@
+"use client"
+
 import { ArrowUpRight } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { useNavigate } from "react-router-dom"
 
-export default function CardContainer({ title, subtitle, children, onAction }) {
+export default function CardContainer({ title, subtitle, children, onAction, href }) {
+  const navigate = useNavigate()
+
+  const handleClick = () => {
+    if (href) navigate(href) // ✅ navegação SPA pelo react-router
+    else if (onAction) onAction() // fallback opcional
+  }
+
   return (
     <div className="bg-card p-6 pt-4 rounded-xl border flex flex-col min-h-0">
       {/* Header */}
@@ -15,7 +25,7 @@ export default function CardContainer({ title, subtitle, children, onAction }) {
         <Button
           variant="ghost"
           size="icon"
-          onClick={onAction}
+          onClick={handleClick}
           className="text-muted-foreground hover:text-foreground"
         >
           <ArrowUpRight className="h-4 w-4" />

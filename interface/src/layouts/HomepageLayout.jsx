@@ -18,7 +18,7 @@ export default function HomePageLayout({
         </CardBodyNoTitle>
 
         <div className="grid grid-cols-1 gap-2 min-h-0">
-          <CardContainer title="Perdas" subtitle="Níveis de atenção">
+          <CardContainer title="Perdas" subtitle="Níveis de atenção" href="/produtos">
             {BottomLeft}
           </CardContainer>
         </div>
@@ -27,11 +27,11 @@ export default function HomePageLayout({
       {/* Coluna da Direita (AGORA CORRETA E SIMPLES) */}
       <div className="grid grid-rows-2 gap-2 min-h-0">
         {/* O CardContainer agora é robusto o suficiente para ser um filho direto do grid */}
-        <CardContainer title="Pontos de Venda" subtitle="Visão geral">
+        <CardContainer title="Pontos de Venda" subtitle="Visão geral" href="/pdvs">
           {SideTop}
         </CardContainer>
         
-        <CardContainer title="Mais Vendidos" subtitle="Ranking do período atual">
+        <CardContainer title="Mais Vendidos" subtitle="Ranking do período atual" href="/produtos">
           {SideBottom}
         </CardContainer>
       </div>
