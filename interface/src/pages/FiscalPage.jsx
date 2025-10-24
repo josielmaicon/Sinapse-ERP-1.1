@@ -56,7 +56,13 @@ export default function FiscalPage() {
             />
         }
         TabelaFiscal={<FiscalDataTable columns={fiscalColumns} data={fiscalData} />}
-        HistoricoEnvio={<FiscalSummaryChart/>}
-        />
+        HistoricoEnvio={
+            <FiscalSummaryChart 
+                dailyData={summaryData.resumo_diario}
+                rejectedCount={summaryData.notas_rejeitadas}
+                oldPendingCount={summaryData.pendentes_antigas}
+                isLoading={isLoading}
+            />
+        }/>
   );
 }

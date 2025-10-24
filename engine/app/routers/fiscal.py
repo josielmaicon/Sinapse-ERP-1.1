@@ -51,7 +51,10 @@ def get_fiscal_summary(db: Session = Depends(get_db)):
     return {
         "total_comprado_mes": total_comprado,
         "total_emitido_mes": total_emitido,
-        "resumo_diario": daily_issuance_query, # Dados para o gráfico
+        "resumo_diario": [
+            {"day": int(row.day), "issuedValue": float(row.issuedValue or 0)}
+            for row in daily_issuance_query
+        ],
         "notas_rejeitadas": rejected_count,
         "pendentes_antigas": old_pending_count
     }

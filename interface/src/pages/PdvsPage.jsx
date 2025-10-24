@@ -67,8 +67,6 @@ export default function PdvsPage() {
         />
       }
       
-      // ✅ 4. RENDERIZAÇÃO CONDICIONAL
-      // O conteúdo do HoldPrincipal agora depende do estado 'mainView'
       HoldPrincipal={
         mainView === 'alerta'
           ? <PdvAlertPanel alert={selectedPdv?.pendingAlert} onResolve={handleResolveAlert} />

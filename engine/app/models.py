@@ -169,6 +169,7 @@ class NotaFiscalSaida(Base):
     chave_acesso = Column(String(44), unique=True)
     protocolo = Column(String(50))
     status_sefaz = Column(String(50), default="Em Processamento") # Ex: "Autorizada", "Cancelada", "Rejeitada"
+    data_emissao = Column(DateTime, nullable=False)
     data_hora_autorizacao = Column(DateTime)
     
     # A conexão com a venda original

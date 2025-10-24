@@ -2,10 +2,9 @@ import bcrypt
 from datetime import date, datetime, timedelta
 from random import choice, randint, uniform
 from app.database import SessionLocal, engine
-from app.models import Base, Usuario, Fornecedor, Produto, Cliente, Pdv, Venda, VendaItem, MovimentacaoCaixa
+from app.models import Base, Usuario, Fornecedor, Produto, Cliente, Pdv, Venda, VendaItem, MovimentacaoCaixa, NotaFiscalSaida
 
 # --- 1. APAGA E RECRIA O BANCO DE DADOS ---
-# Garante que estamos começando com uma base limpa
 print("Recriando o banco de dados...")
 Base.metadata.drop_all(bind=engine)
 Base.metadata.create_all(bind=engine)
@@ -65,7 +64,6 @@ try:
     print("-> Criando vendas para 20, 21 e 22/10/2025...")
 
     vendas_info = [
-        # Cada tupla: (dia, pdv, cliente, lista de itens (produto, quantidade, preco_unitario))
         (20, pdv1, cliente2, [(produtos[0], 1, 5.99), (produtos[3], 1, 9.50)]),
         (20, pdv2, cliente1, [(produtos[1], 2, 25.99)]),
         (20, pdv1, cliente2, [(produtos[2], 3, 7.99)]),
@@ -83,13 +81,14 @@ try:
         (22, pdv1, cliente2, [(produtos[1], 1, 25.99)]),
         (22, pdv2, cliente1, [(produtos[2], 3, 7.99)]),
         (22, pdv1, cliente2, [(produtos[3], 1, 9.50)]),
-
         (22, pdv2, cliente1, [(produtos[0], 1, 5.99), (produtos[1], 1, 25.99)]),
         (22, pdv1, cliente2, [(produtos[2], 2, 7.99)]),
         (22, pdv2, cliente1, [(produtos[3], 1, 9.50)]),
         (22, pdv1, cliente2, [(produtos[0], 1, 5.99), (produtos[2], 1, 7.99)]),
         (22, pdv2, cliente1, [(produtos[1], 1, 25.99)])
     ]
+
+    status_possiveis = ["Autorizada", "Rejeitada", "Pendente"]
 
     for dia, pdv, cliente, itens in vendas_info:
         venda = Venda(
@@ -98,25 +97,35 @@ try:
             status_fiscal="pendente",
             pdv_id=pdv.id,
             operador_id=user_operador.id,
-            cliente_id=cliente.id
+            cliente_id=cliente.id,
+            data_hora=datetime(2025, 10, dia, 10, 0)
         )
-        venda.data_hora = datetime(2025, 10, dia, 10, 0)  # define hora fixa 10:00
         db.add(venda)
         db.commit()
 
-        venda_itens = []
+        # Itens da venda
         for produto_obj, quantidade, preco in itens:
-            venda_itens.append(VendaItem(
+            db.add(VendaItem(
                 venda_id=venda.id,
                 produto_id=produto_obj.id,
                 quantidade=quantidade,
                 preco_unitario_na_venda=preco
             ))
-        db.add_all(venda_itens)
         db.commit()
 
-    print("-> Vendas criadas com sucesso.")
+        # --- Adiciona a nota fiscal de saída ---
+        status = choice(status_possiveis)
+        nota_fiscal = NotaFiscalSaida(
+            venda_id=venda.id,
+            status_sefaz=status,
+            data_emissao=venda.data_hora,
+            data_hora_autorizacao=venda.data_hora + timedelta(minutes=randint(5, 120)),  # autorização até 2h depois da venda
+            chave_acesso=f"NF{randint(100000,999999)}{venda.id}",
+        )
+        db.add(nota_fiscal)
+        db.commit()
 
+    print("-> Vendas e notas fiscais criadas com sucesso.")
 
     # Movimentações de Caixa
     mov1 = MovimentacaoCaixa(tipo="abertura", valor=200.0, pdv_id=pdv1.id, operador_id=user_operador.id)

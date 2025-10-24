@@ -195,3 +195,11 @@ class Solicitacao(SolicitacaoBase):
 
     class Config:
         from_attributes = True
+
+class FiscalSummary(BaseModel):
+    total_comprado: float
+    total_emitido: float
+    notas_entrada: List[NotaFiscalEntrada] = []
+
+    class Config:
+        from_attributes = True
