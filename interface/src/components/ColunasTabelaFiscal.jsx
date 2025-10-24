@@ -6,28 +6,53 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Badge } from "@/components/ui/badge"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { format } from "date-fns"
+import { cn } from "@/lib/utils" // Importe o 'cn' para o 'spin'
 
-// Componente auxiliar para o status, para manter o código limpo
+// ✅ 1. COMPONENTE DE STATUS UNIFICADO E MAIS INTELIGENTE
 const StatusBadge = ({ status }) => {
-  switch (status) {
+  // Se o status for nulo ou indefinido, não renderiza nada
+  if (!status) return null;
+
+  // Normaliza o status para minúsculas para evitar erros de case
+  const statusNormalizado = status.toLowerCase();
+  
+  let variant = "secondary";
+  let text = status;
+  let spin = false;
+
+  switch (statusNormalizado) {
+    case "autorizada":
     case "emitida":
-      return <Badge variant="success" className="bg-green-500/80">Emitida</Badge>; // Supondo que você tenha uma variante 'success'
+      variant = "success";
+      text = "Emitida";
+      break;
+    case "em processamento":
     case "pendente":
-      return (
-        <Badge variant="secondary" className="flex items-center gap-1">
-          <Loader2 className="h-3 w-3 animate-spin" />
-          Pendente
-        </Badge>
-      );
+      variant = "secondary";
+      text = "Pendente";
+      spin = true;
+      break;
     case "nao_declarar":
-      return <Badge variant="outline">Não Declarar</Badge>;
+    case "não declarar":
+      variant = "outline";
+      text = "Não Declarar";
+      break;
     case "rejeitada":
-      return <Badge variant="destructive">Rejeitada</Badge>;
+      variant = "destructive";
+      text = "Rejeitada";
+      break;
     case "cancelada":
-        return <Badge variant="destructive" className="bg-red-500/80">Cancelada</Badge>;
-    default:
-      return <Badge variant="secondary">{status}</Badge>;
+      variant = "destructive";
+      text = "Cancelada";
+      break;
   }
+
+  return (
+    <Badge variant={variant} className={cn(spin && "flex items-center gap-1")}>
+      {spin && <Loader2 className="h-3 w-3 animate-spin" />}
+      {text}
+    </Badge>
+  );
 };
 
 export const fiscalColumns = [
@@ -37,38 +62,47 @@ export const fiscalColumns = [
     cell: ({ row }) => ( <Checkbox checked={row.getIsSelected()} onCheckedChange={(value) => row.toggleSelected(!!value)} aria-label="Select row" /> ),
   },
   {
-    // ✅ CORREÇÃO: O campo no modelo é 'status_fiscal'
     accessorKey: "status_fiscal",
     header: "Status Fiscal",
-    // ✅ CORREÇÃO: O 'getValue' agora usa a chave correta
-    cell: ({ row }) => <StatusBadge status={row.getValue("status_fiscal")} />,
-  },
-  {
-    accessorKey: "nota_fiscal_saida", // Acessa o objeto aninhado
-    header: "Nº da Nota",
+    // ✅ 2. A LÓGICA DE DECISÃO DO STATUS
     cell: ({ row }) => {
-      // Lê o objeto aninhado e exibe o ID dele (ou 'chave_acesso' se preferir)
-      const nota = row.original.nota_fiscal_saida;
-      return nota ? nota.id : "---"; // Exibe '---' se não houver nota
+      const venda = row.original;
+      
+      // Tenta pegar o status da SEFAZ (da nota fiscal, se ela existir)
+      const statusSefaz = venda.nota_fiscal_saida?.status_sefaz;
+      
+      // Pega o status interno da venda
+      const statusInterno = venda.status_fiscal;
+
+      // Prioriza o status da SEFAZ. Se não houver nota, usa o status interno da venda.
+      const finalStatus = statusSefaz || statusInterno;
+
+      return <StatusBadge status={finalStatus} />;
     },
   },
   {
-    // ✅ CORREÇÃO: O campo no modelo é 'data_hora'
+    accessorKey: "nota_fiscal_saida",
+    header: "Nº da Nota",
+    cell: ({ row }) => {
+      const nota = row.original.nota_fiscal_saida;
+      // Mostra o ID da nota (ou 'chave_acesso' se preferir)
+      return nota ? nota.id : "---"; 
+    },
+  },
+  {
     accessorKey: "data_hora",
     header: ({ column }) => ( <Button variant="ghost" onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}>Data da Venda<ArrowUpDown className="ml-2 h-4 w-4" /></Button> ),
     cell: ({ row }) => format(new Date(row.getValue("data_hora")), "dd/MM/yy HH:mm"),
   },
   {
-    id: "data_emissao", // ID virtual, pois o dado é aninhado
+    id: "data_emissao",
     header: "Data de Emissão",
     cell: ({ row }) => {
-      // ✅ CORREÇÃO: Lendo o dado aninhado que vem da API
       const issueDate = row.original.nota_fiscal_saida?.data_hora_autorizacao;
       return issueDate ? format(new Date(issueDate), "dd/MM/yy HH:mm") : "---";
     },
   },
   {
-    // ✅ CORREÇÃO: O campo no modelo é 'valor_total'
     accessorKey: "valor_total",
     header: () => <div className="text-right">Valor da Venda</div>,
     cell: ({ row }) => {
@@ -80,8 +114,10 @@ export const fiscalColumns = [
     id: "actions",
     cell: ({ row }) => {
       const sale = row.original;
-      const isPending = sale.status === 'pendente';
-      const isIssued = sale.status === 'emitida';
+      // ✅ 3. LÓGICA DE AÇÕES CORRIGIDA
+      const finalStatus = sale.nota_fiscal_saida?.status_sefaz || sale.status_fiscal;
+      const isPending = finalStatus === 'pendente';
+      const isIssued = finalStatus === 'autorizada' || finalStatus === 'emitida';
 
       return (
         <DropdownMenu>

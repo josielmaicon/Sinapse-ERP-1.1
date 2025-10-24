@@ -92,6 +92,16 @@ class VendaBase(BaseModel):
 class VendaCreate(VendaBase):
     itens: List[VendaItemCreate]
 
+class NotaFiscalSaida(BaseModel):
+    id: int
+    chave_acesso: Optional[str] = None
+    status_sefaz: Optional[str] = None
+    data_hora_autorizacao: Optional[datetime] = None
+    # venda_id: int # Você pode remover isso, não é necessário no frontend
+
+    class Config:
+        from_attributes = True # CORRIGIDO (era orm_mode = True)
+
 class Venda(VendaBase):
     id: int
     valor_total: float
@@ -99,6 +109,11 @@ class Venda(VendaBase):
     status: str
     status_fiscal: str
     itens: List[VendaItem] = []
+    
+    # --- ESTA É A LINHA QUE FALTAVA ---
+    # Ela diz ao Pydantic para incluir o objeto da nota, se ele existir
+    nota_fiscal_saida: Optional[NotaFiscalSaida] = None 
+    # --- FIM DA CORREÇÃO ---
     
     class Config:
         from_attributes = True
@@ -161,16 +176,6 @@ class NotaFiscalEntrada(BaseModel):
     
     class Config:
         from_attributes = True
-
-class NotaFiscalSaida(BaseModel):
-    id: int
-    chave_acesso: str
-    status_sefaz: str
-    data_hora_autorizacao: datetime
-    venda_id: int
-
-    class Config:
-        from_attributes = True
         
 class Configuracao(BaseModel):
     chave: str
@@ -203,3 +208,4 @@ class FiscalSummary(BaseModel):
 
     class Config:
         from_attributes = True
+

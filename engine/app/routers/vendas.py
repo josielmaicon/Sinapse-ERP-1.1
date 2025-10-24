@@ -168,11 +168,12 @@ def get_resumo_hoje_por_hora(db: Session = Depends(get_db)):
 
 @router.get("/", response_model=List[schemas.Venda])
 def get_all_vendas(db: Session = Depends(get_db)):
-    # ✅ 2. A CORREÇÃO ESTÁ AQUI
-    # Usamos '.options(joinedload(...))' para forçar o JOIN
-    # e trazer os dados da nota fiscal de saída junto com a venda.
     vendas = db.query(models.Venda).options(
         joinedload(models.Venda.nota_fiscal_saida)
     ).order_by(models.Venda.data_hora.desc()).all()
+    
+    # Debug: imprime no terminal
+    for venda in vendas:
+        print("Venda ID:", venda.id, "Nota:", venda.nota_fiscal_saida)
     
     return vendas
