@@ -122,3 +122,46 @@ def get_top_produtos(limit: int = 5, db: Session = Depends(get_db)):
         return []
         
     return top_produtos
+
+@router.get("/resumo-hoje-por-hora", response_model=List[schemas.ResumoPorHora])
+def get_resumo_hoje_por_hora(db: Session = Depends(get_db)):
+    """
+    Retorna o faturamento de HOJE, agrupado por hora e por PDV.
+    Usa a função 'strftime' do SQLite para extrair a hora da data/hora.
+    """
+    today = date.today()
+    
+    # 1. A consulta agrupa por hora E por pdv_id
+    resultado_query = (
+        db.query(
+            func.strftime('%H:00', models.Venda.data_hora).label("sale_hour"),
+            models.Pdv.id.label("pdv_id"),
+            models.Pdv.nome.label("pdv_name"),
+            func.sum(models.Venda.valor_total).label("hourly_total"),
+        )
+        .join(models.Pdv, models.Venda.pdv_id == models.Pdv.id)
+        .filter(
+            models.Venda.status == "concluida",
+            func.date(models.Venda.data_hora) == today # Filtra apenas por HOJE
+        )
+        .group_by("sale_hour", "pdv_id", "pdv_name")
+        .order_by("sale_hour")
+        .all()
+    )
+
+    # 2. A lógica de transformação em Python (pivotação)
+    dados_agrupados: Dict[str, schemas.ResumoPorHora] = {}
+    for row in resultado_query:
+        if row.sale_hour not in dados_agrupados:
+            dados_agrupados[row.sale_hour] = schemas.ResumoPorHora(
+                hour=row.sale_hour,
+                faturamento_total_hora=0,
+                faturamento_por_pdv=[]
+            )
+        
+        dados_agrupados[row.sale_hour].faturamento_por_pdv.append(
+            schemas.FaturamentoPorPdvHora(pdv_id=row.pdv_id, pdv_nome=row.pdv_name, total=row.hourly_total)
+        )
+        dados_agrupados[row.sale_hour].faturamento_total_hora += row.hourly_total
+            
+    return list(dados_agrupados.values())

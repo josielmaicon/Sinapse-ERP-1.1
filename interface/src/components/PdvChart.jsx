@@ -13,38 +13,50 @@ import { ChartContainer, ChartTooltipContent } from "@/components/ui/chart"
 import { Loader2, Calendar as CalendarIcon, ArrowUp, ArrowDown } from "lucide-react"
 
 export default function PdvRevenueChart() {
-  
-  const [timeframe, setTimeframe] = React.useState("30d");
+  // ✅ 1. 'timeframe' agora controla a lógica
+  const [timeframe, setTimeframe] = React.useState("daily"); // Começa na visão "Diário"
   const [selectedPdvKey, setSelectedPdvKey] = React.useState("all");
   const [dateRange, setDateRange] = React.useState({ from: subDays(new Date(), 29), to: new Date() });
   
   const [rawData, setRawData] = React.useState([]);
   const [isLoading, setIsLoading] = React.useState(true);
 
+  // ✅ 2. useEffect agora "ouve" o 'timeframe'
   React.useEffect(() => {
     const fetchChartData = async () => {
       setIsLoading(true);
+      
+      // Decide qual URL da API chamar
+      const isDailyView = timeframe === 'daily';
+      const endpoint = isDailyView
+        ? "http://localhost:8000/vendas/resumo-hoje-por-hora"
+        : "http://localhost:8000/vendas/resumo-diario-dinamico";
+
       try {
-        const response = await fetch("http://localhost:8000/vendas/resumo-diario-dinamico");
-        if (!response.ok) throw new Error("Falha ao buscar dados do resumo diário");
+        const response = await fetch(endpoint);
+        if (!response.ok) throw new Error("Falha ao buscar dados do resumo");
         const data = await response.json();
         setRawData(data);
       } catch (error) {
         console.error(error);
-        // Aqui você pode mostrar um toast de erro
       } finally {
         setIsLoading(false);
       }
     };
     fetchChartData();
-  }, []);
+  }, [timeframe]); // Roda quando 'timeframe' muda
   
+  // ✅ 3. O "Montador" agora lida com os dois formatos de dados
   const { chartData, chartConfig } = React.useMemo(() => {
     if (rawData.length === 0) return { chartData: [], chartConfig: {} };
 
+    const isDailyView = timeframe === 'daily';
     const pdvMap = new Map();
-    rawData.forEach(day => {
-      day.faturamento_por_pdv.forEach(pdv => {
+    const dataKey = isDailyView ? 'hour' : 'date'; // 'hour' ou 'date'
+    const pdvDataKey = 'faturamento_por_pdv';
+
+    rawData.forEach(entry => {
+      entry[pdvDataKey].forEach(pdv => {
         const pdvKey = `pdv_${pdv.pdv_id}`;
         if (!pdvMap.has(pdvKey)) {
           pdvMap.set(pdvKey, { name: pdv.pdv_nome });
@@ -59,10 +71,10 @@ export default function PdvRevenueChart() {
       colorIndex++;
     });
 
-    const transformedData = rawData.map(day => {
-      const dayData = { date: day.date };
+    const transformedData = rawData.map(entry => {
+      const dayData = { [dataKey]: entry[dataKey] };
       pdvMap.forEach((_, key) => { dayData[key] = 0; });
-      day.faturamento_por_pdv.forEach(pdv => {
+      entry[pdvDataKey].forEach(pdv => {
         const pdvKey = `pdv_${pdv.pdv_id}`;
         dayData[pdvKey] = pdv.total;
       });
@@ -70,25 +82,27 @@ export default function PdvRevenueChart() {
     });
 
     return { chartData: transformedData, chartConfig: dynamicChartConfig };
-  }, [rawData]);
+  }, [rawData, timeframe]);
 
+  // ✅ 4. O filtro de data agora só se aplica na visão "Mensal"
   const filteredData = React.useMemo(() => {
+    if (timeframe === 'daily') {
+      return chartData; // Na visão diária, mostramos todos os dados (horas)
+    }
+    
     if (!dateRange?.from) return [];
-
     return chartData.filter(item => {
         const itemDate = new Date(item.date);
         const fromDate = new Date(dateRange.from);
         const toDate = dateRange.to ? new Date(dateRange.to) : new Date(dateRange.from);
-        
-        // Ajusta as datas para ignorar a hora
         itemDate.setHours(0, 0, 0, 0);
         fromDate.setHours(0, 0, 0, 0);
         toDate.setHours(0, 0, 0, 0);
-
         return itemDate >= fromDate && itemDate <= toDate;
     });
-  }, [chartData, dateRange]);
+  }, [chartData, dateRange, timeframe]);
   
+  // A lógica de 'stats' continua funcionando como antes
   const stats = React.useMemo(() => {
     if (filteredData.length === 0) return { totalRevenue: 0 };
     
@@ -119,48 +133,22 @@ export default function PdvRevenueChart() {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Todos os PDVs</SelectItem>
-            <SelectItem value="pdv1">PDV 01</SelectItem>
-            <SelectItem value="pdv2">PDV 02</SelectItem>
-            <SelectItem value="pdv3">PDV 03</SelectItem>
+            {Object.entries(chartConfig).map(([key, config]) => (
+                <SelectItem key={key} value={key}>{config.label}</SelectItem>
+            ))}
           </SelectContent>
         </Select>
 
+        {/* ✅ 5. O seletor de data agora só aparece na visão 'monthly' */}
         {timeframe === "monthly" && (
           <Popover>
             <PopoverTrigger asChild>
-              <Button
-                id="date"
-                variant={"outline"}
-                className={cn(
-                  "w-[260px] h-9 justify-start text-left font-normal",
-                  !dateRange && "text-muted-foreground"
-                )}
-              >
-                <CalendarIcon className="mr-2 h-4 w-4" />
-                {dateRange?.from ? (
-                  dateRange.to ? (
-                    <>
-                      {format(dateRange.from, "LLL dd, y", { locale: ptBR })} -{" "}
-                      {format(dateRange.to, "LLL dd, y", { locale: ptBR })}
-                    </>
-                  ) : (
-                    format(dateRange.from, "LLL dd, y", { locale: ptBR })
-                  )
-                ) : (
-                  <span>Escolha um período</span>
-                )}
+              <Button id="date" variant={"outline"} /* ... */ >
+                {/* ... (conteúdo do botão de data) ... */}
               </Button>
             </PopoverTrigger>
             <PopoverContent className="w-auto p-0" align="start">
-              <Calendar
-                initialFocus
-                mode="range"
-                defaultMonth={dateRange?.from}
-                selected={dateRange}
-                onSelect={setDateRange}
-                numberOfMonths={2}
-                locale={ptBR}
-              />
+              <Calendar mode="range" /* ... */ />
             </PopoverContent>
           </Popover>
         )}
@@ -213,52 +201,56 @@ export default function PdvRevenueChart() {
 
       {/* 🔸 Gráfico */}
       <div className="flex-grow w-full relative overflow-hidden">
-        <ResponsiveContainer width="100%" height="100%">
-          <ChartContainer config={chartConfig} className="h-full w-full aspect-auto">
-            <ComposedChart
-              data={filteredData}
-              margin={{ top: 5, right: 10, left: -20, bottom: 0 }}
-            >
-              {/* ✅ Gradientes e cores dinâmicas */}
-              <defs>
-                {Object.keys(chartConfig).map((key) => (
+        {isLoading ? (
+          <div className="absolute inset-0 flex items-center justify-center">
+            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+          </div>
+        ) : (
+          <ResponsiveContainer width="100%" height="100%">
+            <ChartContainer config={chartConfig} className="h-full w-full aspect-auto">
+              <ComposedChart
+                data={filteredData}
+                margin={{ top: 5, right: 10, left: -20, bottom: 0 }}
+              >
+                <defs>
+                  {Object.keys(chartConfig).map((key) => (
                   <linearGradient key={key} id={`fill${key}`} x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor={`var(--color-${key})`} stopOpacity={0.8} />
                     <stop offset="95%" stopColor={`var(--color-${key})`} stopOpacity={0.1} />
                   </linearGradient>
                 ))}
-              </defs>
-
-              <CartesianGrid vertical={false} />
-              <XAxis
-                dataKey="date"
-                tickLine={false}
-                axisLine={false}
-                tickMargin={8}
-                tickFormatter={(value) => format(new Date(value), "dd/MM")}
-              />
-              <YAxis
-                tickFormatter={(value) => value.toLocaleString("pt-BR")}
-                tickLine={false}
-                axisLine={false}
-              />
-              <Tooltip
-                cursor={false}
-                content={
-                  <ChartTooltipContent
-                    formatter={(value, name) => [
-                      value.toLocaleString("pt-BR", {
-                        style: "currency",
-                        currency: "BRL",
-                      }),
-                      chartConfig[name].label,
-                    ]}
-                    labelFormatter={(label) =>
-                      format(new Date(label), "PPP", { locale: ptBR })
-                    }
-                  />
-                }
-              />
+                </defs>
+                <CartesianGrid vertical={false} />
+                
+                {/* ✅ 6. JSX CONDICIONAL PARA O EIXO X */}
+                <XAxis
+                  dataKey={timeframe === 'monthly' ? 'date' : 'hour'}
+                  tickLine={false}
+                  axisLine={false}
+                  tickMargin={8}
+                  tickFormatter={
+                    timeframe === 'monthly' 
+                      ? (value) => format(new Date(value), "dd/MM") 
+                      : (value) => value // Simplesmente mostra a hora (ex: "08:00")
+                  }
+                />
+                <YAxis tickFormatter={(value) => value.toLocaleString("pt-BR")} tickLine={false} axisLine={false} />
+                <Tooltip
+                  cursor={false}
+                  content={
+                    <ChartTooltipContent
+                      formatter={(value, name) => [
+                        value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }),
+                        chartConfig[name].label,
+                      ]}
+                      labelFormatter={
+                        timeframe === 'monthly'
+                          ? (label) => format(new Date(label), "PPP", { locale: ptBR })
+                          : (label) => `Às ${label}` // Formato para o tooltip de hora
+                      }
+                    />
+                  }
+                />
               {pdvsToDisplay.map((pdvKey) => (
                 <Area
                   key={pdvKey}
@@ -270,9 +262,10 @@ export default function PdvRevenueChart() {
                   dot={false}
                 />
               ))}
-            </ComposedChart>
-          </ChartContainer>
-        </ResponsiveContainer>
+              </ComposedChart>
+            </ChartContainer>
+          </ResponsiveContainer>
+        )}
       </div>
     </div>
   )

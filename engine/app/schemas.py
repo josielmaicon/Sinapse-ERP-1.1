@@ -132,3 +132,23 @@ class DashboardStats(BaseModel):
     expiring_soon_count: int
     expired_count: int
     low_stock_count: int
+
+class PdvStatus(BaseModel):
+    id: int
+    nome: str
+    status: str
+    operador_atual: Optional[UsuarioBase] = None # Mostra o nome do operador
+    # Adicionaremos o valor em caixa no futuro
+
+    class Config:
+        from_attributes = True
+
+class FaturamentoPorPdvHora(BaseModel):
+    pdv_id: int
+    pdv_nome: str
+    total: float
+
+class ResumoPorHora(BaseModel):
+    hour: str
+    faturamento_total_hora: float
+    faturamento_por_pdv: List[FaturamentoPorPdvHora]

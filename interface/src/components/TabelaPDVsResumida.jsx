@@ -1,69 +1,54 @@
-// src/components/PdvStatusTable.jsx
-
 "use client"
 
 import * as React from "react"
-
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip"
-import {
-  Table,
-  TableHeader,
-  TableBody,
-  TableRow,
-  TableHead,
-  TableCell,
-} from "@/components/SimpleTable"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/SimpleTable"
+import { Skeleton } from "@/components/ui/skeleton" // Importe o Skeleton
 
-// 🧩 MOCK: Novos dados mais realistas para os PDVs
-const pdvData = [
-  { id: 1, name: "Caixa 01", operator: "Ana Paula", inregister: 2150.70, status: "aberto", statusDetail: "Em operação desde 08:02" },
-  { id: 2, name: "Caixa 02", operator: "Carlos Souza", inregister: 1840.25, status: "aberto", statusDetail: "Em operação desde 08:05" },
-  { id: 3, name: "Caixa 03", operator: "Mariana Lima", inregister: 0, status: "fechado", statusDetail: "Fechado desde ontem às 18:00" },
-  { id: 4, name: "Caixa 04", operator: "Jorge Dias", inregister: 1980.50, status: "aberto", statusDetail: "Em operação desde 09:15" },
-  { id: 5, name: "Caixa 05", operator: "N/D", inregister: 0, status: "fechado", statusDetail: "Inativo" },
-  { id: 6, name: "Self-Checkout", operator: "N/D", inregister: 950.80, status: "pausado", statusDetail: "Pausado para manutenção às 13:10" },
-];
+// ❌ O MOCK FOI REMOVIDO
 
 export default function PdvStatusTable() {
-  // Estado para controlar o filtro selecionado
+  // ✅ 1. ESTADOS PARA OS DADOS, FILTRO E LOADING
+  const [pdvData, setPdvData] = React.useState([]);
   const [filter, setFilter] = React.useState("todos");
+  const [isLoading, setIsLoading] = React.useState(true);
 
-  // Filtra os dados com base no estado. useMemo otimiza a performance.
-  const filteredData = React.useMemo(() => {
-    if (filter === "abertos") {
-      return pdvData.filter((pdv) => pdv.status === "aberto");
-    }
-    if (filter === "fechados") {
-      return pdvData.filter((pdv) => pdv.status !== "aberto");
-    }
-    return pdvData; // Filtro "todos"
-  }, [filter]);
+  // ✅ 2. useEffect PARA BUSCAR DADOS QUANDO O FILTRO MUDA
+  React.useEffect(() => {
+    const fetchPdvData = async () => {
+      setIsLoading(true);
+      try {
+        // O filtro é passado como um parâmetro na URL
+        const response = await fetch(`http://localhost:8000/api/pdvs?status=${filter}`);
+        if (!response.ok) throw new Error("Falha ao buscar dados dos PDVs");
+        const data = await response.json();
+        setPdvData(data);
+      } catch (error) {
+        console.error(error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
 
-  // Define as colunas da nossa nova tabela
-  const columns = ["PDV", "Operador", "Em caixa", ""]; // Coluna de status não tem título
+    fetchPdvData();
+  }, [filter]); // A mágica da reatividade: roda toda vez que 'filter' muda
+
+  const columns = ["PDV", "Operador", "Em caixa", ""];
 
   return (
-    // TooltipProvider é necessário para os tooltips funcionarem
     <TooltipProvider>
       <div className="h-full flex flex-col">
-        {/* Grupo de botões de filtro */}
         <div className="flex-shrink-0 mb-4">
           <Tabs value={filter} onValueChange={setFilter}>
             <TabsList>
               <TabsTrigger value="todos">Todos</TabsTrigger>
-              <TabsTrigger value="abertos">Abertos</TabsTrigger>
+              <TabsTrigger value="aberto">Abertos</TabsTrigger>
               <TabsTrigger value="fechados">Fechados</TabsTrigger>
             </TabsList>
           </Tabs>
         </div>
 
-        {/* Container da Tabela com scroll */}
         <div className="flex-grow overflow-y-auto min-h-0">
           <Table>
             <TableHeader>
@@ -73,30 +58,43 @@ export default function PdvStatusTable() {
                 ))}
               </TableRow>
             </TableHeader>
-            <TableBody>
-              {filteredData.map((item) => (
-                <TableRow key={item.id}>
-                  <TableCell className="font-medium">{item.name}</TableCell>
-                  <TableCell>{item.operator}</TableCell>
-                  <TableCell>{item.inregister.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</TableCell>
-                  <TableCell className="text-right">
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        {/* A bolinha de status */}
-                        <div
-                          className={`inline-block w-2.5 h-2.5 rounded-full ${
-                            item.status === 'aberto' ? 'bg-green-500' : 'bg-red-500'
-                          }`}
-                        />
-                      </TooltipTrigger>
-                      {/* O conteúdo do tooltip */}
-                      <TooltipContent>
-                        <p>{item.statusDetail}</p>
-                      </TooltipContent>
-                    </Tooltip>
-                  </TableCell>
-                </TableRow>
-              ))}
+              <TableBody>
+              {/* ✅ 3. LÓGICA DE LOADING COM SKELETON */}
+              {isLoading ? (
+                Array.from({ length: 5 }).map((_, index) => (
+                  <TableRow key={index}>
+                    <TableCell><Skeleton className="h-4 w-20" /></TableCell>
+                    <TableCell><Skeleton className="h-4 w-24" /></TableCell>
+                    <TableCell><Skeleton className="h-4 w-16" /></TableCell>
+                    <TableCell className="text-right"><Skeleton className="h-3 w-3 rounded-full" /></TableCell>
+                  </TableRow>
+                ))
+              ) : (
+                pdvData.map((item) => (
+                  <TableRow key={item.id}>
+                    <TableCell className="font-medium">{item.nome}</TableCell>
+                    {/* Agora pegamos o nome do operador do objeto aninhado */}
+                    <TableCell>{item.operador_atual?.nome ?? "N/D"}</TableCell>
+                    {/* O 'inregister' virá de outra chamada no futuro, por enquanto deixamos 0 */}
+                    <TableCell>R$ 0,00</TableCell>
+                    <TableCell className="text-right">
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <div
+                            className={`inline-block w-2.5 h-2.5 rounded-full ${
+                              item.status === 'aberto' ? 'bg-green-500' : 
+                              item.status === 'pausado' ? 'bg-yellow-500' : 'bg-red-500'
+                            }`}
+                          />
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p className="capitalize">{item.status}</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
             </TableBody>
           </Table>
         </div>

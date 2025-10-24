@@ -7,8 +7,6 @@ import { ProductDataTable } from "@/components/TabelaProdutos";
 import ProductDetailPanel from "@/components/PainelDetalheProduto";
 import MiniChart from "@/components/MiniChart";
 
-
-
 export default function ProdutosPage() {
   const [productData, setProductData] = React.useState([]);
   const [selectedProduct, setSelectedProduct] = React.useState(null);
