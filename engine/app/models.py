@@ -118,6 +118,7 @@ class Venda(Base):
     
     # Uma venda tem muitos itens. 'cascade' garante que se uma venda for deletada, seus itens também sejam.
     itens = relationship("VendaItem", back_populates="venda", cascade="all, delete-orphan")
+    nota_fiscal_saida = relationship("NotaFiscalSaida", back_populates="venda", uselist=False)
 
 class VendaItem(Base):
     __tablename__ = "venda_itens"
@@ -149,3 +150,32 @@ class MovimentacaoCaixa(Base):
     # Relações
     pdv = relationship("Pdv", back_populates="movimentacoes_caixa")
     operador = relationship("Usuario", back_populates="movimentacoes_caixa")
+
+class NotaFiscalEntrada(Base):
+    __tablename__ = "notas_fiscais_entrada"
+    id = Column(Integer, primary_key=True)
+    numero_nota = Column(String(50), index=True)
+    chave_acesso = Column(String(44), unique=True)
+    data_emissao = Column(Date, nullable=False)
+    valor_total = Column(Float, nullable=False)
+    
+    fornecedor_id = Column(Integer, ForeignKey("fornecedores.id"))
+    fornecedor = relationship("Fornecedor") # Relação simples
+
+class NotaFiscalSaida(Base):
+    __tablename__ = "notas_fiscais_saida"
+    id = Column(Integer, primary_key=True)
+    chave_acesso = Column(String(44), unique=True)
+    protocolo = Column(String(50))
+    status_sefaz = Column(String(50), default="Em Processamento") # Ex: "Autorizada", "Cancelada", "Rejeitada"
+    data_hora_autorizacao = Column(DateTime)
+    
+    # A conexão com a venda original
+    venda_id = Column(Integer, ForeignKey("vendas.id"), unique=True)
+    venda = relationship("Venda", back_populates="nota_fiscal_saida")
+
+class Configuracao(Base):
+    __tablename__ = "configuracoes"
+    id = Column(Integer, primary_key=True)
+    chave = Column(String(50), unique=True, nullable=False) # Ex: "meta_fiscal_tipo", "meta_fiscal_valor"
+    valor = Column(String(255), nullable=False)

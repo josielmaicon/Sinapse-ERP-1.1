@@ -15,7 +15,8 @@ import {
   HoverCardContent,
   HoverCardTrigger,
 } from "@/components/ui/hover-card"
-import { Rocket, Target } from "lucide-react"
+import { Rocket, Target, Save } from "lucide-react"
+import { toast } from "sonner"
 
 // As props que o componente espera receber da página principal
 export default function MetaEnvio({ totalPurchased = 200000, totalIssued = 150000 }) {
@@ -45,6 +46,17 @@ export default function MetaEnvio({ totalPurchased = 200000, totalIssued = 15000
     return { calculatedGoal: goal, progressPercentage: Math.min(percentage, 100) };
   }, [strategy, goalValue, totalPurchased, totalIssued]);
   
+  const handleUpdateGoal = async () => {
+      // Aqui você faria a chamada de API para o backend
+      // Ex: await fetch('/api/fiscal/meta', { method: 'POST', body: JSON.stringify({ strategy, goalValue }) });
+      
+      // Simulação de sucesso
+      console.log("Salvando nova meta:", { strategy, goalValue });
+      await new Promise(res => setTimeout(res, 500)); // Simula delay da rede
+      
+      toast.success("Estratégia de meta atualizada com sucesso!");
+    };
+
   const goalUnit = {
     coeficiente: "x",
     porcentagem: "%",
@@ -109,13 +121,21 @@ export default function MetaEnvio({ totalPurchased = 200000, totalIssued = 15000
       
       {/* SEÇÃO 4: AÇÕES (O rodapé) */}
       <div className="flex items-center justify-between mt-2">
-        {/* O botão "Atingir Meta" só aparece se o piloto automático estiver DESLIGADO */}
-        {!isAutopilotOn && (
-          <Button disabled={progressPercentage >= 100}>
-            <Target className="h-4 w-4 mr-2" />
-            Atingir Meta Agora
-          </Button>
-        )}
+        {/* Agrupamos os botões de ação na esquerda */}
+        <div className="flex items-center gap-2">
+          {!isAutopilotOn && (
+            <>
+              <Button onClick={handleUpdateGoal}>
+                <Save className="h-4 w-4 mr-2" />
+                Atualizar Meta
+              </Button>
+              <Button variant="secondary" disabled={progressPercentage >= 100}>
+                <Target className="h-4 w-4 mr-2" />
+                Atingir Meta Agora
+              </Button>
+            </>
+          )}
+        </div>
         
         {/* O Switch agora fica isolado na direita */}
         <div className="flex items-center space-x-2 ml-auto">

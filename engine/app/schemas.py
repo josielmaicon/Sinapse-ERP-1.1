@@ -152,3 +152,29 @@ class ResumoPorHora(BaseModel):
     hour: str
     faturamento_total_hora: float
     faturamento_por_pdv: List[FaturamentoPorPdvHora]
+
+class NotaFiscalEntrada(BaseModel):
+    id: int
+    numero_nota: str
+    data_emissao: date
+    valor_total: float
+    
+    class Config:
+        from_attributes = True
+
+class NotaFiscalSaida(BaseModel):
+    id: int
+    chave_acesso: str
+    status_sefaz: str
+    data_hora_autorizacao: datetime
+    venda_id: int
+
+    class Config:
+        from_attributes = True
+        
+class Configuracao(BaseModel):
+    chave: str
+    valor: str
+
+    class Config:
+        from_attributes = True

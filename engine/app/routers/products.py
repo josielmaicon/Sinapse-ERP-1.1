@@ -30,11 +30,21 @@ def get_all_products(db: Session = Depends(get_db)):
 @router.delete("/{produto_id}")
 def delete_produto(produto_id: int, db: Session = Depends(get_db)):
     db_produto = db.query(models.Produto).filter(models.Produto.id == produto_id).first()
+
     if db_produto is None:
         raise HTTPException(status_code=404, detail="Produto não encontrado")
+
+    # Verifica se o produto já está em alguma venda
+    item_vinculado = db.query(models.VendaItem).filter(models.VendaItem.produto_id == produto_id).first()
+    if item_vinculado:
+        raise HTTPException(
+            status_code=400,
+            detail="Não é possível excluir este produto, pois ele já foi utilizado em uma venda."
+        )
+
     db.delete(db_produto)
     db.commit()
-    return {"ok": True, "message": "Produto excluído com sucesso"}  
+    return {"ok": True, "message": "Produto excluído com sucesso"} 
 
 @router.get("/barcode/{barcode}", response_model=schemas.Produto)
 def get_product_by_barcode(barcode: str, db: Session = Depends(get_db)):

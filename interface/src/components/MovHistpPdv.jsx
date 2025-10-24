@@ -49,7 +49,7 @@ export default function PdvHistoryLog({ pdv }) {
   return (
     // TooltipProvider agora envolve todo o componente
     <TooltipProvider>
-      <div className="h-full flex flex-col">
+      <div className="h-full w-full flex flex-col">
         <div className="flex-shrink-0">
           <h3 className="text-lg font-semibold">{title}</h3>
           <Separator className="my-4" />
