@@ -9,7 +9,6 @@ import { Label } from "@/components/ui/label"
 import { Progress } from "@/components/ui/progress"
 import { Switch } from "@/components/ui/switch"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
-// ✅ 1. Importe os componentes do HoverCard
 import {
   HoverCard,
   HoverCardContent,
@@ -19,7 +18,12 @@ import { Rocket, Target, Save } from "lucide-react"
 import { toast } from "sonner"
 
 // As props que o componente espera receber da página principal
-export default function MetaEnvio({ totalPurchased = 200000, totalIssued = 150000 }) {
+export default function MetaEnvio({ totalPurchased, totalIssued }) {
+
+  if (totalPurchased === undefined || totalIssued === undefined) {
+      return <div>Carregando dados fiscais...</div>; // Ou um componente de Skeleton
+    }
+
   const [strategy, setStrategy] = React.useState("coeficiente");
   const [goalValue, setGoalValue] = React.useState(2.1);
   const [isAutopilotOn, setIsAutopilotOn] = React.useState(false);

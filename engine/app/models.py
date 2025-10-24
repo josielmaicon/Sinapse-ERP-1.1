@@ -97,6 +97,7 @@ class Pdv(Base):
     operador_atual = relationship("Usuario", uselist=False) 
     vendas = relationship("Venda", back_populates="pdv")
     movimentacoes_caixa = relationship("MovimentacaoCaixa", back_populates="pdv")
+    solicitacoes = relationship("Solicitacao", back_populates="pdv")
 
 class Venda(Base):
     __tablename__ = "vendas"
@@ -179,3 +180,23 @@ class Configuracao(Base):
     id = Column(Integer, primary_key=True)
     chave = Column(String(50), unique=True, nullable=False) # Ex: "meta_fiscal_tipo", "meta_fiscal_valor"
     valor = Column(String(255), nullable=False)
+
+class Solicitacao(Base):
+    __tablename__ = "solicitacoes"
+
+    id = Column(Integer, primary_key=True, index=True)
+    tipo = Column(String(50), nullable=False)
+    detalhes = Column(String(255))
+    status = Column(String(50), default="pendente", nullable=False)
+    data_hora_criacao = Column(DateTime, default=datetime.utcnow)
+    data_hora_resolucao = Column(DateTime, nullable=True)
+
+    # Conexões
+    pdv_id = Column(Integer, ForeignKey("pdvs.id"), nullable=False)
+    operador_id = Column(Integer, ForeignKey("usuarios.id"), nullable=False)
+    gerente_id = Column(Integer, ForeignKey("usuarios.id"), nullable=True) # Quem resolveu
+
+    # Relações
+    pdv = relationship("Pdv", back_populates="solicitacoes")
+    operador = relationship("Usuario", foreign_keys=[operador_id])
+    gerente = relationship("Usuario", foreign_keys=[gerente_id])

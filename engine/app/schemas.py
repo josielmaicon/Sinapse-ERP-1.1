@@ -178,3 +178,20 @@ class Configuracao(BaseModel):
 
     class Config:
         from_attributes = True
+
+class SolicitacaoBase(BaseModel):
+    tipo: str
+    detalhes: Optional[str] = None
+    pdv_id: int
+    operador_id: int
+
+class SolicitacaoCreate(SolicitacaoBase):
+    pass
+
+class Solicitacao(SolicitacaoBase):
+    id: int
+    status: str
+    data_hora_criacao: datetime
+
+    class Config:
+        from_attributes = True
