@@ -27,12 +27,12 @@ export default function PdvRevenueChart() {
       setIsLoading(true);
       
       // Decide qual URL da API chamar
-      const isDailyView = timeframe === 'daily';
+      const isDailyView = timeframe === 'hoje';
       const endpoint = isDailyView
         ? "http://localhost:8000/vendas/resumo-hoje-por-hora"
         : "http://localhost:8000/vendas/resumo-diario-dinamico";
 
-      try {
+        try {
         const response = await fetch(endpoint);
         if (!response.ok) throw new Error("Falha ao buscar dados do resumo");
         const data = await response.json();
@@ -143,12 +143,39 @@ export default function PdvRevenueChart() {
         {timeframe === "monthly" && (
           <Popover>
             <PopoverTrigger asChild>
-              <Button id="date" variant={"outline"} /* ... */ >
-                {/* ... (conteúdo do botão de data) ... */}
+              <Button
+                id="date"
+                variant={"outline"}
+                className={cn(
+                  "w-[260px] h-9 justify-start text-left font-normal",
+                  !dateRange && "text-muted-foreground"
+                )}
+              >
+                <CalendarIcon className="mr-2 h-4 w-4" />
+                {dateRange?.from ? (
+                  dateRange.to ? (
+                    <>
+                      {format(dateRange.from, "LLL dd, y", { locale: ptBR })} -{" "}
+                      {format(dateRange.to, "LLL dd, y", { locale: ptBR })}
+                    </>
+                  ) : (
+                    format(dateRange.from, "LLL dd, y", { locale: ptBR })
+                  )
+                ) : (
+                  <span>Escolha um período</span>
+                )}
               </Button>
             </PopoverTrigger>
             <PopoverContent className="w-auto p-0" align="start">
-              <Calendar mode="range" /* ... */ />
+              <Calendar
+                initialFocus
+                mode="range"
+                defaultMonth={dateRange?.from}
+                selected={dateRange}
+                onSelect={setDateRange}
+                numberOfMonths={2}
+                locale={ptBR}
+              />
             </PopoverContent>
           </Popover>
         )}
