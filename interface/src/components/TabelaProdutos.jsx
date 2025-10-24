@@ -129,7 +129,7 @@ export function ProductDataTable({ columns, data, onProductSelect, refetchData }
     if (productsToDelete.length === 0) return;
     try {
       for (const product of productsToDelete) {
-        const response = await fetch(`http://localhost:8000/api/produtos/${product.id}`, { method: 'DELETE' });
+        const response = await fetch(`http://localhost:8000/produtos/${product.id}`, { method: 'DELETE' });
         if (!response.ok) throw new Error(`Falha ao excluir ${product.nome}`);
       }
       toast.success(`${productsToDelete.length} produto(s) excluído(s) com sucesso.`);

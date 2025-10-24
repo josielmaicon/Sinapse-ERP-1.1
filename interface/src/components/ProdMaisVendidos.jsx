@@ -1,5 +1,8 @@
 "use client"
 
+import * as React from "react"
+import { Loader2 } from "lucide-react"
+
 import {
   Bar,
   BarChart,
@@ -11,14 +14,6 @@ import {
 } from "recharts"
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart"
 
-const chartData = [
-  { name: "Leite Integral", totalSales: 2850.75 },
-  { name: "Pão Francês", totalSales: 2100.40 },
-  { name: "Coca-Cola 2L", totalSales: 1730.00 },
-  { name: "Contra-filé Kg", totalSales: 1520.10 },
-  { name: "Cerveja Skol Lt", totalSales: 1280.50 },
-].sort((a, b) => a.totalSales - b.totalSales)
-
 // ✅ Correção: define a cor e o label aqui, que será usada pelo ChartContainer
 const chartConfig = {
   totalSales: {
@@ -28,10 +23,39 @@ const chartConfig = {
 }
 
 export default function TopProductsChart() {
-  const maxValue =
-    chartData.length > 0
-      ? Math.max(...chartData.map((item) => item.totalSales))
-      : 0
+const [chartData, setChartData] = React.useState([]);
+  const [isLoading, setIsLoading] = React.useState(true);
+
+  React.useEffect(() => {
+    const fetchTopProducts = async () => {
+      setIsLoading(true);
+      try {
+        const response = await fetch("http://localhost:8000/vendas/top-produtos");
+        if (!response.ok) throw new Error("Falha ao buscar top produtos");
+        let data = await response.json();
+        
+        // Ordena os dados do menor para o maior para o gráfico renderizar de baixo para cima
+        data.sort((a, b) => b.totalSales - a.totalSales);
+        
+        setChartData(data);
+      } catch (error) {
+        console.error(error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    fetchTopProducts();
+  }, []);
+
+  const maxValue = chartData.length > 0 ? Math.max(...chartData.map((item) => item.totalSales)) : 0;
+
+  if (isLoading) {
+    return (
+      <div className="h-full flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
 
   return (
     <div className="w-full h-full relative">

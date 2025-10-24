@@ -1,116 +1,119 @@
 "use client"
 
 import * as React from "react"
-import { format, subDays } from "date-fns"
+import { format, subDays, startOfMonth, endOfMonth } from "date-fns"
 import { ptBR } from "date-fns/locale"
-import { Calendar as CalendarIcon, ArrowUp, ArrowDown } from "lucide-react"
-import {
-  Area,
-  ComposedChart,
-  CartesianGrid,
-  XAxis,
-  YAxis,
-  Tooltip,
-  ResponsiveContainer,
-  Line,
-} from "recharts"
-
+import { Area, ComposedChart, CartesianGrid, XAxis, YAxis, Tooltip, ResponsiveContainer, Line } from "recharts"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Calendar } from "@/components/ui/calendar"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { ChartContainer, ChartTooltipContent } from "@/components/ui/chart"
-
-// 📊 Geração de dados mockados
-const generateMockData = () => {
-  const data = []
-  for (let i = 90; i >= 0; i--) {
-    const date = subDays(new Date(), i)
-    data.push({
-      date: format(date, "yyyy-MM-dd"),
-      pdv1: Math.floor(Math.random() * (1200 - 500 + 1)) + 500,
-      pdv2: Math.floor(Math.random() * (1000 - 400 + 1)) + 400,
-      pdv3: Math.floor(Math.random() * (800 - 200 + 1)) + 200,
-    })
-  }
-  return data
-}
-const chartData = generateMockData()
-
-// ⚙️ CORRIGIDO: usar var(--chart-1/2/3) para o ChartContainer gerar as vars --color-pdv*
-const chartConfig = {
-  pdv1: { label: "PDV 01", color: "var(--chart-1)" },
-  pdv2: { label: "PDV 02", color: "var(--chart-2)" },
-  pdv3: { label: "PDV 03", color: "var(--chart-3)" },
-}
+import { Loader2, Calendar as CalendarIcon, ArrowUp, ArrowDown } from "lucide-react"
 
 export default function PdvRevenueChart() {
-  const [timeframe, setTimeframe] = React.useState("daily")
-  const [selectedPdv, setSelectedPdv] = React.useState("all")
-  const [dateRange, setDateRange] = React.useState({
-    from: subDays(new Date(), 30),
-    to: new Date(),
-  })
+  
+  const [timeframe, setTimeframe] = React.useState("30d");
+  const [selectedPdvKey, setSelectedPdvKey] = React.useState("all");
+  const [dateRange, setDateRange] = React.useState({ from: subDays(new Date(), 29), to: new Date() });
+  
+  const [rawData, setRawData] = React.useState([]);
+  const [isLoading, setIsLoading] = React.useState(true);
+
+  React.useEffect(() => {
+    const fetchChartData = async () => {
+      setIsLoading(true);
+      try {
+        const response = await fetch("http://localhost:8000/vendas/resumo-diario-dinamico");
+        if (!response.ok) throw new Error("Falha ao buscar dados do resumo diário");
+        const data = await response.json();
+        setRawData(data);
+      } catch (error) {
+        console.error(error);
+        // Aqui você pode mostrar um toast de erro
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    fetchChartData();
+  }, []);
+  
+  const { chartData, chartConfig } = React.useMemo(() => {
+    if (rawData.length === 0) return { chartData: [], chartConfig: {} };
+
+    const pdvMap = new Map();
+    rawData.forEach(day => {
+      day.faturamento_por_pdv.forEach(pdv => {
+        const pdvKey = `pdv_${pdv.pdv_id}`;
+        if (!pdvMap.has(pdvKey)) {
+          pdvMap.set(pdvKey, { name: pdv.pdv_nome });
+        }
+      });
+    });
+
+    const dynamicChartConfig = {};
+    let colorIndex = 1;
+    pdvMap.forEach((pdv, key) => {
+      dynamicChartConfig[key] = { label: pdv.name, color: `var(--chart-${colorIndex})` };
+      colorIndex++;
+    });
+
+    const transformedData = rawData.map(day => {
+      const dayData = { date: day.date };
+      pdvMap.forEach((_, key) => { dayData[key] = 0; });
+      day.faturamento_por_pdv.forEach(pdv => {
+        const pdvKey = `pdv_${pdv.pdv_id}`;
+        dayData[pdvKey] = pdv.total;
+      });
+      return dayData;
+    });
+
+    return { chartData: transformedData, chartConfig: dynamicChartConfig };
+  }, [rawData]);
 
   const filteredData = React.useMemo(() => {
-    let data = chartData
+    if (!dateRange?.from) return [];
 
-    if (timeframe === "monthly" && dateRange?.from && dateRange?.to) {
-      data = chartData.filter((item) => {
-        const itemDate = new Date(item.date)
-        return itemDate >= dateRange.from && itemDate <= dateRange.to
-      })
-    } else {
-      data = chartData.slice(-30)
-    }
-    return data
-  }, [timeframe, dateRange])
+    return chartData.filter(item => {
+        const itemDate = new Date(item.date);
+        const fromDate = new Date(dateRange.from);
+        const toDate = dateRange.to ? new Date(dateRange.to) : new Date(dateRange.from);
+        
+        // Ajusta as datas para ignorar a hora
+        itemDate.setHours(0, 0, 0, 0);
+        fromDate.setHours(0, 0, 0, 0);
+        toDate.setHours(0, 0, 0, 0);
 
+        return itemDate >= fromDate && itemDate <= toDate;
+    });
+  }, [chartData, dateRange]);
+  
   const stats = React.useMemo(() => {
-    if (!filteredData || filteredData.length === 0) {
-      return { totalRevenue: 0, percentageChange: 0, hasPreviousData: false }
-    }
-    const totalRevenue = filteredData.reduce(
-      (acc, day) => acc + (day.pdv1 || 0) + (day.pdv2 || 0) + (day.pdv3 || 0),
-      0
-    )
-    const firstDate = new Date(filteredData[0].date)
-    const lastDate = new Date(filteredData[filteredData.length - 1].date)
-    const duration = Math.round((lastDate - firstDate) / (1000 * 60 * 60 * 24))
-    const prevPeriodEndDate = subDays(firstDate, 1)
-    const prevPeriodStartDate = subDays(prevPeriodEndDate, duration)
-    const prevPeriodData = chartData.filter((item) => {
-      const itemDate = new Date(item.date)
-      return itemDate >= prevPeriodStartDate && itemDate <= prevPeriodEndDate
-    })
-    if (prevPeriodData.length === 0) {
-      return { totalRevenue, percentageChange: 0, hasPreviousData: false }
-    }
-    const previousRevenue = prevPeriodData.reduce(
-      (acc, day) => acc + (day.pdv1 || 0) + (day.pdv2 || 0) + (day.pdv3 || 0),
-      0
-    )
-    if (previousRevenue === 0) {
-      return {
-        totalRevenue,
-        percentageChange: totalRevenue > 0 ? 100 : 0,
-        hasPreviousData: true,
-      }
-    }
-    const percentageChange =
-      ((totalRevenue - previousRevenue) / previousRevenue) * 100
-    return { totalRevenue, percentageChange, hasPreviousData: true }
-  }, [filteredData])
+    if (filteredData.length === 0) return { totalRevenue: 0 };
+    
+    const pdvsToSum = selectedPdvKey === 'all' 
+        ? Object.keys(chartConfig) 
+        : [selectedPdvKey];
 
-  const pdvsToDisplay =
-    selectedPdv === "all" ? Object.keys(chartConfig) : [selectedPdv]
-
+    const totalRevenue = filteredData.reduce((acc, day) => {
+        let dayTotal = 0;
+        pdvsToSum.forEach(pdvKey => {
+            dayTotal += day[pdvKey] || 0;
+        });
+        return acc + dayTotal;
+    }, 0);
+    
+    return { totalRevenue };
+  }, [filteredData, selectedPdvKey, chartConfig]);
+  
+  const pdvsToDisplay = selectedPdvKey === "all" ? Object.keys(chartConfig) : [selectedPdvKey];
+  
   return (
     <div className="w-full h-full flex flex-col">
       {/* 🔸 Filtros e seleção */}
       <div className="flex flex-wrap items-center justify-start sm:justify-end gap-2 mb-4">
-        <Select value={selectedPdv} onValueChange={setSelectedPdv}>
+        <Select value={selectedPdvKey} onValueChange={setSelectedPdvKey}>
           <SelectTrigger className="w-[180px] h-9">
             <SelectValue placeholder="Selecionar PDV" />
           </SelectTrigger>
@@ -256,25 +259,17 @@ export default function PdvRevenueChart() {
                   />
                 }
               />
-
-              {/* ✅ Usa as variáveis geradas pelo ChartContainer */}
-              {pdvsToDisplay.map((pdvKey) => [
+              {pdvsToDisplay.map((pdvKey) => (
                 <Area
-                  key={`${pdvKey}-area`}
+                  key={pdvKey}
                   type="natural"
                   dataKey={pdvKey}
                   fill={`url(#fill${pdvKey})`}
-                  stroke="none"
-                />,
-                <Line
-                  key={`${pdvKey}-line`}
-                  type="natural"
-                  dataKey={pdvKey}
                   stroke={`var(--color-${pdvKey})`}
                   strokeWidth={2}
                   dot={false}
-                />,
-              ])}
+                />
+              ))}
             </ComposedChart>
           </ChartContainer>
         </ResponsiveContainer>

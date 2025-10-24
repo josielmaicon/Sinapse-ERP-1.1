@@ -2,7 +2,9 @@
 from typing import List
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
+from datetime import date, timedelta
 from .. import models, schemas
+from sqlalchemy import and_
 from ..database import get_db, engine
 
 models.Base.metadata.create_all(bind=engine)
@@ -70,3 +72,29 @@ def update_produto(produto_id: int, produto_update: schemas.ProdutoUpdate, db: S
     db.commit()
     db.refresh(db_produto)
     return db_produto
+
+@router.get("/dashboard-stats/", response_model=schemas.DashboardStats)
+def get_dashboard_stats(db: Session = Depends(get_db)):
+    today = date.today()
+    seven_days_from_now = today + timedelta(days=7)
+
+    low_stock_count = db.query(models.Produto).filter(
+        models.Produto.quantidade_estoque <= models.Produto.estoque_minimo
+    ).count()
+
+    expired_count = db.query(models.Produto).filter(
+        models.Produto.vencimento < today
+    ).count()
+
+    expiring_soon_count = db.query(models.Produto).filter(
+        and_(
+            models.Produto.vencimento >= today,
+            models.Produto.vencimento <= seven_days_from_now
+        )
+    ).count()
+
+    return schemas.DashboardStats(
+        low_stock_count=low_stock_count,
+        expired_count=expired_count,
+        expiring_soon_count=expiring_soon_count
+    )

@@ -78,9 +78,11 @@ class Cliente(Base):
     cpf = Column(String(14), unique=True, index=True)
     limite_credito = Column(Float, default=0.0)
     saldo_devedor = Column(Float, default=0.0)
+    status_conta = Column(String(50), default="Em Dia")
     
     # Relação: Um cliente pode ter várias vendas
     vendas = relationship("Venda", back_populates="cliente")
+
 
 class Pdv(Base):
     __tablename__ = "pdvs"

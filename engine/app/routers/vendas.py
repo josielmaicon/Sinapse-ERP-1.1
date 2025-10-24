@@ -1,5 +1,7 @@
 # app/routers/vendas.py
-from typing import List
+from typing import List, Dict
+from datetime import date
+from sqlalchemy import func
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from .. import models, schemas
@@ -20,9 +22,8 @@ def create_venda(venda: schemas.VendaCreate, db: Session = Depends(get_db)):
         status="em_andamento" 
     )
     db.add(db_venda)
-    db.commit() # Salva a venda para obter um ID
+    db.commit()
 
-    # Itera sobre os itens recebidos do frontend
     for item in venda.itens:
         db_produto = db.query(models.Produto).filter(models.Produto.id == item.produto_id).first()
         if not db_produto:
@@ -53,3 +54,71 @@ def create_venda(venda: schemas.VendaCreate, db: Session = Depends(get_db)):
 @router.get("/", response_model=List[schemas.Venda])
 def get_all_vendas(db: Session = Depends(get_db)):
     return db.query(models.Venda).all()
+
+@router.get("/resumo-diario-dinamico", response_model=List[schemas.ResumoDiario])
+def get_resumo_diario_dinamico(db: Session = Depends(get_db)):
+    """
+    Retorna o faturamento agrupado por dia e por PDV.
+    Esta é uma rota flexível que funciona com qualquer número de PDVs.
+    """
+    # 1. A consulta no banco de dados agora é mais simples:
+    # Agrupamos por data E por pdv.
+    resultado_query = (
+        db.query(
+            func.date(models.Venda.data_hora).label("sale_date"),
+            models.Pdv.id.label("pdv_id"),
+            models.Pdv.nome.label("pdv_name"),
+            func.sum(models.Venda.valor_total).label("daily_total"),
+        )
+        .join(models.Pdv, models.Venda.pdv_id == models.Pdv.id)
+        .filter(models.Venda.status == "concluida")
+        .group_by("sale_date", "pdv_id", "pdv_name")
+        .order_by("sale_date")
+        .all()
+    )
+
+    # 2. A lógica de transformação em Python:
+    # Agrupamos os resultados por data em um dicionário.
+    dados_agrupados: Dict[date, schemas.ResumoDiario] = {}
+    for row in resultado_query:
+        if row.sale_date not in dados_agrupados:
+            dados_agrupados[row.sale_date] = schemas.ResumoDiario(
+                date=row.sale_date,
+                faturamento_total_dia=0,
+                faturamento_por_pdv=[]
+            )
+        
+        # Adiciona o faturamento do PDV específico
+        dados_agrupados[row.sale_date].faturamento_por_pdv.append(
+            schemas.FaturamentoPorPdv(pdv_id=row.pdv_id, pdv_nome=row.pdv_name, total=row.daily_total)
+        )
+        # Soma para o total do dia
+        dados_agrupados[row.sale_date].faturamento_total_dia += row.daily_total
+            
+    # 3. Retorna a lista de valores do dicionário.
+    return list(dados_agrupados.values())
+
+@router.get("/top-produtos", response_model=List[schemas.ProdutoMaisVendido])
+def get_top_produtos(limit: int = 5, db: Session = Depends(get_db)):
+    """
+    Calcula e retorna os produtos mais vendidos por valor total.
+    """
+    # Esta consulta agrupa os itens de venda por produto,
+    # soma o valor total de cada um, ordena do maior para o menor
+    # e pega os 'limit' primeiros.
+    top_produtos = (
+        db.query(
+            models.Produto.nome.label("name"),
+            func.sum(models.VendaItem.quantidade * models.VendaItem.preco_unitario_na_venda).label("totalSales")
+        )
+        .join(models.Produto, models.VendaItem.produto_id == models.Produto.id)
+        .group_by(models.Produto.id)
+        .order_by(func.sum(models.VendaItem.quantidade * models.VendaItem.preco_unitario_na_venda).desc())
+        .limit(limit)
+        .all()
+    )
+    
+    if not top_produtos:
+        return []
+        
+    return top_produtos

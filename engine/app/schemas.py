@@ -110,3 +110,25 @@ class ProdutoUpdate(BaseModel):
     preco_custo: Optional[float] = None
     categoria: Optional[str] = None
     vencimento: Optional[date] = None
+
+class FaturamentoPorPdv(BaseModel):
+    pdv_id: int
+    pdv_nome: str
+    total: float
+
+class ResumoDiario(BaseModel):
+    date: date
+    faturamento_total_dia: float
+    faturamento_por_pdv: List[FaturamentoPorPdv]
+
+class ProdutoMaisVendido(BaseModel):
+    name: str
+    totalSales: float
+
+    class Config:
+        from_attributes = True
+
+class DashboardStats(BaseModel):
+    expiring_soon_count: int
+    expired_count: int
+    low_stock_count: int
