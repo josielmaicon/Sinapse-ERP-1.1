@@ -7,47 +7,64 @@ import { History, Power, ArrowUpCircle, ArrowDownCircle } from "lucide-react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { Separator } from "@/components/ui/separator"
 import { Table, TableBody, TableRow, TableCell } from "@/components/SimpleTable"
-// ✅ 1. Importe o Tooltip e o Badge
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { Badge } from "@/components/ui/badge"
+import { Skeleton } from "@/components/ui/skeleton"
 
-
-const generalLogData = [
-  { id: 1, pdvName: "Caixa 01", date: new Date("2025-10-15T14:15:00"), type: "venda", value: -45.50, user: "Ana Paula", details: "Cliente #104, 3 itens" },
-  { id: 2, pdvName: "Caixa 02", date: new Date("2025-10-15T14:14:00"), type: "venda", value: -12.90, user: "Carlos S.", details: "Cliente #208, 1 item" },
-  { id: 3, pdvName: "Geral", date: new Date("2025-10-15T14:00:00"), type: "sangria", value: -500.00, user: "Josiel M.", details: "Retirada do Caixa 01 para o cofre" },
-  { id: 4, pdvName: "Caixa 01", date: new Date("2025-10-15T13:50:00"), type: "venda", value: -88.00, user: "Ana Paula", details: "Cliente #103, 8 itens" },
-  { id: 5, pdvName: "Geral", date: new Date("2025-10-15T10:00:00"), type: "suprimento", value: 100.00, user: "Josiel M.", details: "Suprimento de troco para Caixa 02" },
-  { id: 6, pdvName: "Caixa 02", date: new Date("2025-10-15T08:05:00"), type: "abertura", value: 200.00, user: "Carlos S." },
-  { id: 7, pdvName: "Caixa 01", date: new Date("2025-10-15T08:02:00"), type: "abertura", value: 200.00, user: "Ana Paula" },
-].sort((a, b) => b.date - a.date);
+// O mapa de eventos continua o mesmo
 const eventDetails = {
-  'suprimento': { icon: ArrowUpCircle, color: "text-green-500", title: "Suprimento de Caixa" },
-  'venda': { icon: ArrowDownCircle, color: "text-blue-500", title: "Saída por Venda" },
-  'sangria': { icon: ArrowDownCircle, color: "text-orange-500", title: "Sangria (Retirada)" },
-  'abertura': { icon: Power, color: "text-gray-500", title: "Abertura de Caixa" },
-  'fechamento': { icon: Power, color: "text-red-500", title: "Fechamento de Caixa" },
-  'ajuste': { icon: Power, color: "text-gray-500", title: "Ajuste Manual" },
+  'suprimento': { icon: ArrowUpCircle, color: "text-green-500", title: "Suprimento" },
+  'venda': { icon: ArrowDownCircle, color: "text-blue-500", title: "Venda" },
+  'sangria': { icon: ArrowDownCircle, color: "text-orange-500", title: "Sangria" },
+  'abertura': { icon: Power, color: "text-gray-500", title: "Abertura" },
+  'fechamento': { icon: Power, color: "text-red-500", title: "Fechamento" },
 };
 
 export default function PdvHistoryLog({ pdv }) {
   const [isModalOpen, setIsModalOpen] = React.useState(false);
   const [selectedLog, setSelectedLog] = React.useState(null);
+  
+  // ✅ 1. ESTADOS PARA OS DADOS VINDOS DA API
+  const [logData, setLogData] = React.useState([]);
+  const [isLoading, setIsLoading] = React.useState(true);
+
+  // ✅ 2. useEffect ATUALIZADO
+  // Agora busca dados com base no 'pdv' (ou a falta dele)
+  React.useEffect(() => {
+    const fetchHistory = async () => {
+      setIsLoading(true);
+      
+      // Se 'pdv' for fornecido, busca o histórico específico.
+      // Senão, busca o histórico geral.
+      const url = pdv 
+        ? `http://localhost:8000/api/pdvs/${pdv.id}/history` 
+        : `http://localhost:8000/api/history/general`;
+
+      try {
+        const response = await fetch(url);
+        if (!response.ok) throw new Error("Falha ao buscar histórico");
+        const data = await response.json();
+        setLogData(data);
+      } catch (error) {
+        console.error(error);
+        setLogData([]); // Limpa em caso de erro
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchHistory();
+  }, [pdv]); // Dispara toda vez que 'pdv' mudar
 
   const handleLogClick = (logEntry) => {
     setSelectedLog(logEntry);
     setIsModalOpen(true);
   };
   
-  const title = pdv ? `Histórico do ${pdv.nome}` : "Histórico Geral";
-  const dataToDisplay = pdv ? generalLogData.filter(log => log.pdvName === pdv.name || log.pdvName === "Geral") : generalLogData;
-
-  if (dataToDisplay.length === 0) {
-    return ( <div className="h-full ...">{/*... Placeholder ...*/}</div> );
-  }
+  // ✅ 3. TÍTULO ATUALIZADO
+  const title = pdv ? `Histórico do ${pdv.nome}` : "Histórico Geral Recente";
   
   return (
-    // TooltipProvider agora envolve todo o componente
     <TooltipProvider>
       <div className="h-full w-full flex flex-col">
         <div className="flex-shrink-0">
@@ -58,48 +75,61 @@ export default function PdvHistoryLog({ pdv }) {
         <div className="flex-grow overflow-y-auto min-h-0">
           <Table>
             <TableBody>
-              {dataToDisplay.map((log) => {
-                const details = eventDetails[log.type] || {};
-                const Icon = details.icon || History;
+              {isLoading ? (
+                Array.from({ length: 5 }).map((_, i) => (
+                  <TableRow key={i}>
+                    <TableCell><Skeleton className="h-5 w-5 rounded-full" /></TableCell>
+                    <TableCell><Skeleton className="h-4 w-3/4" /></TableCell>
+                    <TableCell><Skeleton className="h-4 w-1/4" /></TableCell>
+                  </TableRow>
+                ))
+              ) : logData.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={3} className="h-24 text-center text-muted-foreground">
+                    Nenhuma movimentação encontrada.
+                  </TableCell>
+                </TableRow>
+              ) : (
+                logData.map((log) => {
+                  const details = eventDetails[log.type] || {};
+                  const Icon = details.icon || History;
+                  
+                  // ✅ 4. LÓGICA DAS CORES DA BADGE (como você pediu)
+                  const isPositive = log.value >= 0;
+                  const badgeColorClass = isPositive
+                    ? "bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-400"
+                    : "bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-400";
 
-                return (
-                  // ✅ 2. Tooltip envolve a linha inteira
-                  <Tooltip key={log.id}>
-                    <TooltipTrigger asChild>
-                      <TableRow
-                        className="cursor-pointer"
-                        onClick={() => handleLogClick(log)}
-                      >
-                        <TableCell className="w-[40px]">
-                          <Icon className={`h-5 w-5 ${details.color}`} />
-                        </TableCell>
-
-                        <TableCell>
-                          <p className="text-xs text-muted-foreground">
-                            {format(log.date, "HH:mm")} por {log.user}
-                            {!pdv && <span className="font-semibold"> ({log.pdvName})</span>}
-                          </p>
-                        </TableCell>
-
-                        <TableCell className="text-right">
-                          <Badge 
-                            variant="secondary" // Usa um fundo cinza claro como base
-                            className={log.value >= 0 
-                              ? "bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-400" 
-                              : "bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-400"
-                            }
-                          >
-                            {log.value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                          </Badge>
-                        </TableCell>
-                      </TableRow>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      <p>{details.title || "Evento Desconhecido"}</p>
-                    </TooltipContent>
-                  </Tooltip>
-                );
-              })}
+                  return (
+                    <Tooltip key={log.id}>
+                      <TooltipTrigger asChild>
+                        <TableRow className="cursor-pointer" onClick={() => handleLogClick(log)}>
+                          <TableCell className="w-[40px]">
+                            <Icon className={`h-5 w-5 ${details.color}`} />
+                          </TableCell>
+                          <TableCell>
+                            <p className="text-sm font-semibold">{details.title || log.type}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {format(new Date(log.date), "HH:mm")} por {log.user}
+                              {/* ✅ 5. MOSTRA O NOME DO PDV SE A VISÃO FOR GERAL */}
+                              {!pdv && <span className="font-semibold"> ({log.pdvName})</span>}
+                            </p>
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <Badge 
+                              variant="secondary"
+                              className={badgeColorClass}
+                            >
+                              {log.value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                            </Badge>
+                          </TableCell>
+                        </TableRow>
+                      </TooltipTrigger>
+                      <TooltipContent><p>{details.title || "Evento Desconhecido"}</p></TooltipContent>
+                    </Tooltip>
+                  );
+                })
+              )}
             </TableBody>
           </Table>
         </div>
@@ -130,3 +160,4 @@ export default function PdvHistoryLog({ pdv }) {
     </TooltipProvider>
   );
 }
+

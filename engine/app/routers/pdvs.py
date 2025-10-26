@@ -157,3 +157,60 @@ def get_pdv_stats(pdv_id: int, db: Session = Depends(get_db)):
         "ticket_medio": ticket_medio,
         "inicio_turno": inicio_turno 
     }
+
+@router.get("/{pdv_id}/history", response_model=List[schemas.PdvHistoryLogEntry])
+def get_pdv_history(pdv_id: int, db: Session = Depends(get_db)):
+    """
+    Retorna um histórico unificado e ordenado de vendas e movimentações de caixa
+    para um PDV específico.
+    """
+    
+    # 1. Busca as Vendas (já com o nome do operador)
+    vendas = (
+        db.query(
+            models.Venda,
+            models.Usuario.nome.label("operador_nome")
+        )
+        .join(models.Usuario, models.Venda.operador_id == models.Usuario.id)
+        .filter(models.Venda.pdv_id == pdv_id, models.Venda.status == "concluida")
+        .all()
+    )
+
+    # 2. Busca as Movimentações (já com o nome do operador)
+    movimentacoes = (
+        db.query(
+            models.MovimentacaoCaixa,
+            models.Usuario.nome.label("operador_nome")
+        )
+        .join(models.Usuario, models.MovimentacaoCaixa.operador_id == models.Usuario.id)
+        .filter(models.MovimentacaoCaixa.pdv_id == pdv_id)
+        .all()
+    )
+
+    # 3. Formata e Combina as listas
+    combined_log = []
+
+    for venda, operador_nome in vendas:
+        combined_log.append({
+            "id": f"venda-{venda.id}",
+            "type": "venda", # O frontend já tem um 'eventDetail' para "venda"
+            "date": venda.data_hora,
+            "value": -venda.valor_total, # Vendas são sempre uma saída do caixa
+            "user": operador_nome,
+            "details": f"Venda ID: {venda.id}"
+        })
+
+    for mov, operador_nome in movimentacoes:
+        combined_log.append({
+            "id": f"mov-{mov.id}",
+            "type": mov.tipo, # "abertura", "sangria", "suprimento", etc.
+            "date": mov.data_hora,
+            "value": mov.valor, # Sangria já é negativa, abertura/suprimento são positivos
+            "user": operador_nome,
+            "details": f"Movimentação de caixa: {mov.tipo}"
+        })
+
+    # 4. Ordena a lista final pela data, do mais recente para o mais antigo
+    combined_log.sort(key=lambda x: x["date"], reverse=True)
+    
+    return combined_log

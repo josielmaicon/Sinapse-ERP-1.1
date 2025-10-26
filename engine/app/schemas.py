@@ -234,3 +234,15 @@ class PdvStats(BaseModel):
     pdv_id: int
     ticket_medio: float
     inicio_turno: Optional[datetime] = None
+
+class PdvHistoryLogEntry(BaseModel):
+    id: str       
+    type: str     
+    date: datetime
+    value: float  
+    user: str     
+    details: Optional[str] = None 
+    pdvName: Optional[str] = None
+
+    class Config:
+        from_attributes = True
