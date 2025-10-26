@@ -71,6 +71,7 @@ class Produto(Base):
     criador = relationship("Usuario", foreign_keys=[criado_por_id], back_populates="produtos_criados")
     atualizador = relationship("Usuario", foreign_keys=[atualizado_por_id], back_populates="produtos_atualizados")
     itens_vendidos = relationship("VendaItem", back_populates="produto")
+    promocoes = relationship("Promocao", back_populates="produto", cascade="all, delete-orphan")
 
 class Cliente(Base):
     __tablename__ = "clientes"
@@ -216,3 +217,17 @@ class ResumoDiarioEstoque(Base):
     itens_estoque_baixo = Column(Integer, default=0)
     itens_vencimento_proximo = Column(Integer, default=0)
     itens_sem_giro = Column(Integer, default=0)
+
+class Promocao(Base):
+    __tablename__ = "promocoes"
+
+    id = Column(Integer, primary_key=True)
+    preco_promocional = Column(Float, nullable=False)
+    data_inicio = Column(DateTime, default=datetime.utcnow)
+    data_fim = Column(DateTime, nullable=True) # Se for nulo, a promoção não expira
+
+    # Conexão com o produto
+    produto_id = Column(Integer, ForeignKey("produtos.id"), nullable=False)
+
+    # Relação: "Esta promoção pertence a um produto"
+    produto = relationship("Produto", back_populates="promocoes")

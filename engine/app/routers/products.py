@@ -122,3 +122,38 @@ def get_stats_history(limit: int = 7, db: Session = Depends(get_db)):
     )
     # Retornamos a lista em ordem cronológica para o gráfico
     return list(reversed(history))
+
+@router.get("/{produto_id}/historico", response_model=List[schemas.ProdutoMovimentacao])
+def get_produto_historico(produto_id: int, db: Session = Depends(get_db)):
+    """
+    Retorna o histórico de movimentações (vendas) de um produto específico.
+    """
+    
+    # Busca todos os itens de venda para este produto
+    vendas_itens = (
+        db.query(
+            models.VendaItem,
+            models.Usuario.nome.label("operador_nome"),
+            models.Venda.id.label("venda_id_str")
+        )
+        .join(models.Venda, models.VendaItem.venda_id == models.Venda.id)
+        .join(models.Usuario, models.Venda.operador_id == models.Usuario.id)
+        .filter(models.VendaItem.produto_id == produto_id)
+        .order_by(models.Venda.data_hora.desc())
+        .all()
+    )
+    
+    historico = []
+    for item, operador, venda_id in vendas_itens:
+        historico.append({
+            "id": item.id,
+            "data_hora": item.venda.data_hora,
+            "tipo": "venda",
+            "quantidade": -item.quantidade, # Venda é uma saída
+            "usuario": operador,
+            "nota": f"Venda #{venda_id}"
+        })
+    
+    # No futuro, você pode adicionar 'entradas' e 'ajustes' aqui
+    
+    return historico

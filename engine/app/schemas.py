@@ -272,3 +272,14 @@ class ResumoEstoqueDiario(BaseModel):
 
     class Config:
         from_attributes = True
+
+class ProdutoMovimentacao(BaseModel):
+    id: int
+    data_hora: datetime
+    tipo: str # "venda", "entrada", "ajuste"
+    quantidade: float
+    usuario: str # Nome do operador
+    nota: Optional[str] = None # Ex: "Venda #123"
+
+    class Config:
+        from_attributes = True

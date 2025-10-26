@@ -58,11 +58,11 @@ const usePaginationRange = ({ totalPageCount, siblingCount = 1, currentPage }) =
   }, [totalPageCount, siblingCount, currentPage]);
 };
 
-export function ProductDataTable({ columns, data, onProductSelect, refetchData }) {
+export function ProductDataTable({ columns, data, rowSelection, onRowSelectionChange, onProductSelect, refetchData }) {
   const [editingProduct, setEditingProduct] = React.useState(null);
   const [sorting, setSorting] = React.useState([])
   const [columnFilters, setColumnFilters] = React.useState([])
-  const [rowSelection, setRowSelection] = React.useState({})
+  // const [rowSelection, setRowSelection] = React.useState({})
   const [columnVisibility, setColumnVisibility] = React.useState({})
   const [isModalOpen, setIsModalOpen] = React.useState(false);
   const [productsToDelete, setProductsToDelete] = React.useState([]);
@@ -81,13 +81,12 @@ export function ProductDataTable({ columns, data, onProductSelect, refetchData }
     getPaginationRowModel: getPaginationRowModel(),
     getSortedRowModel: getSortedRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
-    onRowSelectionChange: setRowSelection,
+    onRowSelectionChange,
     onColumnVisibilityChange: setColumnVisibility,
     state: { sorting, columnFilters, rowSelection, columnVisibility },
-    meta: {
-      triggerDelete, // Passa a função para as colunas
-    },
+    meta: { triggerDelete },
   })
+
 
   const numSelected = Object.keys(rowSelection).length;
   const canEdit = numSelected === 1;

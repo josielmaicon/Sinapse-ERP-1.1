@@ -14,7 +14,7 @@
             </div>
         </div>
       </div>
-      <div className="flex-grow relative mt-4 overflow-hidden">
+      <div className="flex-grow relative mt-4 overflow-hidden pt-3">
           {children}
       </div>
     </div>

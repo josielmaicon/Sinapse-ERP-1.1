@@ -1,3 +1,5 @@
+// src/pages/ProdutosPage.jsx
+
 "use client"
 
 import * as React from "react";
@@ -6,52 +8,79 @@ import { columns } from "@/components/Colunas";
 import { ProductDataTable } from "@/components/TabelaProdutos";
 import ProductDetailPanel from "@/components/PainelDetalheProduto";
 import MiniChart from "@/components/MiniChart";
+import { Loader2 } from "lucide-react";
+import { format } from "date-fns";
 
 export default function ProdutosPage() {
   const [productData, setProductData] = React.useState([]);
-  const [selectedProduct, setSelectedProduct] = React.useState(null);
+  const [rowSelection, setRowSelection] = React.useState({});
+  const [historyData, setHistoryData] = React.useState([]); 
+  const [isLoading, setIsLoading] = React.useState(true);
 
-  const fetchProducts = async () => {
+  const fetchPageData = async () => {
+    setIsLoading(true);
     try {
-      console.log("Buscando produtos atualizados da API...");
-      const response = await fetch('http://localhost:8000/api/produtos');
-      if (!response.ok) {
-        throw new Error('Falha ao buscar produtos');
-      }
-      const data = await response.json();
-      setProductData(data);
+      const [productsRes, historyRes] = await Promise.all([
+        fetch('http://localhost:8000/api/produtos'),
+        fetch('http://localhost:8000/api/produtos/stats-history?limit=7')
+      ]);
+
+      if (!productsRes.ok) throw new Error('Falha ao buscar produtos');
+      if (!historyRes.ok) throw new Error('Falha ao buscar histórico de stats');
+
+      const products = await productsRes.json();
+      const history = await historyRes.json();
+
+      setProductData(products);
+      setHistoryData(history);
+      
     } catch (error) {
-      console.error("Erro ao buscar produtos:", error);
+      console.error("Erro ao buscar dados da página:", error);
+    } finally {
+      setIsLoading(false);
     }
   };
-
+  
   React.useEffect(() => {
-    fetchProducts();
+    fetchPageData();
   }, []);
+  
+  const currentStats = React.useMemo(() => {
+    if (isLoading || historyData.length === 0) {
+      return { 
+        valor_total_estoque: 0, 
+        itens_estoque_baixo: 0, 
+        itens_vencimento_proximo: 0,
+        itens_sem_giro: 0
+      };
+    }
+    return historyData[historyData.length - 1]; 
+  }, [historyData, isLoading]);
 
-  const dashboardStats = React.useMemo(() => {
-      if (!productData || productData.length === 0) {
-        return { totalStockValue: 0, lowStockCount: 0, expiringSoonCount: 0 };
-      }
+  const chartData = React.useMemo(() => {
+    const formatData = (key) => 
+      historyData.map(item => ({
+        name: format(new Date(item.data), "dd/MM"),
+        value: item[key]
+      }));
+    
+    return {
+      stockValue: formatData('valor_total_estoque'),
+      lowStock: formatData('itens_estoque_baixo'),
+      expiringSoon: formatData('itens_vencimento_proximo'),
+      noStockTurn: formatData('itens_sem_giro'),
+    }
+  }, [historyData]);
 
-      const sevenDaysFromNow = new Date();
-      sevenDaysFromNow.setDate(sevenDaysFromNow.getDate() + 7);
+  const loadingSpinner = <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />;
 
-      return productData.reduce((stats, product) => {
-          stats.totalStockValue += (product.preco_custo || 0) * (product.quantidade_estoque || 0);
-
-          if ((product.quantidade_estoque || 0) <= (product.estoque_minimo || 5)) {
-              stats.lowStockCount += 1;
-          }
-
-          const expiryDate = product.vencimento ? new Date(product.vencimento) : null;
-          if (expiryDate && expiryDate <= sevenDaysFromNow && expiryDate >= new Date()) {
-              stats.expiringSoonCount += 1;
-          }
-          
-          return stats;
-      }, { totalStockValue: 0, lowStockCount: 0, expiringSoonCount: 0 });
-    }, [productData]);
+  // ✅ CORREÇÃO APLICADA AQUI
+  const selectedProducts = React.useMemo(() => {
+    return Object.keys(rowSelection)
+      // Converte a chave (string "0") para um número (0)
+      .map(index => productData[parseInt(index, 10)]) 
+      .filter(Boolean); // Remove qualquer 'undefined'
+  }, [rowSelection, productData]);
 
   return (
     <ProdutosPageLayout
@@ -59,27 +88,34 @@ export default function ProdutosPage() {
         <div className="flex flex-col min-w-0 h-full">
            <ProductDataTable 
             columns={columns} 
-            data={productData} 
-            onProductSelect={setSelectedProduct}
-            refetchData={fetchProducts}
+            data={productData}
+            rowSelection={rowSelection}
+            onRowSelectionChange={setRowSelection}
+            refetchData={fetchPageData}
           />
         </div>}
-      PainelLateral={<ProductDetailPanel product={selectedProduct} />}
-      Card1_MainValue={dashboardStats.totalStockValue.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
+      PainelLateral={
+        <ProductDetailPanel 
+          selectedProducts={selectedProducts} 
+          refetchData={fetchPageData} 
+        />
+      }
+
+      Card1_MainValue={isLoading ? loadingSpinner : currentStats.valor_total_estoque.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
       Card1_Description="Valor Total de Estoque"
-      Card1_Children={<MiniChart />}
+      Card1_Children={<MiniChart data={chartData.stockValue} dataKey="value" />}
 
-      Card2_MainValue={dashboardStats.lowStockCount}
+      Card2_MainValue={isLoading ? loadingSpinner : currentStats.itens_estoque_baixo}
       Card2_Description="Itens com Estoque Baixo"
-      Card2_Children={<MiniChart />}
+      Card2_Children={<MiniChart data={chartData.lowStock} dataKey="value" />}
 
-      Card3_MainValue={dashboardStats.expiringSoonCount || 0}
+      Card3_MainValue={isLoading ? loadingSpinner : currentStats.itens_vencimento_proximo}
       Card3_Description="Itens Próximos do Vencimento"
-      Card3_Children={<MiniChart />}
+      Card3_Children={<MiniChart data={chartData.expiringSoon} dataKey="value" />}
 
-      Card4_MainValue={0} // Placeholder
+      Card4_MainValue={isLoading ? loadingSpinner : currentStats.itens_sem_giro}
       Card4_Description="Itens Sem Giro"
-      Card4_Children={<MiniChart />}
+      Card4_Children={<MiniChart data={chartData.noStockTurn} dataKey="value" />}
     />
   );
 }
