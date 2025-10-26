@@ -25,6 +25,7 @@ export default function PdvsPage() {
 
   const [operatorData, setOperatorData] = React.useState([]);
   const [isLoading, setIsLoading] = React.useState(true);
+  const [pdvStats, setPdvStats] = React.useState({ ticket_medio: 0, inicio_turno: null });
 
   const fetchData = async () => {
       setIsLoading(true);
@@ -62,9 +63,24 @@ export default function PdvsPage() {
     React.useEffect(() => {
       fetchData();
     }, []);
+
+
   React.useEffect(() => {
-    fetchData();
-  }, []);
+    if (!selectedPdv) return;
+
+    const fetchPdvStats = async () => {
+      try {
+        const res = await fetch(`http://localhost:8000/api/pdvs/${selectedPdv.id}/stats`);
+        const data = await res.json();
+        setPdvStats(data);
+      } catch (e) {
+        console.error(e);
+        setPdvStats({ ticket_medio: 0, inicio_turno: null });
+      }
+    };
+
+    fetchPdvStats();
+  }, [selectedPdv]);
 
   const handlePdvSelect = (pdv) => {
     setSelectedPdv(pdv);
@@ -103,8 +119,8 @@ export default function PdvsPage() {
           : <HourlyRevenueChart pdv={selectedPdv} />
       }
       HistoricoVendas={<PdvHistoryLog pdv={selectedPdv} />}
-      StatCardInterno1={<TicketMedioCard pdv={selectedPdv} />}
-      StatCardInterno2={<HorasTrabalhadasCard pdv={selectedPdv} />}
+      StatCardInterno1={<TicketMedioCard value={pdvStats.ticket_medio} />}
+      StatCardInterno2={<HorasTrabalhadasCard openTime={pdvStats.inicio_turno} />}
     />
   );
 }

@@ -229,3 +229,8 @@ class UsuarioPerformance(UsuarioBase):
 class ChartDataPoint(BaseModel):
     key: str  # Pode ser a 'hora' (ex: "08:00") ou o 'dia' (ex: "25/10")
     revenue: float
+
+class PdvStats(BaseModel):
+    pdv_id: int
+    ticket_medio: float
+    inicio_turno: Optional[datetime] = None

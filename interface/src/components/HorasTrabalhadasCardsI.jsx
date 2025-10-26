@@ -1,4 +1,5 @@
-// src/components/pdvs/HorasTrabalhadasCard.jsx
+// src/components/HorasTrabalhadasCardsI.jsx
+// (O nome do seu arquivo pode ser HorasTrabalhadasCard.jsx)
 
 "use client"
 
@@ -7,19 +8,27 @@ import { differenceInHours, differenceInMinutes } from "date-fns"
 import StatCard from "@/components/statCard"
 import { Timer } from "lucide-react"
 
-export default function HorasTrabalhadasCard({ pdv }) {
-  // A lógica de cálculo também vive aqui dentro
+// ✅ A prop mudou de 'pdv' para 'openTime' (a data de início)
+export default function HorasTrabalhadasCard({ openTime }) {
+  const [now, setNow] = React.useState(new Date());
+
+  // Efeito para atualizar o 'agora' a cada segundo, fazendo o relógio "ticar"
+  React.useEffect(() => {
+    const timer = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
   const hoursWorked = React.useMemo(() => {
-    if (!pdv || !pdv.openTime) {
-      return "N/A";
+    if (!openTime) {
+      return "0h 0m"; // Se o caixa não foi aberto, mostra 0
     }
 
-    const now = new Date();
-    const hours = differenceInHours(now, new Date(pdv.openTime)); // Garante que openTime é um objeto Date
-    const minutes = differenceInMinutes(now, new Date(pdv.openTime)) % 60;
+    const startTime = new Date(openTime);
+    const hours = differenceInHours(now, startTime);
+    const minutes = differenceInMinutes(now, startTime) % 60;
     
     return `${hours}h ${minutes}m`;
-  }, [pdv]);
+  }, [now, openTime]); // Recalcula a cada segundo
 
   return (
     <StatCard

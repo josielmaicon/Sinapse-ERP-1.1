@@ -1,25 +1,17 @@
-// src/components/pdvs/TicketMedioCard.jsx
+// src/components/TicketMedioCardI.jsx
+// (O nome do seu arquivo pode ser TicketMedioCard.jsx)
 
 "use client"
-
 import * as React from "react"
 import StatCard from "@/components/statCard"
 import { BarChart2 } from "lucide-react"
 
-export default function TicketMedioCard({ pdv }) {
-  const ticketMedio = React.useMemo(() => {
-    if (!pdv || !pdv.numberOfSales || pdv.numberOfSales === 0) {
-      return "R$ 0,00";
-    }
-    
-    const value = pdv.inRegister / pdv.numberOfSales;
-    return value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-  }, [pdv]);
-
+// ✅ O componente agora é "burro" e só recebe o valor já calculado
+export default function TicketMedioCard({ value }) {
   return (
     <StatCard
       title="Ticket Médio do PDV"
-      value={ticketMedio}
+      value={value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
       icon={BarChart2}
     />
   );

@@ -61,8 +61,8 @@ def get_pdv_revenue_data(pdv_id: int, range: str = "today", db: Session = Depend
     """
     Calcula o faturamento para um PDV específico,
     agrupado por hora (para 'today'/'yesterday') ou por dia (para '7d').
-    """
-    
+        """
+        
     query = db.query(models.Venda).filter(
         models.Venda.pdv_id == pdv_id,
         models.Venda.status == "concluida"
@@ -121,3 +121,39 @@ def get_pdv_revenue_data(pdv_id: int, range: str = "today", db: Session = Depend
             
     # Formata para o schema (converte 'date' ou 'time' para string)
     return [schemas.ChartDataPoint(key=str(row.key), revenue=float(row.revenue or 0)) for row in result]
+
+@router.get("/{pdv_id}/stats", response_model=schemas.PdvStats)
+def get_pdv_stats(pdv_id: int, db: Session = Depends(get_db)):
+    """
+    Calcula o Ticket Médio e o Início do Turno para um PDV específico HOJE.
+    """
+    today = date.today()
+
+    # 1. Calcula o Ticket Médio para este PDV hoje
+    stats_vendas = db.query(
+        func.sum(models.Venda.valor_total).label("total_faturado"),
+        func.count(models.Venda.id).label("total_vendas")
+    ).filter(
+        models.Venda.pdv_id == pdv_id,
+        models.Venda.status == "concluida",
+        func.date(models.Venda.data_hora) == today
+    ).first()
+
+    faturamento = stats_vendas.total_faturado or 0
+    vendas = stats_vendas.total_vendas or 0
+    ticket_medio = (faturamento / vendas) if vendas > 0 else 0
+
+    # 2. Busca a primeira "abertura" deste PDV hoje
+    inicio_turno = db.query(
+        func.min(models.MovimentacaoCaixa.data_hora)
+    ).filter(
+        models.MovimentacaoCaixa.pdv_id == pdv_id,
+        models.MovimentacaoCaixa.tipo == 'abertura',
+        func.date(models.MovimentacaoCaixa.data_hora) == today
+    ).scalar() # .scalar() pega o primeiro valor da primeira linha
+
+    return {
+        "pdv_id": pdv_id,
+        "ticket_medio": ticket_medio,
+        "inicio_turno": inicio_turno 
+    }
