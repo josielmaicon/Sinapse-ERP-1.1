@@ -80,6 +80,7 @@ class Cliente(Base):
     limite_credito = Column(Float, default=0.0)
     saldo_devedor = Column(Float, default=0.0)
     status_conta = Column(String(50), default="Em Dia")
+    data_vencimento = Column(Integer, default=10) # Ex: 10 (todo dia 10)
     
     # Relação: Um cliente pode ter várias vendas
     vendas = relationship("Venda", back_populates="cliente")
@@ -202,3 +203,16 @@ class Solicitacao(Base):
     pdv = relationship("Pdv", back_populates="solicitacoes")
     operador = relationship("Usuario", foreign_keys=[operador_id])
     gerente = relationship("Usuario", foreign_keys=[gerente_id])
+
+class ResumoDiarioEstoque(Base):
+    __tablename__ = "resumo_diario_estoque"
+
+    id = Column(Integer, primary_key=True)
+    # Precisamos importar 'date' da biblioteca 'datetime'
+    data = Column(Date, unique=True, nullable=False, default=datetime.date) 
+    
+    # Os 4 KPIs que você queria
+    valor_total_estoque = Column(Float, default=0.0)
+    itens_estoque_baixo = Column(Integer, default=0)
+    itens_vencimento_proximo = Column(Integer, default=0)
+    itens_sem_giro = Column(Integer, default=0)

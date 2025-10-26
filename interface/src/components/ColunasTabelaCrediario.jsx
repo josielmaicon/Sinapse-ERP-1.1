@@ -1,12 +1,11 @@
-// src/components/crediario/crediarioColumns.jsx
-
 "use client"
 
+import { cn } from "@/lib/utils"
 import { ArrowUpDown } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Checkbox } from "@/components/ui/checkbox"
-import { format, isPast } from "date-fns"
+import { format, isPast, addDays } from "date-fns" // Importe 'addDays'
 
 // Componente auxiliar para a Badge de status
 const StatusBadge = ({ status }) => {
@@ -32,7 +31,6 @@ export const crediarioColumns = [
         checked={row.getIsSelected()}
         onCheckedChange={(value) => row.toggleSelected(!!value)}
         aria-label="Select row"
-        // ✅ Impede que o clique no checkbox acione o onClick da linha
         onClick={(e) => e.stopPropagation()}
       />
     ),
@@ -40,7 +38,7 @@ export const crediarioColumns = [
     enableHiding: false,
   },
   {
-    accessorKey: "clientName",
+    accessorKey: "nome",
     header: ({ column }) => (
       <Button variant="ghost" onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}>
         Cliente
@@ -49,11 +47,11 @@ export const crediarioColumns = [
     ),
   },
   {
-    accessorKey: "clientCpf",
+    accessorKey: "cpf",
     header: "CPF",
   },
   {
-    accessorKey: "dueValue",
+    accessorKey: "saldo_devedor",
     header: ({ column }) => (
         <Button variant="ghost" onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}>
             Valor Devedor
@@ -61,40 +59,45 @@ export const crediarioColumns = [
         </Button>
     ),
     cell: ({ row }) => {
-      const amount = parseFloat(row.getValue("dueValue"))
+      // ✅ CORREÇÃO: Usando a chave correta
+      const amount = parseFloat(row.getValue("saldo_devedor"))
       return <div className="text-right font-medium">{amount.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</div>
     },
   },
   {
-    accessorKey: "dueDate",
+    accessorKey: "data_vencimento",
     header: ({ column }) => (
         <Button variant="ghost" onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}>
-            Vencimento
+            Dia Vencimento
             <ArrowUpDown className="ml-2 h-4 w-4" />
         </Button>
     ),
     cell: ({ row }) => {
-        const date = new Date(row.getValue("dueDate"));
-        const adjustedDate = new Date(date.valueOf() + 1000 * 3600 * 24); 
-        const isOverdue = isPast(adjustedDate) && row.original.status !== "Em Dia";
+        // ✅ CORREÇÃO: Lendo os dados corretos
+        const dia_vencimento = row.getValue("data_vencimento");
+        const status = row.original.status_conta; // Pega o status real
+        
+        const isOverdue = status === "Atrasado";
         return (
-            <div className={isOverdue ? "text-destructive font-semibold" : ""}>
-                {format(date, "dd/MM/yyyy")}
+            <div className={cn("text-center", isOverdue && "text-destructive font-semibold")}>
+                {dia_vencimento}
             </div>
         )
     },
   },
   {
-    accessorKey: "status",
+    accessorKey: "status_conta",
     header: "Status",
-    cell: ({ row }) => <StatusBadge status={row.getValue("status")} />,
+    // ✅ CORREÇÃO: Usando a chave correta
+    cell: ({ row }) => <StatusBadge status={row.getValue("status_conta")} />,
   },
   {
-    accessorKey: "limitAvailable",
+    accessorKey: "limite_disponivel",
     header: () => <div className="text-right">Limite Disponível</div>,
     cell: ({ row }) => {
-        const amount = parseFloat(row.getValue("limitAvailable"))
-        return <div className="text-right">{amount > 0 ? amount.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : "---"}</div>;
+      // ✅ CORREÇÃO: Usando a chave correta
+      const amount = parseFloat(row.getValue("limite_disponivel"))
+      return <div className="text-right">{amount > 0 ? amount.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : "---"}</div>;
     },
   },
 ];

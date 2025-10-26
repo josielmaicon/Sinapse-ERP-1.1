@@ -108,3 +108,17 @@ def get_dashboard_stats(db: Session = Depends(get_db)):
         expired_count=expired_count,
         expiring_soon_count=expiring_soon_count
     )
+
+@router.get("/stats-history", response_model=List[schemas.ResumoEstoqueDiario]) # Vamos criar esse schema
+def get_stats_history(limit: int = 7, db: Session = Depends(get_db)):
+    """
+    Retorna o histórico de estatísticas do estoque dos últimos X dias.
+    """
+    history = (
+        db.query(models.ResumoDiarioEstoque)
+        .order_by(models.ResumoDiarioEstoque.data.desc())
+        .limit(limit)
+        .all()
+    )
+    # Retornamos a lista em ordem cronológica para o gráfico
+    return list(reversed(history))

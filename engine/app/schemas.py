@@ -246,3 +246,29 @@ class PdvHistoryLogEntry(BaseModel):
 
     class Config:
         from_attributes = True
+
+class CrediarioSummary(BaseModel):
+    total_a_receber: float
+    total_inadimplente: float
+    clientes_com_credito: int
+
+class ClienteCrediario(ClienteBase):
+    id: int
+    saldo_devedor: float
+    status_conta: str
+    data_vencimento: int
+    limite_credito: float
+    limite_disponivel: float
+
+    class Config:
+        from_attributes = True
+
+class ResumoEstoqueDiario(BaseModel):
+    data: date
+    valor_total_estoque: float
+    itens_estoque_baixo: int
+    itens_vencimento_proximo: int
+    itens_sem_giro: int
+
+    class Config:
+        from_attributes = True

@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from .routers import products, usuarios, vendas, pdvs, fiscal, solicitacoes, historico
+from .routers import products, usuarios, vendas, pdvs, fiscal, solicitacoes, historico, crediario
 
 app = FastAPI(title="Sinapse ERP API")
 
@@ -19,6 +19,7 @@ app.include_router(pdvs.router)
 app.include_router(fiscal.router)
 app.include_router(solicitacoes.router)
 app.include_router(historico.router)
+app.include_router(crediario.router)
 
 @app.get("/")
 def read_root():

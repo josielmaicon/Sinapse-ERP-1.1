@@ -71,7 +71,6 @@ export function CrediarioDataTable({ columns, data, onClientSelect }) {
       const clickedInsideTable = event.target.closest(".crediario-table-container")
       const clickedInsidePanel = event.target.closest(".client-detail-panel")
 
-      // só limpa se não for na tabela nem no painel lateral
       if (!clickedInsideTable && !clickedInsidePanel) {
         table.resetRowSelection()
       }
@@ -80,7 +79,6 @@ export function CrediarioDataTable({ columns, data, onClientSelect }) {
     document.addEventListener("click", handleClickOutside)
     return () => document.removeEventListener("click", handleClickOutside)
   }, [table])
-
 
   return (
     <div className="w-full h-full flex flex-col">
@@ -96,7 +94,7 @@ export function CrediarioDataTable({ columns, data, onClientSelect }) {
         />
         <Select
           onValueChange={(value) =>
-            table.getColumn("status")?.setFilterValue(value === "todos" ? "" : value)
+            table.getColumn("status_conta")?.setFilterValue(value === "todos" ? "" : value)
           }
         >
           <SelectTrigger className="w-[180px]">

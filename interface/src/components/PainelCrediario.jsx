@@ -39,21 +39,32 @@ export default function ClientDetailPanel({ client }) {
     setIsTrustMode(client?.trustMode || false)
   }, [client])
 
-  // Placeholder values
-  const name = client?.clientName ?? "Nome do Cliente"
+  const name = client?.nome ?? "Nome do Cliente";
+
   const overdueBalance = client
-    ? (client.status === "Atrasado" ? client.dueValue : 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })
-    : "--"
-  const dueDate = client ? format(new Date(client.dueDate), "dd/MM/yyyy", { locale: ptBR }) : "--"
+    ? (client.status_conta === "Atrasado" ? client.saldo_devedor : 0).toLocaleString("pt-BR", {
+        style: "currency",
+        currency: "BRL",
+      })
+    : "--";
+
+  const dueDate = client?.data_vencimento
+    ? format(new Date(client.data_vencimento), "dd/MM/yyyy", { locale: ptBR })
+    : "--";
+
   const spentLimit = client
-    ? (client.creditLimit - client.limitAvailable).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })
-    : "--"
+    ? (client.limite_credito - client.limite_disponivel).toLocaleString("pt-BR", {
+        style: "currency",
+        currency: "BRL",
+      })
+    : "--";
+
   const totalLimit = client
     ? isTrustMode
       ? "Confiança"
-      : client.creditLimit.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })
-    : "--"
-
+      : client.limite_credito.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })
+    : "--";
+    
   return (
     <div className="h-full flex flex-col gap-4 p-4">
       {/* --- PAINEL SUPERIOR --- */}

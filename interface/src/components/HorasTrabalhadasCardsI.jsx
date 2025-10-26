@@ -1,5 +1,4 @@
 // src/components/HorasTrabalhadasCardsI.jsx
-// (O nome do seu arquivo pode ser HorasTrabalhadasCard.jsx)
 
 "use client"
 

@@ -3,6 +3,7 @@ from datetime import date, datetime, timedelta
 from random import choice, randint, uniform
 from app.database import SessionLocal, engine
 from app.models import Base, Usuario, NotaFiscalEntrada, Fornecedor, Produto, Cliente, Pdv, Venda, VendaItem, MovimentacaoCaixa, NotaFiscalSaida
+from app.models import ResumoDiarioEstoque
 
 # --- 1. APAGA E RECRIA O BANCO DE DADOS ---
 print("Recriando o banco de dados...")
@@ -145,6 +146,27 @@ try:
     print("-> Movimentações de caixa criadas.")
 
     print("\nBanco de dados populado com sucesso!")
+
+finally:
+    db.close()
+
+try:
+    print("Gerando snapshots de estoque para os gráficos...")
+    
+    # Cria dados de exemplo para os últimos 7 dias
+    for i in range(7):
+        dia_atual = date.today() - timedelta(days=i)
+        snapshot = ResumoDiarioEstoque(
+            data = dia_atual,
+            valor_total_estoque = 21183.25 + (i * 1000) - (i*i*50), # Lógica de exemplo
+            itens_estoque_baixo = 40 + i,
+            itens_vencimento_proximo = 10 + i,
+            itens_sem_giro = 30 - i
+        )
+        db.add(snapshot)
+    
+    db.commit()
+    print("-> Snapshots criados.")
 
 finally:
     db.close()
