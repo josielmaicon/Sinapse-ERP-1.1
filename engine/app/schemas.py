@@ -209,3 +209,23 @@ class FiscalSummary(BaseModel):
     class Config:
         from_attributes = True
 
+class PdvDashboardSummary(BaseModel):
+    faturamento_total: float
+    ticket_medio: float
+    pdvs_operando: int
+    pdvs_totais: int
+
+class UsuarioPerformance(UsuarioBase):
+    id: int
+    status: str
+    total_vendas: int
+    faturamento_total: float
+    ticket_medio: float
+    horas_trabalhadas: str # Vamos usar um placeholder por enquanto
+
+    class Config:
+        from_attributes = True
+
+class ChartDataPoint(BaseModel):
+    key: str  # Pode ser a 'hora' (ex: "08:00") ou o 'dia' (ex: "25/10")
+    revenue: float

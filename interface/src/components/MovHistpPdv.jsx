@@ -39,7 +39,7 @@ export default function PdvHistoryLog({ pdv }) {
     setIsModalOpen(true);
   };
   
-  const title = pdv ? `Histórico do ${pdv.name}` : "Histórico Geral";
+  const title = pdv ? `Histórico do ${pdv.nome}` : "Histórico Geral";
   const dataToDisplay = pdv ? generalLogData.filter(log => log.pdvName === pdv.name || log.pdvName === "Geral") : generalLogData;
 
   if (dataToDisplay.length === 0) {

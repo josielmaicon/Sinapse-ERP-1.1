@@ -20,6 +20,7 @@ class Usuario(Base):
     produtos_atualizados = relationship("Produto", foreign_keys="[Produto.atualizado_por_id]", back_populates="atualizador")
     vendas = relationship("Venda", back_populates="operador")
     movimentacoes_caixa = relationship("MovimentacaoCaixa", back_populates="operador")
+    pdv_ativo = relationship("Pdv", back_populates="operador_atual", foreign_keys="[Pdv.operador_atual_id]")
 
 class Fornecedor(Base):
     __tablename__ = "fornecedores"
@@ -94,7 +95,7 @@ class Pdv(Base):
     operador_atual_id = Column(Integer, ForeignKey("usuarios.id"), nullable=True)
     vendas = relationship("Venda", back_populates="pdv")
     movimentacoes_caixa = relationship("MovimentacaoCaixa", back_populates="pdv")
-    operador_atual = relationship("Usuario", uselist=False) 
+    operador_atual = relationship("Usuario", back_populates="pdv_ativo", foreign_keys=[operador_atual_id])
     vendas = relationship("Venda", back_populates="pdv")
     movimentacoes_caixa = relationship("MovimentacaoCaixa", back_populates="pdv")
     solicitacoes = relationship("Solicitacao", back_populates="pdv")
