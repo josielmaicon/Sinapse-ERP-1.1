@@ -32,11 +32,16 @@ const MovementLog = ({ logData, isLoading }) => {
             Array.from({ length: 3 }).map((_, i) => (
               <div key={i} className="flex items-start gap-4">
                 <Skeleton className="h-5 w-5 rounded-full" />
-                <div className="flex flex-col gap-2 w-full"><Skeleton className="h-4 w-40" /><Skeleton className="h-3 w-56" /></div>
+                <div className="flex flex-col gap-2 w-full">
+                  <Skeleton className="h-4 w-40" />
+                  <Skeleton className="h-3 w-56" />
+                </div>
               </div>
             ))
           ) : logData.length === 0 ? (
-             <p className="text-sm text-muted-foreground text-center py-4">Nenhuma movimentação registrada.</p>
+            <p className="text-sm text-muted-foreground text-center py-4">
+              Nenhuma movimentação registrada.
+            </p>
           ) : (
             logData.map((log) => {
               const details = logTypeDetails[log.tipo] || { icon: History, color: "text-gray-500", text: log.tipo };
@@ -73,8 +78,22 @@ const DetailRow = ({ label, value }) => (
 
 // --- DOSSIÊ (ABA VISUALIZAR) ---
 const ProductView = ({ product, movementLog, isLoadingLog }) => {
-  const margin = (product.preco_venda && product.preco_custo)
-    ? ((product.preco_venda - product.preco_custo) / product.preco_venda) * 100
+const placeholderProduct = {
+    nome: "Nenhum produto selecionado",
+    preco_custo: null,
+    preco_venda: null,
+    quantidade_estoque: "--",
+    codigo_barras: "--",
+    categoria: "--",
+    margem: "--",
+  };
+
+  // ✅ 2. Decida qual produto mostrar: o real (se existir) ou o fantasma
+  const displayProduct = product || placeholderProduct;
+
+  // ✅ 3. Calcule a margem de forma SEGURA, usando o 'displayProduct'
+  const margin = (displayProduct.preco_venda && displayProduct.preco_custo)
+    ? ((displayProduct.preco_venda - displayProduct.preco_custo) / displayProduct.preco_venda) * 100
     : 0;
 
   return (
@@ -82,20 +101,20 @@ const ProductView = ({ product, movementLog, isLoadingLog }) => {
       {/* Detalhes (parte fixa) */}
       <div className="flex-shrink-0 flex flex-col gap-4">
         <div>
-          <h3 className="text-lg font-semibold">{product.nome}</h3>
+          <h3 className="text-lg font-semibold">{displayProduct.nome}</h3>
         </div>
         <div className="flex flex-col gap-2">
           <h4 className="font-semibold text-md mb-1">Financeiro</h4>
-          <DetailRow label="Preço de Custo" value={product.preco_custo?.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) ?? "--"} />
-          <DetailRow label="Preço de Venda" value={product.preco_venda?.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })} />
+          <DetailRow label="Preço de Custo" value={displayProduct.preco_custo?.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) ?? "--"} />
+          <DetailRow label="Preço de Venda" value={displayProduct.preco_venda?.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })} />
           <DetailRow label="Margem" value={`${margin.toFixed(2)}%`} />
         </div>
         <Separator />
         <div className="flex flex-col gap-2">
           <h4 className="font-semibold text-md mb-1">Estoque</h4>
-          <DetailRow label="Quantidade Atual" value={product.quantidade_estoque} />
-          <DetailRow label="SKU" value={product.codigo_barras} />
-          <DetailRow label="Categoria" value={product.categoria} />
+          <DetailRow label="Quantidade Atual" value={displayProduct.quantidade_estoque} />
+          <DetailRow label="SKU" value={displayProduct.codigo_barras} />
+          <DetailRow label="Categoria" value={displayProduct.categoria} />
         </div>
       </div>
       
@@ -105,28 +124,33 @@ const ProductView = ({ product, movementLog, isLoadingLog }) => {
   );
 };
 
+// --- COMPONENTE PRINCIPAL ---
+export default function ProductDetailPanel({ selectedProducts, refetchData, activeTab: externalTab, onTabChange }) {
 
-// --- COMPONENTE PRINCIPAL (O CÉREBRO) ---
-export default function ProductDetailPanel({ selectedProducts, refetchData }) {
-  const [activeTab, setActiveTab] = React.useState("visualizar");
+
+
+  const [internalTab, setInternalTab] = React.useState("visualizar");
   const [formData, setFormData] = React.useState({});
   const [movementLog, setMovementLog] = React.useState([]);
   const [isLoadingLog, setIsLoadingLog] = React.useState(false);
-
   const isMultiSelect = selectedProducts.length > 1;
   const singleProduct = selectedProducts.length === 1 ? selectedProducts[0] : null;
 
-  // Sincroniza o formulário E busca o histórico
+  const currentTab = externalTab ?? internalTab;
+
+  const handleTabChange = (tab) => {
+    setInternalTab(tab);
+    onTabChange?.(tab);
+  };
+
   React.useEffect(() => {
-    setMovementLog([]); // Sempre reseta o histórico
+    setMovementLog([]);
 
     if (selectedProducts.length === 1) {
-      // --- CASO 1: SELEÇÃO ÚNICA ---
       const product = selectedProducts[0];
       setFormData(product);
-      setActiveTab("visualizar"); // Fica na aba de visualização
-      
-      // Busca o histórico de movimentações
+      handleTabChange("visualizar");
+
       const fetchHistory = async () => {
         setIsLoadingLog(true);
         try {
@@ -141,35 +165,22 @@ export default function ProductDetailPanel({ selectedProducts, refetchData }) {
         }
       };
       fetchHistory();
-      
     } else if (selectedProducts.length > 1) {
-      // --- ✅ CASO 2: MULTI-SELEÇÃO (SUA NOVA LÓGICA) ---
-      // Prepara o formulário para edição em lote
-      setFormData({
-        categoria: "",
-        preco_venda: "",
-        preco_custo: "",
-      });
-      // Pula direto para a aba de edição
-      setActiveTab("editar"); 
-
+      setFormData({ categoria: "", preco_venda: "", preco_custo: "" });
+      handleTabChange("editar");
     } else {
-      // --- CASO 0: NADA SELECIONADO ---
-      setFormData({});
-      setActiveTab("visualizar"); // Reseta para a aba padrão
-    }
-  }, [selectedProducts]); // Este efeito roda sempre que a seleção de produtos mudar
+          setFormData({});
+          handleTabChange("visualizar");
+          setIsLoadingLog(true);
+        }
+      }, [selectedProducts]);
 
-  // Função que será chamada pelo formulário para salvar
   const handleSave = async (updatedData) => {
     try {
       if (isMultiSelect) {
-        // --- LÓGICA DE MULTI-SELEÇÃO ---
         console.log("Salvando múltiplos produtos:", updatedData);
         toast.info("A atualização em lote ainda não foi implementada.");
-        // TODO: Implementar API de batch-update
       } else {
-        // --- LÓGICA DE SELEÇÃO ÚNICA ---
         const productId = singleProduct.id;
         const changedData = {};
         for (const key in updatedData) {
@@ -177,10 +188,10 @@ export default function ProductDetailPanel({ selectedProducts, refetchData }) {
             changedData[key] = updatedData[key];
           }
         }
-        
+
         if (Object.keys(changedData).length === 0) {
-            toast.info("Nenhuma alteração detectada.");
-            return;
+          toast.info("Nenhuma alteração detectada.");
+          return;
         }
 
         const response = await fetch(`http://localhost:8000/api/produtos/${productId}`, {
@@ -188,37 +199,24 @@ export default function ProductDetailPanel({ selectedProducts, refetchData }) {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(changedData),
         });
-        
+
         if (!response.ok) throw new Error("Falha ao salvar no servidor");
       }
-      
+
       toast.success("Alterações salvas com sucesso!");
       refetchData();
-      
     } catch (error) {
-        toast.error("Erro ao salvar", { description: error.message });
+      toast.error("Erro ao salvar", { description: error.message });
     }
   };
 
-  // Se nenhum produto estiver selecionado
-  if (selectedProducts.length === 0) {
-    return (
-      <div className="h-full flex flex-col items-center justify-center text-center text-muted-foreground p-6">
-        <User className="h-12 w-12 mb-4" />
-        <h3 className="font-semibold">Nenhum produto selecionado</h3>
-        <p className="text-sm">Selecione um produto na tabela para ver seus detalhes.</p>
-      </div>
-    );
-  }
-
-  // Se um ou mais produtos estiverem selecionados
   return (
-    <Tabs value={activeTab} onValueChange={setActiveTab} className="h-full flex flex-col">
-      <TabsList className="grid w-full grid-cols-2">
+    <Tabs value={currentTab} onValueChange={handleTabChange} className="h-full flex flex-col">
+      <TabsList className="flex gap-2 w-auto self-start mb-2">
         <TabsTrigger value="visualizar">Visualizar</TabsTrigger>
         <TabsTrigger value="editar">Editar</TabsTrigger>
       </TabsList>
-      
+
       <TabsContent value="visualizar" className="flex-grow overflow-y-auto">
         {isMultiSelect ? (
           <div className="p-4">
@@ -226,14 +224,14 @@ export default function ProductDetailPanel({ selectedProducts, refetchData }) {
             <p className="text-sm text-muted-foreground">Mude para a aba "Editar" para alterar propriedades em comum.</p>
           </div>
         ) : (
-          <ProductView 
+        <ProductView 
             product={singleProduct} 
             movementLog={movementLog}
             isLoadingLog={isLoadingLog}
           />
         )}
       </TabsContent>
-      
+
       <TabsContent value="editar" className="flex-grow">
         <ProductEditForm 
           formData={formData}

@@ -283,3 +283,31 @@ class ProdutoMovimentacao(BaseModel):
 
     class Config:
         from_attributes = True
+
+class LabelPrintData(BaseModel):
+    id: int
+    nome: str
+    preco_venda: float
+
+class ProdutoSimples(BaseModel):
+    id: int
+    nome: str
+    class Config:
+        from_attributes = True
+
+class PromocaoBase(BaseModel):
+    nome: str
+    tipo: str  # 'percentual' ou 'preco_fixo'
+    valor: float
+    data_inicio: datetime
+    data_fim: Optional[datetime] = None
+
+class PromocaoCreate(PromocaoBase):
+    produto_ids: List[int]
+    
+class Promocao(PromocaoBase):
+    id: int
+    produtos: List[ProdutoSimples] = []
+    
+    class Config:
+        from_attributes = True

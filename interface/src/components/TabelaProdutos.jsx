@@ -25,6 +25,7 @@ import { Menubar, MenubarContent, MenubarItem, MenubarMenu, MenubarSeparator, Me
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious, PaginationEllipsis } from "@/components/ui/pagination"
 import { ProductForm } from "./FormularioCadastroProduto"
+import { PromocaoForm } from "./formulariopromocao"
 
 // Helper para criar o range de paginação inteligente
 const DOTS = '...';
@@ -58,7 +59,7 @@ const usePaginationRange = ({ totalPageCount, siblingCount = 1, currentPage }) =
   }, [totalPageCount, siblingCount, currentPage]);
 };
 
-export function ProductDataTable({ columns, data, rowSelection, onRowSelectionChange, onProductSelect, refetchData }) {
+export function ProductDataTable({ columns, data, rowSelection, onRowSelectionChange, setActivePanelTab , onProductSelect, refetchData }) {
   const [editingProduct, setEditingProduct] = React.useState(null);
   const [sorting, setSorting] = React.useState([])
   const [columnFilters, setColumnFilters] = React.useState([])
@@ -66,7 +67,9 @@ export function ProductDataTable({ columns, data, rowSelection, onRowSelectionCh
   const [columnVisibility, setColumnVisibility] = React.useState({})
   const [isModalOpen, setIsModalOpen] = React.useState(false);
   const [productsToDelete, setProductsToDelete] = React.useState([]);
+  const [isPromoModalOpen, setIsPromoModalOpen] = React.useState(false);
 
+  
   // Função para "armar" o modal de exclusão
   const triggerDelete = (products) => {
     setProductsToDelete(products);
@@ -150,32 +153,88 @@ export function ProductDataTable({ columns, data, rowSelection, onRowSelectionCh
     }
   };
 
+  const handleGenerateLabels = () => {
+      const selectedProducts = table.getFilteredSelectedRowModel().rows.map(row => row.original);
+      
+      if (selectedProducts.length === 0) {
+        toast.error("Nenhum produto selecionado.");
+        return;
+      }
+
+      // Formata os dados para enviar apenas o que a API precisa
+      // (Isso corresponde ao nosso schema 'LabelPrintData' no Pydantic)
+      const labelData = selectedProducts.map(product => ({
+        id: product.id,
+        nome: product.nome,
+        preco_venda: product.preco_venda
+      }));
+
+      // Cria a "promessa" que o toast vai observar
+      const apiPromise = fetch('http://localhost:8000/api/impressao/etiquetas', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(labelData)
+      })
+      .then(async (response) => {
+        const result = await response.json();
+        if (!response.ok) {
+          // Se a API der erro, joga o erro para o toast.error
+          throw new Error(result.detail || "Erro desconhecido no servidor");
+        }
+        return result; // Passa o resultado de sucesso para o toast.success
+      });
+
+      // Usa o toast.promise para mostrar Loading -> Success/Error
+      toast.promise(apiPromise, {
+        loading: "Enviando etiquetas para a fila de impressão...",
+        success: (result) => {
+          table.resetRowSelection(); // Limpa a seleção após o sucesso
+          return result.message; // Mostra a msg do backend (ex: "3 etiqueta(s) enviada(s)...")
+        },
+        error: (err) => {
+          return err.message; // Mostra a mensagem de erro
+        }
+      });
+    };
+
   return (
     <div className="w-full h-full flex flex-col">
       <div className="flex flex-col items-start gap-4 py-2">
         <Menubar className="rounded-md flex items-center gap-1">
-            <Button variant="ghost" size="sm" onClick={() => setIsModalOpen(true)}>
+            <Button variant="ghost" size="sm" onClick={() => { setEditingProduct(null); setIsModalOpen(true); }}>
               <PlusCircle className="h-4 w-4 mr-2" />
               Novo Produto
             </Button>
 
             <Separator orientation="vertical" className="h-6" />
 
-            <Button variant="ghost" size="sm" disabled={!canActOnSelection} onClick={() => alert("Gerando Etiquetas...")}>
-              Gerar Etiqueta(s)
-            </Button>
-            <Button variant="ghost" size="sm" disabled={!canActOnSelection} onClick={() => alert("Criando Promoção...")}>
-              Criar Promoção
-            </Button>
-            <Button variant="ghost" size="sm" disabled={!canActOnSelection} onClick={() => alert("Reajustando Preço...")}>
-              Reajuste de Preço
-            </Button>
+          <Button variant="ghost" size="sm" disabled={!canActOnSelection} onClick={handleGenerateLabels}>
+            Gerar Etiqueta(s)
+          </Button>
+          <Button 
+            variant="ghost" 
+            size="sm" 
+            disabled={!canActOnSelection} 
+            onClick={() => setIsPromoModalOpen(true)}
+          >
+            Criar Promoção
+          </Button>
             
             <Separator orientation="vertical" className="h-6" />
 
-            <Button variant="ghost" size="sm" disabled={!canEdit} onClick={() => alert("Editando...")}>
+            <Button variant="ghost" size="sm" disabled={!canEdit} onClick={() => {
+                const selectedRows = table.getFilteredSelectedRowModel().rows;
+                if (selectedRows.length === 1) {
+                  onProductSelect?.(selectedRows[0].original);
+                  setActivePanelTab?.("editar"); // 👈 muda a aba
+                }
+              }}
+            >
+              <Edit className="h-4 w-4 mr-2" />
               Editar
             </Button>
+
+
             <Button 
               variant="ghost" 
               size="sm" 
@@ -272,6 +331,16 @@ export function ProductDataTable({ columns, data, rowSelection, onRowSelectionCh
         onOpenChange={setIsModalOpen} 
         onProductCreated={refetchData}
         productToEdit={editingProduct} // Passa o produto para o formulário
+      />
+
+      <PromocaoForm
+        open={isPromoModalOpen}
+        onOpenChange={setIsPromoModalOpen}
+        selectedProducts={table.getFilteredSelectedRowModel().rows.map(row => row.original)}
+        onPromotionCreated={() => {
+          refetchData();
+          table.resetRowSelection(); // Limpa a seleção após criar a promo
+        }}
       />
 
       <AlertDialog open={productsToDelete.length > 0} onOpenChange={(open) => !open && setProductsToDelete([])}>

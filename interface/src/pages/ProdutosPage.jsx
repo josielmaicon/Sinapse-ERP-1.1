@@ -16,6 +16,7 @@ export default function ProdutosPage() {
   const [rowSelection, setRowSelection] = React.useState({});
   const [historyData, setHistoryData] = React.useState([]); 
   const [isLoading, setIsLoading] = React.useState(true);
+  const [activePanelTab, setActivePanelTab] = React.useState("visualizar");
 
   const fetchPageData = async () => {
     setIsLoading(true);
@@ -92,12 +93,15 @@ export default function ProdutosPage() {
             rowSelection={rowSelection}
             onRowSelectionChange={setRowSelection}
             refetchData={fetchPageData}
+            setActivePanelTab={setActivePanelTab}
           />
         </div>}
       PainelLateral={
         <ProductDetailPanel 
           selectedProducts={selectedProducts} 
           refetchData={fetchPageData} 
+          activeTab={activePanelTab}
+          onTabChange={setActivePanelTab} 
         />
       }
 

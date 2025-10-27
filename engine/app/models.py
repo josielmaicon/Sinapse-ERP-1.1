@@ -1,4 +1,4 @@
-from sqlalchemy import (Column, Integer, String, Date, Float, DateTime, ForeignKey, Boolean, Enum)
+from sqlalchemy import (Column, Integer, String, Date, Float, DateTime, ForeignKey, Boolean, Enum, Table) # ✅ Adicione 'Table'
 from sqlalchemy.orm import relationship
 from .database import Base
 from datetime import datetime
@@ -30,6 +30,38 @@ class Fornecedor(Base):
     
     # Relação
     produtos = relationship("Produto", back_populates="fornecedor")
+
+promocao_produtos_association = Table(
+    'promocao_produtos', Base.metadata,
+    Column('promocao_id', Integer, ForeignKey('promocoes.id'), primary_key=True),
+    Column('produto_id', Integer, ForeignKey('produtos.id'), primary_key=True)
+)
+
+# ✅ 2. CRIE O MODELO DA PROMOÇÃO
+class Promocao(Base):
+    __tablename__ = "promocoes"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    nome = Column(String(100), nullable=False)
+    
+    # Tipo da promoção: desconto em % ou um preço final fixo
+    tipo = Column(Enum('percentual', 'preco_fixo', name='tipo_promocao_enum'), nullable=False, default='preco_fixo')
+    
+    # O valor: 20.0 (para 20%) ou 9.99 (para R$ 9,99)
+    valor = Column(Float, nullable=False)
+    
+    data_inicio = Column(DateTime, default=datetime.utcnow)
+    data_fim = Column(DateTime, nullable=True) # Nulo = promoção sem data para acabar
+    
+    criado_em = Column(DateTime, default=datetime.utcnow)
+    
+    # A "mágica" da relação Many-to-Many:
+    # "Esta promoção tem muitos produtos, ligados pela tabela 'promocao_produtos_association'"
+    produtos = relationship(
+        "Produto",
+        secondary=promocao_produtos_association,
+        back_populates="promocoes"
+    )
 
 class Produto(Base):
     __tablename__ = "produtos"
@@ -71,7 +103,7 @@ class Produto(Base):
     criador = relationship("Usuario", foreign_keys=[criado_por_id], back_populates="produtos_criados")
     atualizador = relationship("Usuario", foreign_keys=[atualizado_por_id], back_populates="produtos_atualizados")
     itens_vendidos = relationship("VendaItem", back_populates="produto")
-    promocoes = relationship("Promocao", back_populates="produto", cascade="all, delete-orphan")
+    promocoes = relationship( "Promocao", secondary=promocao_produtos_association, back_populates="produtos")
 
 class Cliente(Base):
     __tablename__ = "clientes"
@@ -218,16 +250,3 @@ class ResumoDiarioEstoque(Base):
     itens_vencimento_proximo = Column(Integer, default=0)
     itens_sem_giro = Column(Integer, default=0)
 
-class Promocao(Base):
-    __tablename__ = "promocoes"
-
-    id = Column(Integer, primary_key=True)
-    preco_promocional = Column(Float, nullable=False)
-    data_inicio = Column(DateTime, default=datetime.utcnow)
-    data_fim = Column(DateTime, nullable=True) # Se for nulo, a promoção não expira
-
-    # Conexão com o produto
-    produto_id = Column(Integer, ForeignKey("produtos.id"), nullable=False)
-
-    # Relação: "Esta promoção pertence a um produto"
-    produto = relationship("Produto", back_populates="promocoes")
