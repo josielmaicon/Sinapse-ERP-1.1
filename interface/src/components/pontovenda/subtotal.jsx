@@ -19,7 +19,7 @@ export default function SaleResume({ items = [] }) {
 
   return (
     // Usamos flex para centralizar o conteúdo vertical e horizontalmente
-    <div className="w-full h-full flex flex-col justify-center items-end p-6 font-mono">
+    <div className="w-full h-full flex flex-col justify-center items-end font-mono">
       
       {/* Rótulo "TOTAL" */}
       <p className="text-lg font-medium text-muted-foreground">

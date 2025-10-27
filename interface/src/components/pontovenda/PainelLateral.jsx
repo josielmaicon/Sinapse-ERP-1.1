@@ -76,7 +76,7 @@ export default function PosSidePanel({ lastItem }) {
           {hotkeys.map((hotkey) => (
             <div
               key={hotkey.key}
-              className="flex justify-between items-center text-sm"
+              className="flex justify-between items-center text-base"
             >
               <span>{hotkey.description}</span>
               <Kbd>{hotkey.key}</Kbd>
