@@ -3,7 +3,7 @@
 "use client"
 
 import * as React from "react"
-import { Power, Pause, DollarSign, HandCoins, ExternalLink } from "lucide-react"
+import { Power, PowerOff, Pause, DollarSign, HandCoins, ExternalLink, Loader2 } from "lucide-react"
 import { useReactTable, getCoreRowModel, getPaginationRowModel, getSortedRowModel, flexRender } from "@tanstack/react-table"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -12,18 +12,21 @@ import { Pagination, PaginationContent, PaginationItem, PaginationNext, Paginati
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { useNavigate } from "react-router-dom";
+import { toast } from "sonner"
 
 // Importe as colunas
 import { pdvColumns } from "./ColunasPDV"
 import { operatorColumns } from "./ColunasOPR"
 
 // SIMULAÇÃO: Identificador do computador/PDV atual
-const CURRENT_MACHINE_PDV_ID = "PDV-01";
+const CURRENT_MACHINE_PDV_ID = "Caixa 02";
+const API_URL = "http://localhost:8000";
 
-export function PdvDataTable({ data: pdvsData, operatorData, onPdvSelect }) {
+export function PdvDataTable({ data: pdvsData, operatorData, onPdvSelect, refetchData }) {
     const [viewMode, setViewMode] = React.useState("pdvs");
     const [sorting, setSorting] = React.useState([]);
     const [selectedRow, setSelectedRow] = React.useState(null);
+    const [isTogglingStatus, setIsTogglingStatus] = React.useState(false);
     const navigate = useNavigate();
 
     const { columns, data } = React.useMemo(() => {
@@ -52,11 +55,52 @@ export function PdvDataTable({ data: pdvsData, operatorData, onPdvSelect }) {
         }
     }
 
-    const handleAction = (action) => { alert(`Ação: ${action} no item ${selectedRow?.name}`) };
-    const isCurrentMachineSelected = viewMode === "pdvs" && selectedRow?.id === CURRENT_MACHINE_PDV_ID;
+    // ✅ 1. NOVA FUNÇÃO ASYNC PARA ABRIR/FECHAR
+    const handleTogglePdvStatus = async () => {
+      if (!selectedRow || isTogglingStatus) return; // Não faz nada se já estiver carregando
+
+      setIsTogglingStatus(true);
+      const pdvId = selectedRow.id;
+      const currentStatus = selectedRow.status;
+      const actionText = currentStatus === 'aberto' ? "Fechando" : "Abrindo";
+
+      // (Exemplo) ID do operador logado - pegue isso do seu contexto de Auth no futuro
+      const operadorId = 1; 
+
+      const apiPromise = fetch(`${API_URL}/api/pdvs/${pdvId}/toggle-status`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ operador_id: operadorId }) 
+      })
+      .then(async (response) => {
+        const result = await response.json();
+        if (!response.ok) {
+          throw new Error(result.detail || `Erro ao ${actionText.toLowerCase()} o caixa`);
+        }
+        return result; // Retorna o PDV atualizado
+      });
+
+      toast.promise(apiPromise, {
+        loading: `${actionText} caixa ${selectedRow.nome}...`,
+        success: (updatedPdv) => {
+          refetchData(); // ✅ Recarrega os dados da PÁGINA INTEIRA
+          // Opcional: Atualizar o selectedRow localmente para feedback mais rápido
+          // setSelectedRow(updatedPdv); 
+          return `Caixa ${updatedPdv.nome} ${updatedPdv.status === 'aberto' ? 'aberto' : 'fechado'} com sucesso!`;
+        },
+        error: (err) => err.message,
+        finally: () => setIsTogglingStatus(false) // ✅ Finaliza o loading
+      });
+    };
+
+
+    const isCurrentMachineSelected = viewMode === "pdvs" && selectedRow?.nome === CURRENT_MACHINE_PDV_ID;
     const numSelected = selectedRow ? 1 : 0;
     const buttonsDisabled = viewMode === "operadores" || numSelected === 0;
+    const isPdvOpen = selectedRow?.status === 'aberto';
 
+    const ToggleIcon = isPdvOpen ? PowerOff : Power; // Escolhe o ícone correto
+    const toggleButtonTooltip = isPdvOpen ? "Fechar Caixa" : "Abrir Caixa"; // Escolhe o texto do tooltip       
     const handleOpenInterface = () => {
             // A função 'navigate' nos leva para a rota definida no seu routes.jsx
             navigate("/pontovenda");
@@ -154,17 +198,34 @@ export function PdvDataTable({ data: pdvsData, operatorData, onPdvSelect }) {
                       Abrir Interface
                     </Button>
                   )}
-                  <Button variant="outline" size="sm" disabled={buttonsDisabled} onClick={() => handleAction("Abrir Caixa")}>
-                    <Power className="h-4 w-4" />
-                  </Button>
+
+                   <Tooltip>
+                     <TooltipTrigger asChild>
+                       <Button 
+                         variant="outline" 
+                         size="sm" 
+                         // Desabilita se for operador OU se não houver seleção OU se estiver carregando
+                         disabled={buttonsDisabled || isTogglingStatus} 
+                         onClick={handleTogglePdvStatus}
+                       >
+                         {/* Mostra Loader se estiver carregando, senão o ícone dinâmico */}
+                         {isTogglingStatus ? (
+                           <Loader2 className="h-4 w-4 animate-spin" />
+                         ) : (
+                           <ToggleIcon className="h-4 w-4" />
+                         )}
+                       </Button>
+                     </TooltipTrigger>
+                     <TooltipContent>
+                       <p>{toggleButtonTooltip}</p>
+                     </TooltipContent>
+                   </Tooltip>
+
                   <Button variant="outline" size="sm" disabled={buttonsDisabled} onClick={() => handleAction("Pausar")}>
                     <Pause className="h-4 w-4" />
                   </Button>
                   <Button variant="secondary" size="sm" disabled={buttonsDisabled} onClick={() => handleAction("Sangria")}>
                     <HandCoins className="h-4 w-4" />
-                  </Button>
-                  <Button variant="destructive" size="sm" disabled={buttonsDisabled} onClick={() => handleAction("Fechar Caixa")}>
-                    <DollarSign className="h-4 w-4" />
                   </Button>
                 </div>
             </div>
