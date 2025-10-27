@@ -2,15 +2,15 @@
 
 import * as React from "react"
 import PdvsPageLayout from "@/layouts/PdvsPageLayout"
-import HourlyRevenueChart from "@/components/FatpHora"
-import PdvHistoryLog from "@/components/MovHistpPdv"
-import { PdvDataTable } from "@/components/TabelaPDVs"
-import TicketMedioCard from "@/components/TicketMedioCardI"
-import HorasTrabalhadasCard from "@/components/HorasTrabalhadasCardsI"
-import FaturamentoTotalCard from "@/components/FaturamentoTotalCard"
-import TicketMedioCardGeral from "@/components/TicketMedioCard"
-import PdvsOperandoCard from "@/components/PDVAbertos"
-import PdvAlertPanel from "@/components/PainelAlertaPDV";
+import HourlyRevenueChart from "@/components/pdvs/FatpHora"
+import PdvHistoryLog from "@/components/pdvs/MovHistpPdv"
+import { PdvDataTable } from "@/components/pdvs/TabelaPDVs"
+import TicketMedioCard from "@/components/pdvs/TicketMedioCardI"
+import HorasTrabalhadasCard from "@/components/pdvs/HorasTrabalhadasCardsI"
+import FaturamentoTotalCard from "@/components/pdvs/FaturamentoTotalCard"
+import TicketMedioCardGeral from "@/components/pdvs/TicketMedioCard"
+import PdvsOperandoCard from "@/components/pdvs/PDVAbertos"
+import PdvAlertPanel from "@/components/pdvs/PainelAlertaPDV";
 
 export default function PdvsPage() {
   const [dashboardStats, setDashboardStats] = React.useState({

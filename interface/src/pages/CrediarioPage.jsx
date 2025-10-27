@@ -4,9 +4,9 @@
 
 import * as React from "react";
 import CrediarioPageLayout from "@/layouts/CrediarioPageLayout";
-import { crediarioColumns } from "@/components/ColunasTabelaCrediario";
-import { CrediarioDataTable } from "@/components/TabelaCrediario";
-import ClientDetailPanel from "@/components/PainelCrediario";
+import { crediarioColumns } from "@/components/crediario/ColunasTabelaCrediario";
+import { CrediarioDataTable } from "@/components/crediario/TabelaCrediario";
+import ClientDetailPanel from "@/components/crediario/PainelCrediario";
 import { Loader2 } from "lucide-react"; // Para um placeholder de loading
 
 export default function CrediarioPage() {

@@ -1,10 +1,10 @@
 import * as React from "react"
 import ComprasPageLayout from "@/layouts/PontoVendaLayout";
-import SaleItemsList from "@/components/itensvenda";
-import PosHeaderStatus from "@/components/Header2";
-import SaleResume from "@/components/subtotal";
-import PosSidePanel from "@/components/PainelLateral";
-import PosFooterStatus from "@/components/rodape";
+import SaleItemsList from "@/components/pontovenda/itensvenda";
+import PosHeaderStatus from "@/components/pontovenda/Header2";
+import SaleResume from "@/components/pontovenda/subtotal";
+import PosSidePanel from "@/components/pontovenda/PainelLateral";
+import PosFooterStatus from "@/components/pontovenda/rodape";
 import Logo from "@/components/Logo";
 
 const mockCartItems = [

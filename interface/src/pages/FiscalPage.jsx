@@ -1,11 +1,11 @@
 "use client"
 
 import * as React from "react";
-import MetaEnvio from "@/components/MetaEnvio";
+import MetaEnvio from "@/components/fiscal/MetaEnvio";
 import FiscalPageLayout from "@/layouts/FiscalPageLayout";
-import FiscalDataTable from "@/components/TabelaFiscal"
-import { fiscalColumns } from "@/components/ColunasTabelaFiscal";
-import FiscalSummaryChart from "@/components/AnaliseEnvioFiscal";
+import FiscalDataTable from "@/components/fiscal/TabelaFiscal"
+import { fiscalColumns } from "@/components/fiscal/ColunasTabelaFiscal";
+import FiscalSummaryChart from "@/components/fiscal/AnaliseEnvioFiscal";
 
 export default function FiscalPage() {
 

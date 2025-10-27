@@ -4,10 +4,10 @@
 
 import * as React from "react";
 import ProdutosPageLayout from "@/layouts/ProdutosPageLayout"; 
-import { columns } from "@/components/Colunas";
-import { ProductDataTable } from "@/components/TabelaProdutos";
-import ProductDetailPanel from "@/components/PainelDetalheProduto";
-import MiniChart from "@/components/MiniChart";
+import { columns } from "@/components/produtos/ColunasTabelaProdutos";
+import { ProductDataTable } from "@/components/produtos/TabelaProdutos";
+import ProductDetailPanel from "@/components/produtos/PainelDetalheProduto";
+import MiniChart from "@/components/produtos/MiniChart";
 import { Loader2 } from "lucide-react";
 import { format } from "date-fns";
 

@@ -4,11 +4,11 @@
 
 import * as React from "react"
 import HomePageLayout from "@/layouts/HomepageLayout"
-import PdvRevenueChart from "@/components/PdvChart"
+import PdvRevenueChart from "@/components/homepage/PdvChart"
 import StatCard from "@/components/statCard"
 import { AlertTriangle, ArchiveX, PackageSearch } from "lucide-react"
-import TopProductsChart from "@/components/ProdMaisVendidos"
-import PdvStatusTable from "@/components/TabelaPDVsResumida"
+import TopProductsChart from "@/components/homepage/ProdMaisVendidos"
+import PdvStatusTable from "@/components/homepage/TabelaPDVsResumida"
 
 export default function HomePage() {
   const [stockAlerts, setStockAlerts] = React.useState({
