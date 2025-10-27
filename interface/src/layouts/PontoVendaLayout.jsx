@@ -1,5 +1,3 @@
-// src/layouts/ComprasPageLayout.jsx
-
 export default function ComprasPageLayout({
   Header1,
   Header2,
@@ -9,41 +7,45 @@ export default function ComprasPageLayout({
   Resume
 }) {
   return (
-    <div className="font-mono flex-1 p-2 pt-4 flex flex-col h-full bg-[#0b5077]">
-      <div className="grid flex-grow grid-rows-[0.2fr_1fr_0.2fr] gap-2 h-full min-h-0">
-        <div className="grid flex-grow grid-cols-[4fr_6fr] gap-2 h-full min-h-0">
-          <div className="bg-card p-4 flex items-center justify-center">
+    // h-screen garante ocupar a viewport; flex-col para usar flex-1 corretamente
+    <div className="w-full h-screen bg-[#0b5077] font-mono flex flex-col p-2 gap-2">
+      {/* grid principal com 3 linhas: header / content / footer */}
+      <div className="flex-1 flex flex-col overflow-hidden">
+        {/* Cabeçalhos (altura automática) */}
+        <div className="grid grid-cols-[4fr_6fr] gap-2">
+          <div className="bg-card p-4 flex items-center justify-center overflow-hidden">
             {Header1 || "[CABEÇALHO 1]"}
           </div>
-          <div className="bg-card  p-4 flex items-center justify-center">
+          <div className="bg-card p-4 flex items-center justify-center overflow-hidden">
             {Header2 || "[CABEÇALHO 2]"}
           </div>
         </div>
 
-        <div className="grid grid-cols-[4fr_6fr] gap-2 min-h-0">
-          
-          <div className="grid grid-rows-1 gap-2 min-h-0">
-            <div className="bg-card p-4 flex items-center justify-center">
-              {SidePanel || "[PAINEL LATERAL]"}
-            </div>
+        {/* Conteúdo central: ocupa o restante */}
+        <div className="flex-1 grid grid-cols-[4fr_6fr] gap-2 min-h-0">
+          {/* Painel lateral (fixo dentro do espaço) */}
+          <div className="bg-card p-4 flex items-start justify-center overflow-auto min-h-0">
+            {SidePanel || "[PAINEL LATERAL]"}
           </div>
 
-          <div className="grid grid-rows-[6fr_1fr] gap-2 min-h-0">
-            <div className="bg-card p-4 flex items-center justify-center">
+          {/* Coluna principal: lista rolável e subtotal fixo embaixo */}
+          <div className="flex flex-col min-h-0">
+            <div className="bg-card p-4 flex-1 overflow-auto min-h-0">
+              {/* A lista deve rolar aqui se exceder */}
               {MainContent || "[CONTEÚDO PRINCIPAL]"}
             </div>
-            <div className="bg-card p-4 flex items-center justify-center">
+            <div className="bg-card p-4">
               {Resume || "[SUBTOTAL]"}
             </div>
           </div>
-
-          
         </div>
 
-        <div className="bg-card p-4 flex items-center justify-center">
-          {Footer || "[RODAPÉ]"}
+        {/* Rodapé */}
+        <div className="mt-2">
+          <div className="bg-card p-4 flex items-center justify-center">
+            {Footer || "[RODAPÉ]"}
+          </div>
         </div>
-
       </div>
     </div>
   );

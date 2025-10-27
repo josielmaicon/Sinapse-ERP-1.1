@@ -12,6 +12,7 @@ import { Pagination, PaginationContent, PaginationItem, PaginationNext, Paginati
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { useNavigate } from "react-router-dom";
+import { OpenClosePdvModal } from "./modalAberturaFechamento"
 import { toast } from "sonner"
 
 // Importe as colunas
@@ -27,6 +28,8 @@ export function PdvDataTable({ data: pdvsData, operatorData, onPdvSelect, refetc
     const [sorting, setSorting] = React.useState([]);
     const [selectedRow, setSelectedRow] = React.useState(null);
     const [isTogglingStatus, setIsTogglingStatus] = React.useState(false);
+    const [isModalOpen, setIsModalOpen] = React.useState(false);
+    const [modalActionType, setModalActionType] = React.useState(null);
     const navigate = useNavigate();
 
     const { columns, data } = React.useMemo(() => {
@@ -105,6 +108,13 @@ export function PdvDataTable({ data: pdvsData, operatorData, onPdvSelect, refetc
             // A função 'navigate' nos leva para a rota definida no seu routes.jsx
             navigate("/pontovenda");
         };
+
+    const handleOpenModal = () => {
+      if (!selectedRow) return;
+      const action = selectedRow.status === 'aberto' ? 'close' : 'open';
+      setModalActionType(action);
+      setIsModalOpen(true);
+    }
 
     return (
         <TooltipProvider>
@@ -205,15 +215,10 @@ export function PdvDataTable({ data: pdvsData, operatorData, onPdvSelect, refetc
                          variant="outline" 
                          size="sm" 
                          // Desabilita se for operador OU se não houver seleção OU se estiver carregando
-                         disabled={buttonsDisabled || isTogglingStatus} 
-                         onClick={handleTogglePdvStatus}
+                         disabled={buttonsDisabled} 
+                         onClick={handleOpenModal}
                        >
-                         {/* Mostra Loader se estiver carregando, senão o ícone dinâmico */}
-                         {isTogglingStatus ? (
-                           <Loader2 className="h-4 w-4 animate-spin" />
-                         ) : (
-                           <ToggleIcon className="h-4 w-4" />
-                         )}
+                        <ToggleIcon className="h-4 w-4" />
                        </Button>
                      </TooltipTrigger>
                      <TooltipContent>
@@ -229,6 +234,16 @@ export function PdvDataTable({ data: pdvsData, operatorData, onPdvSelect, refetc
                   </Button>
                 </div>
             </div>
+
+          <OpenClosePdvModal
+            open={isModalOpen}
+            onOpenChange={setIsModalOpen}
+            actionType={modalActionType}
+            pdv={selectedRow}
+            refetchData={refetchData}
+            // Passamos a lista de operadores que a PdvDataTable já recebe
+            operators={operatorData.filter(op => op.status === 'ativo')} 
+          />
         </TooltipProvider>
     );
 }

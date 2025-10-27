@@ -1,11 +1,9 @@
-// src/layouts/FullScreenLayout.jsx
-
 import { Outlet } from "react-router-dom";
 
 export default function FullScreenLayout() {
   return (
-    // Este layout simplesmente ocupa 100% do espaço e renderiza a página filha.
-    <div className="w-full h-full">
+    // h-screen garante 100vh direto na raiz do layout
+    <div className="w-full h-screen flex flex-col">
       <Outlet />
     </div>
   );
