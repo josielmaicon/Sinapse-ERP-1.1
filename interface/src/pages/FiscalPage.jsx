@@ -6,7 +6,11 @@ import FiscalPageLayout from "@/layouts/FiscalPageLayout";
 import FiscalDataTable from "@/components/fiscal/TabelaFiscal"
 import { fiscalColumns } from "@/components/fiscal/ColunasTabelaFiscal";
 import FiscalSummaryChart from "@/components/fiscal/AnaliseEnvioFiscal";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
+import NotaEntradaDataTable from "@/components/fiscal/TabelaEntrada";
+import { notaEntradaColumns } from "@/components/fiscal/ColunasFiscalEntrada";
 
 export default function FiscalPage() {
 
@@ -16,6 +20,11 @@ export default function FiscalPage() {
         autopilot_enabled: false,
     });
     const [isConfigLoading, setIsConfigLoading] = React.useState(true);
+
+    const [entradaData, setEntradaData] = React.useState([]);
+    const [isEntradaLoading, setIsEntradaLoading] = React.useState(true); // Loading específico
+
+    const [activeTab, setActiveTab] = React.useState("saida"); // 'saida' ou 'entrada'
 
     const [summaryData, setSummaryData] = React.useState({
         total_comprado_mes: 0,
@@ -28,35 +37,42 @@ export default function FiscalPage() {
     const [isLoading, setIsLoading] = React.useState(true);
 
     const fetchData = async (showLoading = true) => {
-        if (showLoading) setIsLoading(true);
-        setIsConfigLoading(true);
-        try {
-            const [summaryRes, tableRes, configRes] = await Promise.all([
-                fetch('http://localhost:8000/api/fiscal/summary'),
-                fetch('http://localhost:8000/vendas/'),
-                fetch('http://localhost:8000/api/fiscal/config') 
-            ]);
-        
-            if (!summaryRes.ok) throw new Error("Falha ao buscar resumo fiscal");
-            if (!tableRes.ok) throw new Error("Falha ao buscar dados da tabela");
-            if (!configRes.ok) throw new Error("Falha ao buscar configuração fiscal");
-        
-            const summary = await summaryRes.json();
-            const table = await tableRes.json();
-            const config = await configRes.json();
-        
-            setSummaryData(summary);
-            setTableData(table);
-            setFiscalConfig(config);
-        
-        } catch (error) {
-            console.error("Erro ao buscar dados fiscais:", error);
-            toast.error("Erro ao carregar dados", { description: error.message });
-        } finally {
-            if (showLoading) setIsLoading(false);
-            setIsConfigLoading(false);
-        }
-    };
+            if (showLoading) setIsLoading(true);
+            setIsConfigLoading(true);
+            setIsEntradaLoading(true); // ✅ Inicia loading da tabela de entrada
+            try {
+                // ✅ 3. BUSCA TUDO EM PARALELO (incluindo notas de entrada)
+                const [summaryRes, tableRes, configRes, entradaRes] = await Promise.all([
+                    fetch('http://localhost:8000/api/fiscal/summary'),
+                    fetch('http://localhost:8000/vendas/'),
+                    fetch('http://localhost:8000/api/fiscal/config'), 
+                    fetch('http://localhost:8000/notas-fiscais-entrada/') // ✅ Busca notas de entrada
+                ]);
+            
+                if (!summaryRes.ok) throw new Error("Falha ao buscar resumo fiscal");
+                if (!tableRes.ok) throw new Error("Falha ao buscar dados da tabela de saída");
+                if (!configRes.ok) throw new Error("Falha ao buscar configuração fiscal");
+                if (!entradaRes.ok) throw new Error("Falha ao buscar notas de entrada"); // ✅ Verifica resposta
+            
+                const summary = await summaryRes.json();
+                const tableSaida = await tableRes.json();
+                const config = await configRes.json();
+                const tableEntrada = await entradaRes.json(); // ✅ Pega dados de entrada
+            
+                setSummaryData(summary);
+                setTableData(tableSaida); // Dados de Saída
+                setFiscalConfig(config);
+                setEntradaData(tableEntrada); // ✅ Guarda dados de Entrada
+            
+            } catch (error) {
+                console.error("Erro ao buscar dados fiscais:", error);
+                toast.error("Erro ao carregar dados", { description: error.message });
+            } finally {
+                if (showLoading) setIsLoading(false);
+                setIsConfigLoading(false);
+                setIsEntradaLoading(false); // ✅ Finaliza loading da entrada
+            }
+        };
 
     const handleConfigSave = async (newConfig) => {
         const apiPromise = fetch('http://localhost:8000/api/fiscal/config', {
@@ -122,14 +138,42 @@ export default function FiscalPage() {
                 isLoading={isConfigLoading}
             />
         }
-        TabelaFiscal={
-            <FiscalDataTable 
-                columns={fiscalColumns} 
-                data={tableData}
-                refetchData={fetchData}
-                fiscalConfig={fiscalConfig}
-                totalPurchased={summaryData.total_comprado_mes}
-            />
+        MainContent={ 
+            <Tabs value={activeTab} onValueChange={setActiveTab} className="h-full flex flex-col">
+                <TabsList className="flex-shrink-0">
+                    <TabsTrigger value="saida">Notas de Saída (Vendas)</TabsTrigger>
+                    <TabsTrigger value="entrada">Notas de Entrada (Compras)</TabsTrigger>
+                </TabsList>
+                
+                {/* Conteúdo da Aba Saída */}
+                <TabsContent value="saida" className="flex-grow min-h-0"> 
+                    {isLoading ? ( // Usa o loading geral ou da tabela específica?
+                        <Skeleton className="w-full h-full" /> 
+                    ) : (
+                        <FiscalDataTable 
+                            columns={fiscalColumns} 
+                            data={tableData}
+                            refetchData={fetchData}
+                            fiscalConfig={fiscalConfig}
+                            totalPurchased={summaryData.total_comprado_mes}
+                        />
+                    )}
+                </TabsContent>
+                
+                {/* Conteúdo da Aba Entrada */}
+                <TabsContent value="entrada" className="flex-grow min-h-0">
+                    {isEntradaLoading ? (
+                         <Skeleton className="w-full h-full" />
+                    ) : (
+                        // ✅ RENDERIZA A NOVA TABELA
+                        <NotaEntradaDataTable
+                            columns={notaEntradaColumns} 
+                            data={entradaData}
+                            refetchData={fetchData} // Passa refetch para ações futuras
+                        /> 
+                    )}
+                </TabsContent>
+            </Tabs>
         }
         HistoricoEnvio={
             <FiscalSummaryChart 

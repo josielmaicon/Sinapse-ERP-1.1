@@ -194,8 +194,8 @@ class MovimentacaoCaixa(Base):
 class NotaFiscalEntrada(Base):
     __tablename__ = "notas_fiscais_entrada"
     id = Column(Integer, primary_key=True)
-    numero_nota = Column(String(50), index=True)
-    chave_acesso = Column(String(44), unique=True)
+    numero_nota = Column(String(50), index=True, nullable=False)
+    chave_acesso = Column(String(44), unique=True, nullable=False)
     data_emissao = Column(Date, nullable=False)
     valor_total = Column(Float, nullable=False)
     

@@ -141,10 +141,15 @@ try:
 
         for fornecedor in [fornecedor_laticinios, fornecedor_hortifruti, fornecedor_bebidas]:
             for dia in [20, 21, 22]:
+                numero_aleatorio = randint(1000, 9999)
+                chave_aleatoria = f"{randint(10000000000000, 99999999999999)}{randint(10000000000000, 99999999999999)}"[:44]
+
                 nota = NotaFiscalEntrada(
                     fornecedor_id=fornecedor.id,
+                    numero_nota=f"{fornecedor.id}{dia}{numero_aleatorio}",
+                    chave_acesso=chave_aleatoria,
                     data_emissao=datetime(2025, 10, dia),
-                    valor_total=randint(50, 200)  # valor aleatório de compra
+                    valor_total=randint(50, 200)
                 )
                 db.add(nota)
         db.commit()

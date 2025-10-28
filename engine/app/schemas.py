@@ -22,8 +22,25 @@ class Usuario(UsuarioBase):
 
 # --- SCHEMAS DE FORNECEDOR ---
 class FornecedorBase(BaseModel):
+    id: int
     nome: str
     cnpj: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+class NotaFiscalEntradaBase(BaseModel):
+    numero_nota: Optional[str] = None
+    chave_acesso: Optional[str] = None
+    data_emissao: date
+    valor_total: float
+
+class NotaFiscalEntrada(NotaFiscalEntradaBase):
+    id: int
+    fornecedor: Optional[FornecedorBase] = None # Inclui os dados do fornecedor
+
+    class Config:
+        from_attributes = True
 
 class FornecedorCreate(FornecedorBase):
     pass

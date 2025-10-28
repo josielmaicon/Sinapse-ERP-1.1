@@ -441,19 +441,33 @@ def trigger_emitir_pendentes(db: Session = Depends(get_db)):
 
     # ✅ LÓGICA REAL: Itera e tenta emitir (simuladamente) cada pendente
     for venda_a_emitir in vendas_realmente_pendentes:
-        print(f"  - Tentando emitir Venda ID {venda_a_emitir.id} (Valor: R$ {venda_a_emitir.valor_total:.2f})...")
+        print(f"  - Tentando emitir Venda ID {venda_a_emitir.id}...")
         try:
-            # Chama a função auxiliar
             _simular_emissao_bem_sucedida(venda_a_emitir, db)
             ids_emitidos.append(venda_a_emitir.id)
             valor_total_emitir += venda_a_emitir.valor_total
         except Exception as e:
             print(f"  - ERRO ao processar Venda ID {venda_a_emitir.id} no DB: {e}")
             erros_emissao.append(f"DB Venda {venda_a_emitir.id}: {e}")
-            
-    print(f"Valor Total Emitido: R$ {valor_total_emitir:.2f}") 
+            # raise e # Descomente se um erro deve parar todas as emissões
+
+    # ✅ ADICIONA COMMIT EXPLÍCITO AQUI TAMBÉM
+    try:
+        if ids_emitidos:
+             print(f"Tentando commit explícito (emitir-pendentes) para IDs: {ids_emitidos}")
+             db.commit()
+             print("Commit explícito (emitir-pendentes) bem-sucedido.")
+        else:
+             print("Nenhum ID processado com sucesso (emitir-pendentes), skipando commit explícito.")
+    except Exception as e_commit:
+        print(f"ERRO durante o commit explícito (emitir-pendentes): {e_commit}")
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Erro ao salvar alterações (emitir-pendentes): {e_commit}")
+
+    print(f"Valor Total Emitido: R$ {valor_total_emitir:.2f}")
     print(f"------------------------------------")
-    
+
+    # ... (lógica de retorno da mensagem) ...
     message = f"{len(ids_emitidos)} venda(s) pendente(s) marcada(s) como emitida(s)."
     if erros_emissao: message += f" Erros: {'; '.join(erros_emissao)}"
     return schemas.ActionResponse(message=message)

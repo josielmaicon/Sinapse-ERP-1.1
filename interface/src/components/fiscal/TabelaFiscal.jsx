@@ -209,7 +209,7 @@ export default function FiscalDataTable({ columns, data, refetchData, fiscalConf
   
    // Chama a API de emitir todas as pendentes
    setIsBatchLoading(true);
-   const apiPromise = fetch(`${API_URL}/fiscal/emitir/pendentes`, { 
+   const apiPromise = fetch(`${API_URL}/api/fiscal/emitir/pendentes`, { 
        method: 'POST',
    })
    .then(async (response) => {
