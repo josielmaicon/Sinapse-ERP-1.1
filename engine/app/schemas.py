@@ -276,7 +276,7 @@ class ClienteCrediario(ClienteBase):
     id: int
     saldo_devedor: float
     status_conta: str
-    data_vencimento: int
+    data_vencimento_fatura: date | None = None
     limite_credito: float
     limite_disponivel: float
 

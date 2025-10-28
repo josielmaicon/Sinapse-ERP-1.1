@@ -21,6 +21,8 @@ import {
   AlertDialogTitle
 } from "@/components/ui/alert-dialog"
 import { toast } from "sonner"
+import { EditClientSheet } from "./FormularioEdicaoCliente"
+import { UpdateLimitDrawer } from "./GavetaLimite"
 
 // MOCK de histórico (manter por enquanto, conectar à API depois)
 const transactionHistory = [
@@ -65,6 +67,9 @@ export default function ClientDetailPanel({ client, refetchData }) {
     setAlertAction(isBlocked ? 'unblock' : 'block'); // Define qual ação será confirmada
     setIsAlertOpen(true);
   };
+
+  const [isSheetOpen, setIsSheetOpen] = React.useState(false);
+  const [isDrawerOpen, setIsDrawerOpen] = React.useState(false);
 
   // Função chamada ao confirmar no AlertDialog
   const handleConfirmStatusChange = async () => {
@@ -147,14 +152,16 @@ export default function ClientDetailPanel({ client, refetchData }) {
   // --- PLACEHOLDERS para próximas implementações ---
   const handleEditClick = () => {
     if(isLoading) return;
-    alert(`(WIP) Abrir Sheet de Edição para ${client.nome}`);
-    // Aqui vamos implementar a lógica para abrir o Sheet
+    // alert(`(WIP) Abrir Sheet de Edição para ${client.nome}`); // Remove alert
+    setIsSheetOpen(true); // Abre o Sheet!
   }
-  const handleLimiteClick = () => {
-    if(isLoading) return;
-    alert(`(WIP) Abrir Modal/Sheet para Alterar Limite de ${client.nome}`);
-    // Aqui vamos implementar a lógica para o modal/sheet de limite
+
+  const handleLimiteClick = () => { 
+      if(isLoading) return; 
+      // alert(`(WIP) Abrir Modal/Sheet para Alterar Limite de ${client.nome}`); // Remove alert
+      setIsDrawerOpen(true); // Abre o Drawer!
   }
+
   const handleTrustModeChange = (checked) => {
      if(isLoading) return;
      // ATENÇÃO: Apenas atualiza estado local. Precisa chamar API!
@@ -302,8 +309,27 @@ export default function ClientDetailPanel({ client, refetchData }) {
           </AlertDialogContent>
       </AlertDialog>
 
-      {/* AQUI VAI O SHEET PARA EDIÇÃO (próximo passo) */}
-      {/* <EditClientSheet open={isSheetOpen} onOpenChange={setIsSheetOpen} client={client} refetchData={refetchData} /> */}
+      <EditClientSheet 
+        open={isSheetOpen} 
+        onOpenChange={setIsSheetOpen} 
+        client={client} 
+        refetchData={() => {
+            // Função wrapper para fechar E recarregar
+            setIsSheetOpen(false); 
+            if (typeof refetchData === 'function') refetchData(); 
+        }}
+      />
+
+      <UpdateLimitDrawer
+        open={isDrawerOpen}
+        onOpenChange={setIsDrawerOpen}
+        client={client}
+        refetchData={() => {
+            // Função wrapper para fechar E recarregar
+            setIsDrawerOpen(false); 
+            if (typeof refetchData === 'function') refetchData(); 
+        }}
+      />
 
     </div>
   )

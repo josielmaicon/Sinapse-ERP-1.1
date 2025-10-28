@@ -15,7 +15,7 @@ def get_crediario_summary(db: Session = Depends(get_db)):
     total_a_receber = db.query(func.sum(models.Cliente.saldo_devedor)).scalar() or 0
     
     total_inadimplente = db.query(func.sum(models.Cliente.saldo_devedor)).filter(
-        models.Cliente.status_conta == "Atrasado"
+        models.Cliente.status_conta == "atrasado"
     ).scalar() or 0
     
     clientes_com_credito = db.query(func.count(models.Cliente.id)).filter(
@@ -46,7 +46,7 @@ def get_crediario_clientes(db: Session = Depends(get_db)):
             limite_credito=cliente.limite_credito,
             saldo_devedor=cliente.saldo_devedor,
             status_conta=cliente.status_conta,
-            data_vencimento=cliente.data_vencimento,
+            data_vencimento_fatura=cliente.data_vencimento_fatura,
             limite_disponivel=limite_disponivel
         )
         clientes_com_limite.append(cliente_schema)
