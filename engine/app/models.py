@@ -19,8 +19,9 @@ class Usuario(Base):
     produtos_criados = relationship("Produto", foreign_keys="[Produto.criado_por_id]", back_populates="criador")
     produtos_atualizados = relationship("Produto", foreign_keys="[Produto.atualizado_por_id]", back_populates="atualizador")
     vendas = relationship("Venda", back_populates="operador")
-    movimentacoes_caixa = relationship("MovimentacaoCaixa", back_populates="operador")
+    movimentacoes_realizadas = relationship( "MovimentacaoCaixa", foreign_keys="[MovimentacaoCaixa.operador_id]", back_populates="operador" )
     pdv_ativo = relationship("Pdv", back_populates="operador_atual", foreign_keys="[Pdv.operador_atual_id]")
+    movimentacoes_autorizadas = relationship( "MovimentacaoCaixa", foreign_keys="[MovimentacaoCaixa.autorizado_por_id]", back_populates="autorizador")
 
 class Fornecedor(Base):
     __tablename__ = "fornecedores"
@@ -182,11 +183,13 @@ class MovimentacaoCaixa(Base):
     # Conexões
     pdv_id = Column(Integer, ForeignKey("pdvs.id"), nullable=False)
     operador_id = Column(Integer, ForeignKey("usuarios.id"), nullable=False)
-    
+    autorizado_por_id = Column(Integer, ForeignKey("usuarios.id"), nullable=True)
+
     # Relações
     pdv = relationship("Pdv", back_populates="movimentacoes_caixa")
-    operador = relationship("Usuario", back_populates="movimentacoes_caixa")
-
+    operador = relationship("Usuario", foreign_keys=[operador_id], back_populates="movimentacoes_realizadas")
+    autorizador = relationship("Usuario", foreign_keys=[autorizado_por_id], back_populates="movimentacoes_autorizadas")
+    
 class NotaFiscalEntrada(Base):
     __tablename__ = "notas_fiscais_entrada"
     id = Column(Integer, primary_key=True)

@@ -4,6 +4,7 @@ from random import choice, randint, uniform
 from app.database import SessionLocal, engine
 from app.models import Base, Usuario, NotaFiscalEntrada, Fornecedor, Produto, Cliente, Pdv, Venda, VendaItem, MovimentacaoCaixa, NotaFiscalSaida
 from app.models import ResumoDiarioEstoque
+from app.utils.security import get_password_hash, verify_password
 
 # --- 1. APAGA E RECRIA O BANCO DE DADOS ---
 print("Recriando o banco de dados...")
@@ -18,14 +19,26 @@ try:
     # --- 2. CRIANDO ENTIDADES INDEPENDENTES ---
 
     # Usuários
-    senha_padrao = "1234".encode('utf-8')
-    senha_hash_padrao = bcrypt.hashpw(senha_padrao, bcrypt.gensalt())
-    
-    user_admin = Usuario(nome="Josiel Maicon", email="admin@empresa.com", funcao="admin", senha_hash=senha_hash_padrao)
-    user_operador = Usuario(nome="Ana Paula", email="ana@empresa.com", funcao="operador", senha_hash=senha_hash_padrao)
+    senha_hash_string = get_password_hash("1234")
+    print("Hash gerado:", senha_hash_string)
+    print("Verificação:", verify_password("1234", senha_hash_string))
+
+    user_admin = Usuario(
+        nome="Josiel Maicon",
+        email="admin@empresa.com",
+        funcao="admin",
+        senha_hash=senha_hash_string
+    )
+    user_operador = Usuario(
+        nome="Ana Paula",
+        email="ana@empresa.com",
+        funcao="operador",
+        senha_hash=senha_hash_string
+    )
     db.add_all([user_admin, user_operador])
     db.commit()
     print("-> Usuários criados.")
+
 
     # Fornecedores
     fornecedor_laticinios = Fornecedor(nome="Distribuidora Friobom", cnpj="11.222.333/0001-44")

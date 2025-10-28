@@ -110,6 +110,7 @@ export default function PdvsPage() {
           data={pdvsData} 
           operatorData={operatorData}
           onPdvSelect={handlePdvSelect}
+          refetchData={fetchData}
         />
       }
 

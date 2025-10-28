@@ -1,7 +1,7 @@
 from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session, joinedload
-from sqlalchemy import func, extract
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.orm import Session, joinedload,selectinload
+from sqlalchemy import func, extract, exists
 from .. import models, schemas
 from ..database import get_db
 from datetime import datetime, date, timedelta
@@ -214,3 +214,147 @@ def get_pdv_history(pdv_id: int, db: Session = Depends(get_db)):
     combined_log.sort(key=lambda x: x["date"], reverse=True)
     
     return combined_log
+
+# ✅ NOVA ROTA: Verificar Vendas Ativas
+@router.get("/{pdv_id}/has-active-sales", response_model=schemas.HasActiveSalesResponse)
+def check_active_sales_for_pdv(pdv_id: int, db: Session = Depends(get_db)):
+    """Verifica se um PDV específico possui vendas com status 'em_andamento'."""
+    has_active = db.query(
+        exists().where(
+            (models.Venda.pdv_id == pdv_id) &
+            (models.Venda.status == 'em_andamento')
+        )
+    ).scalar()
+    
+    return schemas.HasActiveSalesResponse(has_active_sales=has_active)
+
+
+# ✅ NOVA ROTA: Abrir Caixa
+@router.post("/{pdv_id}/open", response_model=schemas.PdvStatusDetalhado) # Retorna o status detalhado atualizado
+def open_pdv(
+    pdv_id: int,
+    request: schemas.OpenPdvRequest,
+    db: Session = Depends(get_db)
+):
+    """Abre um PDV, registrando a movimentação e o operador."""
+    
+    # Usar transação para garantir atomicidade
+    with db.begin(): 
+        db_pdv = db.query(models.Pdv).filter(models.Pdv.id == pdv_id).first()
+        if not db_pdv:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="PDV não encontrado")
+            
+        if db_pdv.status == 'aberto':
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Este PDV já está aberto.")
+            
+        # Verifica se o operador e o admin existem e estão ativos
+        operador = db.query(models.Usuario).filter(models.Usuario.id == request.operador_id, models.Usuario.status == 'ativo').first()
+        if not operador:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Operador não encontrado ou inativo.")
+            
+        admin = db.query(models.Usuario).filter(models.Usuario.id == request.admin_id, models.Usuario.status == 'ativo').first()
+        if not admin or admin.funcao not in ['admin', 'gerente']:
+             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Usuário autorizador inválido ou sem permissão.")
+
+        # Cria a movimentação de abertura
+        movimentacao = models.MovimentacaoCaixa(
+            tipo='abertura',
+            valor=request.valor_abertura,
+            pdv_id=db_pdv.id,
+            operador_id=request.operador_id, # Quem está operando
+            autorizado_por_id=request.admin_id # Quem autorizou
+        )
+        db.add(movimentacao)
+        
+        # Atualiza o status e operador do PDV
+        db_pdv.status = 'aberto'
+        db_pdv.operador_atual_id = request.operador_id
+        
+        # O db.begin() cuida do commit/rollback
+        
+    # Recarrega o PDV com os relacionamentos necessários para a resposta
+    # Usamos uma subquery para carregar os relacionamentos após a transação
+    updated_pdv = db.query(models.Pdv).options(
+        joinedload(models.Pdv.operador_atual),
+        selectinload(models.Pdv.solicitacoes),
+        selectinload(models.Pdv.vendas),
+        selectinload(models.Pdv.movimentacoes_caixa)
+    ).filter(models.Pdv.id == pdv_id).one() # Usamos .one() pois sabemos que ele existe
+
+    # Reconstruir a resposta detalhada (lógica similar ao GET /)
+    # (Poderíamos refatorar isso para uma função auxiliar no futuro)
+    # ... (código para calcular valor_em_caixa, etc. APÓS a abertura) ...
+    # Por simplicidade agora, vamos apenas retornar o PDV mapeado
+    # O frontend fará o refetchData de qualquer forma
+    
+    # Mapeia diretamente para o schema base PdvStatus, o frontend fará refetch para detalhes
+    # Nota: Precisamos carregar 'operador_atual' para isso funcionar
+    db.refresh(updated_pdv, ["operador_atual"]) 
+    return updated_pdv # Pydantic V2 com from_attributes=True deve mapear isso
+
+
+# ✅ NOVA ROTA: Fechar Caixa
+@router.post("/{pdv_id}/close", response_model=schemas.PdvStatusDetalhado)
+def close_pdv(
+    pdv_id: int,
+    request: schemas.ClosePdvRequest,
+    db: Session = Depends(get_db)
+):
+    """Fecha um PDV, verificando vendas ativas e registrando a movimentação."""
+    
+    with db.begin():
+        db_pdv = db.query(models.Pdv).options(
+            # Pré-carrega o operador atual, pois precisaremos do ID dele
+            joinedload(models.Pdv.operador_atual) 
+        ).filter(models.Pdv.id == pdv_id).first()
+        
+        if not db_pdv:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="PDV não encontrado")
+            
+        if db_pdv.status != 'aberto':
+             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Este PDV não está aberto.")
+             
+        # Verificação CRUCIAL no backend: Há vendas ativas?
+        has_active = db.query(
+            exists().where(
+                (models.Venda.pdv_id == pdv_id) &
+                (models.Venda.status == 'em_andamento')
+            )
+        ).scalar()
+        if has_active:
+             raise HTTPException(
+                 status_code=status.HTTP_400_BAD_REQUEST, 
+                 detail="Não é possível fechar o caixa. Existem vendas em andamento neste PDV."
+             )
+             
+        # Verifica se o admin existe e tem permissão
+        admin = db.query(models.Usuario).filter(models.Usuario.id == request.admin_id, models.Usuario.status == 'ativo').first()
+        if not admin or admin.funcao not in ['admin', 'gerente']:
+             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Usuário autorizador inválido ou sem permissão.")
+
+        # Pega o ID do operador que ESTAVA no caixa
+        current_operador_id = db_pdv.operador_atual_id
+        if not current_operador_id:
+             # Isso não deveria acontecer se o status é 'aberto', mas é uma segurança extra
+             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Inconsistência: PDV aberto sem operador atual.")
+
+        # Cria a movimentação de fechamento
+        movimentacao = models.MovimentacaoCaixa(
+            tipo='fechamento',
+            valor=request.valor_fechamento,
+            pdv_id=db_pdv.id,
+            operador_id=current_operador_id, # Quem estava operando
+            autorizado_por_id=request.admin_id # Quem autorizou
+        )
+        db.add(movimentacao)
+        
+        # Atualiza o status e remove o operador do PDV
+        db_pdv.status = 'fechado'
+        db_pdv.operador_atual_id = None
+        
+        # db.begin() cuida do commit/rollback
+
+    # Recarrega o PDV
+    updated_pdv = db.query(models.Pdv).filter(models.Pdv.id == pdv_id).one()
+    # Mapeia diretamente, frontend fará refetch
+    return updated_pdv

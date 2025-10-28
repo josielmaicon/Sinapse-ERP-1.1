@@ -311,3 +311,44 @@ class Promocao(PromocaoBase):
     
     class Config:
         from_attributes = True
+
+class VerifyAdminPasswordRequest(BaseModel):
+    password: str
+
+class VerifyAdminPasswordResponse(BaseModel):
+    admin_id: int
+    admin_nome: str # Enviamos o nome para possível log no frontend
+
+class OpenPdvRequest(BaseModel):
+    admin_id: int       # Quem autorizou
+    operador_id: int    # Quem vai operar
+    valor_abertura: float # Quanto dinheiro inicial
+
+class ClosePdvRequest(BaseModel):
+    admin_id: int         # Quem autorizou
+    valor_fechamento: float # Quanto dinheiro foi contado
+
+# Schema simples para a resposta do check de vendas
+class HasActiveSalesResponse(BaseModel):
+    has_active_sales: bool
+
+class PdvStatusDetalhado(BaseModel):
+    """
+    Schema de resposta rico para PDVs, incluindo status, operador,
+    alertas e dados calculados.
+    """
+    id: int
+    nome: str
+    status: str
+    
+    # --- Relacionamentos Carregados ---
+    operador_atual: Optional[UsuarioBase] = None
+    alerta_pendente: Optional[Solicitacao] = None 
+    
+    # --- Campos Calculados ---
+    valor_em_caixa: float = 0.0
+    total_vendas_dia: int = 0
+    hora_abertura: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
