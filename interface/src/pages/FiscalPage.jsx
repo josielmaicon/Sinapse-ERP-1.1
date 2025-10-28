@@ -126,6 +126,9 @@ export default function FiscalPage() {
             <FiscalDataTable 
                 columns={fiscalColumns} 
                 data={tableData}
+                refetchData={fetchData}
+                fiscalConfig={fiscalConfig}
+                totalPurchased={summaryData.total_comprado_mes}
             />
         }
         HistoricoEnvio={

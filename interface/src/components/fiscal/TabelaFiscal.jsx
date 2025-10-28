@@ -9,8 +9,10 @@ import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Pagination, PaginationLink, PaginationContent, PaginationItem, PaginationNext, PaginationPrevious, PaginationEllipsis } from "@/components/ui/pagination"
+import { toast } from "sonner"
+import { Loader2 } from "lucide-react";
 
-// Helper para criar o range de paginação inteligente
+const API_URL = "http://localhost:8000";
 const DOTS = '...';
 const usePaginationRange = ({ totalPageCount, siblingCount = 1, currentPage }) => {
   return React.useMemo(() => {
@@ -42,14 +44,77 @@ const usePaginationRange = ({ totalPageCount, siblingCount = 1, currentPage }) =
   }, [totalPageCount, siblingCount, currentPage]);
 };
 
-
-// Supondo uma meta definida no componente pai
-const META_DE_EMISSAO = 400000;
-
-export default function FiscalDataTable({ columns, data }) {
+export default function FiscalDataTable({ columns, data, refetchData, fiscalConfig, totalPurchased }) {
   const [sorting, setSorting] = React.useState([]);
   const [columnFilters, setColumnFilters] = React.useState([]);
   const [rowSelection, setRowSelection] = React.useState({});
+  const [sendingIds, setSendingIds] = React.useState(new Set());
+  const [isBatchLoading, setIsBatchLoading] = React.useState(false);
+
+  const calculateCurrentGoal = () => {
+    if (!fiscalConfig || totalPurchased === undefined) return 0; // Retorna 0 se dados não carregaram
+    
+    let goal = 0;
+    const numericGoalValue = fiscalConfig.goal_value || 0;
+    switch (fiscalConfig.strategy) {
+      case "coeficiente": goal = totalPurchased * numericGoalValue; break;
+      case "porcentagem": goal = totalPurchased * (1 + numericGoalValue / 100); break;
+      case "valor_fixo": goal = numericGoalValue; break;
+      default: goal = 0;
+    }
+    return goal;
+  };
+
+  // ✅ FUNÇÃO AUXILIAR para calcular o total já emitido (baseado nos dados da tabela)
+  const calculateTotalIssued = () => {
+    // Usa a mesma lógica do backend/frontend para status final
+    return data.reduce((acc, venda) => {
+        const statusSefaz = venda.nota_fiscal_saida?.status_sefaz?.toLowerCase();
+        if (statusSefaz === 'autorizada' || statusSefaz === 'emitida') {
+            return acc + (venda.valor_total || 0);
+        }
+        return acc;
+    }, 0);
+  }
+
+  const handleEmitSingleNote = async (vendaId) => {
+    if (sendingIds.has(vendaId)) return; // Já está enviando, não faz nada
+
+    setSendingIds(prev => new Set(prev).add(vendaId)); // Adiciona ao Set (imutável)
+
+    const apiPromise = fetch(`${API_URL}/api/fiscal/emitir/${vendaId}`, { // ✅ Chamada para NOVA ROTA
+      method: 'POST',
+      // Headers e Body se necessários (ex: token de autenticação)
+    })
+    .then(async (response) => {
+      // Mesmo se der erro na API, precisamos limpar o estado 'sendingIds'
+      const result = await response.json().catch(() => ({})); // Tenta pegar JSON, senão objeto vazio
+      if (!response.ok) {
+        // Tenta pegar 'detail' do erro FastAPI, senão mensagem genérica
+        throw new Error(result.detail || `Erro ${response.status} ao emitir nota ${vendaId}`);
+      }
+      return result; // Retorna os dados de sucesso (pode ser o status atualizado)
+    });
+  
+    toast.promise(apiPromise, {
+      loading: `Enviando NFe para venda ID ${vendaId}...`,
+      success: (result) => {
+        // Chamada SÍNCRONA, não precisa de await aqui
+        refetchData(false); // Recarrega os dados da tabela SEM piscar a página
+        // A mensagem pode vir do backend ou ser fixa
+        return `NFe para venda ID ${vendaId} processada com status: ${result.status_sefaz || result.status || 'OK'}`; 
+      },
+      error: (err) => err.message, // Mostra a mensagem de erro da API
+      finally: () => {
+        // SEMPRE remove o ID do Set, no sucesso ou erro
+        setSendingIds(prev => {
+          const next = new Set(prev);
+          next.delete(vendaId);
+          return next;
+        });
+      }
+    });
+  };
 
   const table = useReactTable({
     data,
@@ -62,6 +127,7 @@ export default function FiscalDataTable({ columns, data }) {
     getFilteredRowModel: getFilteredRowModel(),
     onRowSelectionChange: setRowSelection,
     state: { sorting, columnFilters, rowSelection },
+    meta: { sendingIds, handleEmitSingleNote }
   });
 
   const numSelected = Object.keys(rowSelection).length;
@@ -75,32 +141,96 @@ export default function FiscalDataTable({ columns, data }) {
   });
 
   const handleEmitSelected = () => {
-    const totalToIssue = selectedRowsData.reduce((acc, row) => acc + row.saleValue, 0);
-    const totalAlreadyIssued = data.filter(d => d.status === 'emitida').reduce((acc, row) => acc + row.saleValue, 0);
+    if (isBatchLoading) return; // Não faz nada se já estiver processando um lote
+    if (selectedRowsData.length === 0) {
+      toast.info("Nenhuma nota selecionada para emitir.");
+      return;
+    }
     
-    if (totalAlreadyIssued + totalToIssue > META_DE_EMISSAO) {
-      if (!confirm(`Atenção: A emissão de ${totalToIssue.toLocaleString('pt-BR', {style: 'currency', currency: 'BRL'})} irá ultrapassar sua meta de ${META_DE_EMISSAO.toLocaleString('pt-BR', {style: 'currency', currency: 'BRL'})}. Deseja continuar?`)) {
-        return;
+    // Pega apenas os IDs das linhas selecionadas
+    const idsToEmit = selectedRowsData.map(row => row.id);
+    
+    // Lógica de verificação da meta (AGORA USA DADOS DINÂMICOS)
+    const calculatedGoal = calculateCurrentGoal();
+    const totalIssued = calculateTotalIssued();
+    // Soma apenas o valor das vendas selecionadas (usa valor_total que vem da API)
+    const totalToIssue = selectedRowsData.reduce((acc, row) => acc + (row.valor_total || 0), 0);
+    
+    // Verifica se a emissão ultrapassará a meta (se houver meta e não for piloto automático)
+    if (calculatedGoal > 0 && !fiscalConfig?.autopilot_enabled && (totalIssued + totalToIssue > calculatedGoal)) {
+      if (!confirm(`Atenção: A emissão de ${totalToIssue.toLocaleString('pt-BR', {style: 'currency', currency: 'BRL'})} irá ultrapassar sua meta de ${calculatedGoal.toLocaleString('pt-BR', {style: 'currency', currency: 'BRL'})}. Deseja continuar?`)) {
+        return; // Usuário cancelou
       }
     }
-    alert(`Emitindo ${numSelected} nota(s) selecionada(s)...`);
+    
+    // Chama a API de lote
+    setIsBatchLoading(true);
+    const apiPromise = fetch(`${API_URL}/api/fiscal/emitir/lote`, { 
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ venda_ids: idsToEmit })
+    })
+    .then(async (response) => {
+        const result = await response.json();
+        if (!response.ok) {
+            throw new Error(result.detail || "Erro ao emitir notas selecionadas.");
+        }
+        return result; 
+    });
+    
+    toast.promise(apiPromise, {
+        loading: `Enviando ${idsToEmit.length} nota(s) selecionada(s) para emissão...`,
+        success: (result) => {
+            refetchData(false); // Recarrega dados
+            table.resetRowSelection(); // Limpa seleção
+            return result.message; // Mostra msg do backend
+        },
+        error: (err) => err.message, 
+        finally: () => {
+            setIsBatchLoading(false); // Libera o loading do lote
+        }
+    });
   };
 
   const handleEmitAllPending = () => {
-    const pendingSales = data.filter(d => d.status === 'pendente');
-    if (pendingSales.length === 0) {
-      alert("Não há notas pendentes para emitir.");
-      return;
-    }
-    const totalToIssue = pendingSales.reduce((acc, row) => acc + row.saleValue, 0);
-    const totalAlreadyIssued = data.filter(d => d.status === 'emitida').reduce((acc, row) => acc + row.saleValue, 0);
-
-    if (totalAlreadyIssued + totalToIssue > META_DE_EMISSAO) {
-      if (!confirm(`Atenção: A emissão de ${totalToIssue.toLocaleString('pt-BR', {style: 'currency', currency: 'BRL'})} irá ultrapassar sua meta. Deseja continuar?`)) {
-        return;
-      }
-    }
-    alert(`Emitindo todas as ${pendingSales.length} notas pendentes...`);
+   if (isBatchLoading) return; 
+  
+   // NÃO precisamos filtrar aqui, o backend fará a lógica correta
+   // const pendingSales = data.filter(d => ...); 
+   
+   // AVISO: A verificação de META aqui é complexa, pois não sabemos AINDA
+   // quais notas o backend VAI selecionar. Idealmente, o backend deveria
+   // retornar um AVISO se a emissão ultrapassou a meta, ou ter um parâmetro
+   // na API tipo "?ignorar_meta=true".
+   // Por simplicidade, vamos remover a confirmação de meta daqui por enquanto,
+   // confiando que o usuário sabe o que está fazendo ao clicar em "Emitir Todas".
+   
+   // if (totalAlreadyIssued + totalToIssue > calculatedGoal) { ... } // REMOVIDO
+  
+   // Chama a API de emitir todas as pendentes
+   setIsBatchLoading(true);
+   const apiPromise = fetch(`${API_URL}/fiscal/emitir/pendentes`, { 
+       method: 'POST',
+   })
+   .then(async (response) => {
+       const result = await response.json();
+       if (!response.ok) {
+           throw new Error(result.detail || "Erro ao emitir todas as notas pendentes.");
+       }
+       return result; 
+   });
+  
+   toast.promise(apiPromise, {
+       loading: `Solicitando emissão de todas as notas pendentes...`,
+       success: (result) => {
+           refetchData(false); 
+           return result.message; 
+       },
+       error: (err) => err.message, 
+       finally: () => {
+           setIsBatchLoading(false); 
+       }
+   });
   };
 
   return (
@@ -127,12 +257,20 @@ export default function FiscalDataTable({ columns, data }) {
         </Select>
         {/* Aqui entraria um Date Picker para o filtro de data */}
 
-        {/* Botões de Ação em Massa */}
-        <div className="ml-auto flex items-center gap-2">
+        {/* Botões de Ação em Massa */} 
+      <div className="ml-auto flex items-center gap-2">
           {numSelected > 0 ? (
-            <Button onClick={handleEmitSelected}>Emitir {numSelected} Selecionada(s)</Button>
+            // ✅ Botão agora desabilitado se um lote estiver carregando
+            <Button onClick={handleEmitSelected} disabled={isBatchLoading}>
+              {isBatchLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} 
+              Emitir {numSelected} Selecionada(s)
+            </Button>
           ) : (
-            <Button onClick={handleEmitAllPending} className="min-h-0 min-w-0">Emitir Todas Pendentes</Button>
+            // ✅ Botão agora desabilitado se um lote estiver carregando
+            <Button onClick={handleEmitAllPending} className="min-h-0 min-w-0" disabled={isBatchLoading}>
+              {isBatchLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Emitir Todas Pendentes
+            </Button>
           )}
         </div>
       </div>

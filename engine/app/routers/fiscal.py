@@ -5,6 +5,8 @@ from .. import models, schemas
 from ..database import get_db
 from datetime import datetime, timedelta
 from typing import Dict, List
+import random
+import string
 
 router = APIRouter(
     prefix="/api/fiscal",
@@ -118,6 +120,52 @@ def update_fiscal_config(
         autopilot_enabled=(configs_to_save['fiscal_autopilot_enabled'] == 'true')
     )
 
+def _simular_emissao_bem_sucedida(venda: models.Venda, db: Session):
+    """
+    Atualiza o status da venda e cria/atualiza NotaFiscalSaida 
+    para simular uma emissão bem-sucedida. Envia mudanças com flush.
+    """
+    now = datetime.utcnow()
+    chave_ficticia = f"NFe{venda.id}{''.join(random.choices(string.digits, k=34))}"[:44]
+    protocolo_ficticio = f"Proto{random.randint(100000, 999999)}"
+
+    nota_existente = db.query(models.NotaFiscalSaida).filter(
+        models.NotaFiscalSaida.venda_id == venda.id
+    ).first()
+
+    if nota_existente:
+        nota_existente.chave_acesso = chave_ficticia
+        nota_existente.protocolo = protocolo_ficticio
+        nota_existente.status_sefaz = 'Autorizada' 
+        nota_existente.data_emissao = now 
+        nota_existente.data_hora_autorizacao = now 
+        db.add(nota_existente) 
+        print(f"  - Nota Fiscal Saída ID {nota_existente.id} ATUALIZADA para Venda {venda.id}")
+    else:
+        nova_nota = models.NotaFiscalSaida(
+            venda_id=venda.id,
+            chave_acesso=chave_ficticia,
+            protocolo=protocolo_ficticio,
+            status_sefaz='Autorizada', 
+            data_emissao=now,
+            data_hora_autorizacao=now
+        )
+        db.add(nova_nota) 
+        print(f"  - Nova Nota Fiscal Saída CRIADA para Venda {venda.id}")
+
+    # Atualiza o status fiscal da Venda
+    venda.status_fiscal = 'emitida' 
+    db.add(venda) 
+    
+    # ✅ GARANTE QUE O SQL SEJA ENVIADO AO BANCO AGORA (dentro da transação)
+    try:
+        db.flush() 
+        print(f"  - Mudanças para Venda {venda.id} enviadas ao DB (pré-commit).")
+    except Exception as e:
+        # Se o flush falhar, algo está errado com os dados ou o modelo
+        print(f"  - ERRO DURANTE O FLUSH para Venda {venda.id}: {e}")
+        # Importante: Levantar o erro aqui fará o FastAPI dar rollback
+        raise e
 
 @router.post("/emitir-meta", response_model=schemas.ActionResponse)
 def trigger_emitir_meta(db: Session = Depends(get_db)):
@@ -216,24 +264,223 @@ def trigger_emitir_meta(db: Session = Depends(get_db)):
     print(f"Vendas Selecionadas para Emissão ({len(vendas_para_emitir)}):")
     
     ids_emitidos = []
-    # Removido o db.begin() explícito
+    erros_emissao = []
+    
+    # ✅ LÓGICA REAL: Itera e tenta emitir (simuladamente) cada venda selecionada
     for venda_a_emitir in vendas_para_emitir:
-        print(f"  - ID: {venda_a_emitir.id}, Valor: R$ {venda_a_emitir.valor_total:.2f}, Status Atual Real: {venda_a_emitir.status_fiscal if not venda_a_emitir.nota_fiscal_saida else venda_a_emitir.nota_fiscal_saida.status_sefaz}")
-        
-        # --- LÓGICA REAL (exemplo) ---
-        # venda_a_emitir.status_fiscal = 'em_processamento' 
-        # db.add(venda_a_emitir) # Adiciona à sessão para salvar a mudança
-        # --- Fim da Lógica Real ---
-        
-        ids_emitidos.append(venda_a_emitir.id)
+        print(f"  - Tentando emitir Venda ID {venda_a_emitir.id} (Valor: R$ {venda_a_emitir.valor_total:.2f})...")
+        try:
+            # Chama a função auxiliar para fazer a mágica no DB
+            _simular_emissao_bem_sucedida(venda_a_emitir, db)
+            ids_emitidos.append(venda_a_emitir.id)
+        except Exception as e:
+            # Captura erros inesperados durante a atualização do DB
+            print(f"  - ERRO ao processar Venda ID {venda_a_emitir.id} no DB: {e}")
+            erros_emissao.append(f"DB Venda {venda_a_emitir.id}: {e}")
+            # Considerar rollback PARCIAL aqui seria complexo sem db.begin() por item.
+            # Por enquanto, apenas logamos e continuamos.
             
-    # Commit será feito automaticamente pelo FastAPI/Depends(get_db) se não houver erro
-            
-    print(f"Valor Total a Emitir (Seleção): R$ {valor_acumulado:.2f}") 
+    print(f"Valor Total Emitido (Seleção): R$ {valor_acumulado:.2f}") 
     print(f"------------------------------------")
     
-    # Verifica se realmente selecionamos alguma venda (pode não acontecer se todas forem 0 ou negativas)
-    if not vendas_para_emitir:
-         return schemas.ActionResponse(message="Não foi possível selecionar vendas válidas para atingir a meta (verificar valores).")
+    if not ids_emitidos and not erros_emissao:
+        return schemas.ActionResponse(message="Nenhuma venda válida selecionada ou encontrada para atingir a meta.")
+        
+    message = f"{len(ids_emitidos)} venda(s) marcada(s) como emitida(s) no banco."
+    if erros_emissao:
+        message += f" Erros: {'; '.join(erros_emissao)}"
 
-    return schemas.ActionResponse(message=f"{len(vendas_para_emitir)} venda(s) (IDs: {ids_emitidos}) enviada(s) para emissão para tentar atingir a meta.")
+    return schemas.ActionResponse(message=message)
+
+@router.post("/emitir/lote", response_model=schemas.ActionResponse)
+def trigger_emitir_lote(
+    request_data: schemas.EmitirLoteRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Tenta MARCAR COMO EMITIDA uma lista específica de IDs de venda no DB.
+    Verifica se cada venda está realmente pendente antes.
+    """
+    venda_ids_para_emitir = request_data.venda_ids
+    if not venda_ids_para_emitir:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Nenhum ID de venda fornecido.")
+
+    # Busca as vendas solicitadas e pré-carrega suas notas fiscais de saída associadas
+    vendas_solicitadas = db.query(models.Venda).options(
+        joinedload(models.Venda.nota_fiscal_saida) # Garante que a nota venha junto
+    ).filter(
+        models.Venda.id.in_(venda_ids_para_emitir)
+    ).all()
+
+    # Cria um dicionário para encontrar rapidamente a venda pelo ID
+    vendas_encontradas_map = {venda.id: venda for venda in vendas_solicitadas}
+
+    ids_processados = [] # Lista de IDs que foram marcados como emitidos com sucesso
+    erros = [] # Lista de mensagens de erro ou avisos
+    # Define quais status são considerados "finais" e impedem uma nova emissão
+    status_considerados_finais = ['autorizada', 'emitida', 'cancelada', 'rejeitada', 'nao_declarar', 'não declarar']
+
+    print(f"--- Processando Requisição: /fiscal/emitir/lote ---")
+    print(f"IDs Solicitados para Emissão: {venda_ids_para_emitir}")
+
+    # Itera sobre cada ID de venda que o frontend enviou
+    for venda_id in venda_ids_para_emitir:
+        venda = vendas_encontradas_map.get(venda_id)
+
+        # 1. Verifica se a venda existe no banco
+        if not venda:
+            mensagem_erro = f"Venda ID {venda_id} não encontrada no banco de dados."
+            print(f"  - ERRO: {mensagem_erro}")
+            erros.append(mensagem_erro)
+            continue # Pula para o próximo ID da lista
+
+        # 2. Determina o status fiscal real da venda (considerando a Nota Fiscal Saída)
+        status_final = venda.status_fiscal.lower() # Começa com o status interno da Venda
+        if venda.nota_fiscal_saida and venda.nota_fiscal_saida.status_sefaz:
+            # Se existe uma nota fiscal associada E ela tem um status da SEFAZ,
+            # este status tem prioridade.
+            status_sefaz_lower = venda.nota_fiscal_saida.status_sefaz.lower()
+            # Atualiza o status_final apenas se o status da SEFAZ for relevante
+            # (poderíamos ser mais específicos aqui se necessário)
+            status_final = status_sefaz_lower
+
+        # 3. Verifica se a venda já tem um status final que impede nova emissão
+        if status_final in status_considerados_finais:
+            mensagem_aviso = f"Venda ID {venda_id} já possui status final '{status_final}'. Nenhuma ação realizada."
+            print(f"  - AVISO: {mensagem_aviso}")
+            erros.append(mensagem_aviso) # Adiciona como aviso, não necessariamente erro
+            continue # Pula para o próximo ID
+
+        # 4. Se passou pelas verificações, tenta simular a emissão
+        print(f"  - Tentando marcar como emitida a Venda ID {venda_id} (Valor: R$ {venda.valor_total:.2f})...")
+        try:
+            # Chama a função auxiliar que faz as alterações nos objetos SQLAlchemy
+            # e chama db.flush() para enviar os comandos SQL ao banco (pré-commit)
+            _simular_emissao_bem_sucedida(venda, db)
+            ids_processados.append(venda_id)
+            print(f"  - Venda ID {venda_id} marcada para commit.")
+        except Exception as e:
+            # Captura qualquer erro que ocorra durante o flush ou manipulação do objeto
+            mensagem_erro_db = f"Erro ao processar Venda ID {venda_id} no DB: {e}"
+            print(f"  - ERRO: {mensagem_erro_db}")
+            erros.append(mensagem_erro_db)
+            # Neste ponto, podemos decidir parar todo o lote (raise e) ou apenas pular esta venda.
+            # Por padrão, vamos pular e tentar as outras. O FastAPI cuidará do rollback se necessário.
+            # Se quiséssemos garantir que *ou todas* funcionam *ou nenhuma*, usaríamos db.begin()
+            # no início da ROTA e db.rollback() aqui. Mas vamos manter simples por ora.
+            continue # Pula para o próximo ID
+
+    # 5. Tenta fazer o COMMIT explícito (para depuração e garantia)
+    try:
+        if ids_processados: # Só tenta commitar se alguma venda foi processada com sucesso
+             print(f"Tentando commit explícito para IDs processados: {ids_processados}")
+             db.commit() # Salva permanentemente TODAS as alterações feitas na sessão 'db'
+             print("Commit explícito bem-sucedido.")
+        else:
+             print("Nenhuma venda foi processada com sucesso, commit explícito não realizado.")
+             # Se houve erros, o FastAPI/Depends(get_db) provavelmente fará rollback de qualquer forma.
+
+    except Exception as e_commit:
+        # Captura erros durante o commit final (raro, mas pode acontecer)
+        print(f"ERRO CRÍTICO durante o commit explícito: {e_commit}")
+        db.rollback() # Garante que tudo seja desfeito se o commit falhar
+        # Levanta um erro HTTP 500 para o frontend saber que a operação falhou
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Erro crítico ao salvar alterações no banco: {e_commit}")
+
+    print(f"--- Fim do Processamento: /fiscal/emitir/lote ---")
+
+    # 6. Monta a mensagem de resposta para o frontend
+    message = f"{len(ids_processados)} de {len(venda_ids_para_emitir)} notas solicitadas foram marcadas como emitidas no banco."
+    if erros:
+        # Adiciona os erros/avisos à mensagem
+        message += f" Detalhes: {'; '.join(erros)}"
+
+    # Retorna a resposta
+    return schemas.ActionResponse(message=message)
+
+
+# ✅ NOVA ROTA: Emitir TODAS as vendas pendentes
+@router.post("/emitir/pendentes", response_model=schemas.ActionResponse)
+def trigger_emitir_pendentes(db: Session = Depends(get_db)):
+    """
+    Encontra TODAS as vendas REALMENTE pendentes e as marca para emissão.
+    (SIMULAÇÃO)
+    """
+    
+    # Reutiliza a lógica de busca e filtro da rota /emitir-meta (Passos 4 e 5)
+    vendas_candidatas = db.query(models.Venda).options(
+        joinedload(models.Venda.nota_fiscal_saida) 
+    ).filter(
+        models.Venda.status_fiscal == 'pendente' 
+    ).order_by(models.Venda.data_hora.asc()).all()
+
+    vendas_realmente_pendentes: List[models.Venda] = []
+    status_considerados_finais = ['autorizada', 'emitida', 'cancelada', 'rejeitada', 'nao_declarar'] 
+
+    for venda in vendas_candidatas:
+        status_final = venda.status_fiscal.lower()
+        if venda.nota_fiscal_saida and venda.nota_fiscal_saida.status_sefaz:
+             status_sefaz_lower = venda.nota_fiscal_saida.status_sefaz.lower()
+             if status_sefaz_lower not in status_considerados_finais:
+                 status_final = status_sefaz_lower
+             else:
+                 status_final = status_sefaz_lower
+        if status_final not in status_considerados_finais:
+             vendas_realmente_pendentes.append(venda)
+
+    if not vendas_realmente_pendentes:
+        return schemas.ActionResponse(message="Não há vendas pendentes válidas para emitir no momento.")
+
+    # SIMULAÇÃO: Marca todas as pendentes encontradas
+    print(f"--- SIMULAÇÃO: Emitir Todas Pendentes ---")
+    print(f"Total de Vendas Realmente Pendentes Encontradas: {len(vendas_realmente_pendentes)}")
+    
+    ids_emitidos = []
+    valor_total_emitir = 0.0
+    erros_emissao = []
+
+    # ✅ LÓGICA REAL: Itera e tenta emitir (simuladamente) cada pendente
+    for venda_a_emitir in vendas_realmente_pendentes:
+        print(f"  - Tentando emitir Venda ID {venda_a_emitir.id} (Valor: R$ {venda_a_emitir.valor_total:.2f})...")
+        try:
+            # Chama a função auxiliar
+            _simular_emissao_bem_sucedida(venda_a_emitir, db)
+            ids_emitidos.append(venda_a_emitir.id)
+            valor_total_emitir += venda_a_emitir.valor_total
+        except Exception as e:
+            print(f"  - ERRO ao processar Venda ID {venda_a_emitir.id} no DB: {e}")
+            erros_emissao.append(f"DB Venda {venda_a_emitir.id}: {e}")
+            
+    print(f"Valor Total Emitido: R$ {valor_total_emitir:.2f}") 
+    print(f"------------------------------------")
+    
+    message = f"{len(ids_emitidos)} venda(s) pendente(s) marcada(s) como emitida(s)."
+    if erros_emissao: message += f" Erros: {'; '.join(erros_emissao)}"
+    return schemas.ActionResponse(message=message)
+
+@router.post("/emitir/{venda_id}", response_model=schemas.Venda) # Ou um schema mais específico
+def trigger_emitir_single(venda_id: int, db: Session = Depends(get_db)):
+    """
+    (SIMULAÇÃO) Tenta emitir uma única nota fiscal para a venda especificada.
+    Retorna a venda atualizada (ou um status).
+    """
+    venda = db.query(models.Venda).options(
+        joinedload(models.Venda.nota_fiscal_saida)
+    ).filter(models.Venda.id == venda_id).first()
+
+    if not venda:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Venda não encontrada.")
+
+    print(f"--- SIMULAÇÃO: Emitir Nota Única ---")
+    print(f"  - Processando Venda ID {venda.id}...")
+    
+    try:
+        _simular_emissao_bem_sucedida(venda, db)
+    except Exception as e:
+        print(f"  - ERRO ao processar Venda ID {venda.id} no DB: {e}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Erro ao atualizar banco de dados para Venda {venda.id}: {e}")
+    
+    print(f"--- Fim do Processamento ---")
+    
+    db.refresh(venda, ['nota_fiscal_saida']) 
+    return venda 

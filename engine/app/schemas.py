@@ -370,3 +370,6 @@ class FiscalConfigUpdateRequest(BaseModel):
 # Resposta simples para ações
 class ActionResponse(BaseModel):
     message: str
+
+class EmitirLoteRequest(BaseModel):
+    venda_ids: List[int] # Lista dos IDs das vendas a serem emitidas
