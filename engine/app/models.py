@@ -19,10 +19,21 @@ class Usuario(Base):
     produtos_criados = relationship("Produto", foreign_keys="[Produto.criado_por_id]", back_populates="criador")
     produtos_atualizados = relationship("Produto", foreign_keys="[Produto.atualizado_por_id]", back_populates="atualizador")
     vendas = relationship("Venda", back_populates="operador")
-    movimentacoes_realizadas = relationship( "MovimentacaoCaixa", foreign_keys="[MovimentacaoCaixa.operador_id]", back_populates="operador" )
     pdv_ativo = relationship("Pdv", back_populates="operador_atual", foreign_keys="[Pdv.operador_atual_id]")
-    movimentacoes_autorizadas = relationship( "MovimentacaoCaixa", foreign_keys="[MovimentacaoCaixa.autorizado_por_id]", back_populates="autorizador")
+    movimentacoes_realizadas = relationship(
+        "MovimentacaoCaixa", 
+        # Referencia a coluna na TABELA MovimentacaoCaixa
+        foreign_keys="[MovimentacaoCaixa.operador_id]", 
+        back_populates="operador" 
+    )
     
+    movimentacoes_autorizadas = relationship(
+        "MovimentacaoCaixa", 
+        # Referencia a coluna na TABELA MovimentacaoCaixa
+        foreign_keys="[MovimentacaoCaixa.autorizado_por_id]", 
+        back_populates="autorizador"
+    )
+
 class Fornecedor(Base):
     __tablename__ = "fornecedores"
     id = Column(Integer, primary_key=True)
@@ -114,7 +125,7 @@ class Cliente(Base):
     saldo_devedor = Column(Float, default=0.0) # Saldo atual
     
     trust_mode = Column(Boolean, default=False, nullable=False) 
-    
+    vendas = relationship("Venda", back_populates="cliente")
     status_conta = Column(Enum('ativo', 'inativo', 'bloqueado', 'atrasado', name='status_conta_enum'), default='ativo', nullable=False) 
     
     data_vencimento_fatura = Column(Date, nullable=True) # Próximo vencimento
@@ -206,7 +217,7 @@ class MovimentacaoCaixa(Base):
 
     # Relações
     pdv = relationship("Pdv", back_populates="movimentacoes_caixa")
-    operador = relationship("Usuario", foreign_keys=[operador_id], back_populates="movimentacoes_realizadas")
+    operador = relationship("Usuario", foreign_keys=[operador_id], back_populates="movimentacoes_realizadas") 
     autorizador = relationship("Usuario", foreign_keys=[autorizado_por_id], back_populates="movimentacoes_autorizadas")
     
 class NotaFiscalEntrada(Base):
