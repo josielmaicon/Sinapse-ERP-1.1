@@ -6,10 +6,17 @@ import FiscalPageLayout from "@/layouts/FiscalPageLayout";
 import FiscalDataTable from "@/components/fiscal/TabelaFiscal"
 import { fiscalColumns } from "@/components/fiscal/ColunasTabelaFiscal";
 import FiscalSummaryChart from "@/components/fiscal/AnaliseEnvioFiscal";
+import { toast } from "sonner";
 
 export default function FiscalPage() {
 
-// ✅ 1. ESTADO CENTRALIZADO PARA TODOS OS DADOS DA PÁGINA
+    const [fiscalConfig, setFiscalConfig] = React.useState({
+        strategy: 'coeficiente',
+        goal_value: 2.1,
+        autopilot_enabled: false,
+    });
+    const [isConfigLoading, setIsConfigLoading] = React.useState(true);
+
     const [summaryData, setSummaryData] = React.useState({
         total_comprado_mes: 0,
         total_emitido_mes: 0,
@@ -17,38 +24,90 @@ export default function FiscalPage() {
         notas_rejeitadas: 0,
         pendentes_antigas: 0,
     });
-    const [tableData, setTableData] = React.useState([]); // Novo estado para a tabela
+    const [tableData, setTableData] = React.useState([]);
     const [isLoading, setIsLoading] = React.useState(true);
 
-    // ✅ 2. FUNÇÃO ÚNICA PARA BUSCAR TODOS OS DADOS
-    const fetchData = async () => {
-        setIsLoading(true);
+    const fetchData = async (showLoading = true) => {
+        if (showLoading) setIsLoading(true);
+        setIsConfigLoading(true);
         try {
-            // Busca os dados do summary
-            const summaryResponse = await fetch('http://localhost:8000/api/fiscal/summary');
-            if (!summaryResponse.ok) throw new Error("Falha ao buscar resumo fiscal");
-            const summary = await summaryResponse.json();
+            const [summaryRes, tableRes, configRes] = await Promise.all([
+                fetch('http://localhost:8000/api/fiscal/summary'),
+                fetch('http://localhost:8000/vendas/'),
+                fetch('http://localhost:8000/api/fiscal/config') 
+            ]);
+        
+            if (!summaryRes.ok) throw new Error("Falha ao buscar resumo fiscal");
+            if (!tableRes.ok) throw new Error("Falha ao buscar dados da tabela");
+            if (!configRes.ok) throw new Error("Falha ao buscar configuração fiscal");
+        
+            const summary = await summaryRes.json();
+            const table = await tableRes.json();
+            const config = await configRes.json();
+        
             setSummaryData(summary);
-            
-            // Busca os dados da tabela (lista de vendas)
-            // Usamos a rota de Vendas que já criamos
-            const tableResponse = await fetch('http://localhost:8000/vendas/'); 
-            if (!tableResponse.ok) throw new Error("Falha ao buscar dados da tabela");
-            const table = await tableResponse.json();
             setTableData(table);
-
+            setFiscalConfig(config);
+        
         } catch (error) {
             console.error("Erro ao buscar dados fiscais:", error);
-            // toast.error("Erro ao carregar dados", { description: error.message });
+            toast.error("Erro ao carregar dados", { description: error.message });
         } finally {
-            setIsLoading(false);
+            if (showLoading) setIsLoading(false);
+            setIsConfigLoading(false);
         }
     };
 
-    // ✅ 3. CHAMA A FUNÇÃO QUANDO A PÁGINA CARREGA
-        React.useEffect(() => {
+    const handleConfigSave = async (newConfig) => {
+        const apiPromise = fetch('http://localhost:8000/api/fiscal/config', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(newConfig)
+        })
+        .then(async (response) => {
+            const result = await response.json();
+            if (!response.ok) {
+                throw new Error(result.detail || "Erro ao salvar configuração.");
+            }
+            return result;
+        });
+    
+        toast.promise(apiPromise, {
+            loading: "Salvando configuração...",
+            success: (savedConfig) => {
+                setFiscalConfig(savedConfig);
+                return "Configuração fiscal salva com sucesso!";
+            },
+            error: (err) => err.message,
+        });
+        return apiPromise; 
+    };
+
+    const handleEmitirMeta = async () => {
+         const apiPromise = fetch('http://localhost:8000/api/fiscal/emitir-meta', {
+             method: 'POST',
+         })
+         .then(async (response) => {
+             const result = await response.json();
+             if (!response.ok) {
+                 throw new Error(result.detail || "Erro ao solicitar emissão.");
+             }
+             return result; 
+         });
+
+         toast.promise(apiPromise, {
+             loading: "Processando solicitação para atingir meta...",
+             success: (result) => {
+                 fetchData(false);
+                 return result.message;
+             },
+             error: (err) => err.message,
+         });
+    };
+
+    React.useEffect(() => {
             fetchData();
-        }, []); // Array vazio garante que rode apenas uma vez
+        }, []);
 
   return (
     <FiscalPageLayout
@@ -56,13 +115,17 @@ export default function FiscalPage() {
             <MetaEnvio 
                 totalPurchased={summaryData.total_comprado_mes}
                 totalIssued={summaryData.total_emitido_mes}
+                config={fiscalConfig}
+                onConfigChange={setFiscalConfig}
+                onConfigSave={handleConfigSave} 
+                onEmitirMeta={handleEmitirMeta} 
+                isLoading={isConfigLoading}
             />
         }
         TabelaFiscal={
-            // ✅ 3. PASSA OS DADOS REAIS (do estado) PARA A TABELA
             <FiscalDataTable 
                 columns={fiscalColumns} 
-                data={tableData} // Em vez de 'fiscalData'
+                data={tableData}
             />
         }
         HistoricoEnvio={

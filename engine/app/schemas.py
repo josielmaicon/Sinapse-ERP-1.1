@@ -355,3 +355,18 @@ class PdvStatusDetalhado(BaseModel):
 
     class Config:
         from_attributes = True
+
+class FiscalConfigResponse(BaseModel):
+    strategy: str = 'coeficiente' # Valor padrão se não existir no DB
+    goal_value: float = 2.1        # Valor padrão
+    autopilot_enabled: bool = False # Valor padrão
+
+# O que o frontend envia para ATUALIZAR a configuração
+class FiscalConfigUpdateRequest(BaseModel):
+    strategy: str
+    goal_value: float
+    autopilot_enabled: bool
+
+# Resposta simples para ações
+class ActionResponse(BaseModel):
+    message: str

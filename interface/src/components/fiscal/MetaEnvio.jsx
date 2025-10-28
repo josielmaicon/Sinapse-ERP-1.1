@@ -16,17 +16,18 @@ import {
 } from "@/components/ui/hover-card"
 import { Rocket, Target, Save } from "lucide-react"
 import { toast } from "sonner"
+import { Skeleton } from "@/components/ui/skeleton";
 
 // As props que o componente espera receber da página principal
-export default function MetaEnvio({ totalPurchased, totalIssued }) {
+export default function MetaEnvio({ totalPurchased, totalIssued, config, onConfigChange,onConfigSave,onEmitirMeta,isLoading}) {
 
   if (totalPurchased === undefined || totalIssued === undefined) {
       return <div>Carregando dados fiscais...</div>; // Ou um componente de Skeleton
     }
 
-  const [strategy, setStrategy] = React.useState("coeficiente");
-  const [goalValue, setGoalValue] = React.useState(2.1);
-  const [isAutopilotOn, setIsAutopilotOn] = React.useState(false);
+  const strategy = config?.strategy ?? 'coeficiente';
+  const goalValue = config?.goal_value ?? 2.1;
+  const isAutopilotOn = config?.autopilot_enabled ?? false;
 
   const { calculatedGoal, progressPercentage } = React.useMemo(() => {
     let goal = 0;
@@ -50,16 +51,65 @@ export default function MetaEnvio({ totalPurchased, totalIssued }) {
     return { calculatedGoal: goal, progressPercentage: Math.min(percentage, 100) };
   }, [strategy, goalValue, totalPurchased, totalIssued]);
   
-  const handleUpdateGoal = async () => {
-      // Aqui você faria a chamada de API para o backend
-      // Ex: await fetch('/api/fiscal/meta', { method: 'POST', body: JSON.stringify({ strategy, goalValue }) });
-      
-      // Simulação de sucesso
-      console.log("Salvando nova meta:", { strategy, goalValue });
-      await new Promise(res => setTimeout(res, 500)); // Simula delay da rede
-      
-      toast.success("Estratégia de meta atualizada com sucesso!");
-    };
+  const handleStrategyChange = (newStrategy) => {
+    onConfigChange({ ...config, strategy: newStrategy });
+  };
+
+  const handleGoalValueChange = (e) => {
+    // Tenta converter para float, mas guarda como string temporariamente se falhar
+    const rawValue = e.target.value;
+    const floatValue = parseFloat(rawValue);
+    onConfigChange({ ...config, goal_value: isNaN(floatValue) ? rawValue : floatValue });
+  };
+
+  const handleAutopilotChange = (checked) => {
+    const newConfig = { ...config, autopilot_enabled: checked };
+    onConfigChange(newConfig);
+    onConfigSave(newConfig); // Salva automaticamente ao mudar o switch
+  };
+
+  const handleUpdateGoalClick = () => {
+    // Garante que goalValue seja numérico antes de salvar
+    const numericGoalValue = parseFloat(goalValue);
+    if (isNaN(numericGoalValue)) {
+        toast.error("Valor da meta inválido.");
+        return;
+    }
+    const configToSave = { ...config, goal_value: numericGoalValue };
+    onConfigChange(configToSave); // Atualiza o estado local caso a conversão tenha mudado algo
+    onConfigSave(configToSave); 
+  };
+
+  const handleEmitirMetaClick = () => {
+     onEmitirMeta();
+  }
+
+  if (isLoading) {
+     return (
+       <div className="h-full w-full flex flex-col justify-between gap-4 p-4 border rounded-lg">
+          <div className="space-y-1">
+              <Skeleton className="h-4 w-32" />
+              <Skeleton className="h-10 w-48" />
+          </div>
+          <div className="space-y-2">
+              <Skeleton className="h-4 w-24" />
+              <Skeleton className="h-9 w-full" />
+              <Skeleton className="h-9 w-full" />
+          </div>
+          <div className="space-y-2">
+              <Skeleton className="h-4 w-full" />
+              <Skeleton className="h-4 w-3/4" />
+          </div>
+          <div className="flex justify-between items-center">
+              <div className="flex gap-2">
+                  <Skeleton className="h-9 w-24" />
+                  <Skeleton className="h-9 w-32" />
+              </div>
+              <Skeleton className="h-6 w-32" />
+          </div>
+       </div>
+     )
+  }
 
   const goalUnit = {
     coeficiente: "x",
@@ -67,9 +117,10 @@ export default function MetaEnvio({ totalPurchased, totalIssued }) {
     valor_fixo: "R$",
   }[strategy];
 
+
   return (
     <div className="h-full w-full flex flex-col justify-between gap-4">
-      {/* SEÇÃO 1: VALOR COMPRADO (Sempre visível) */}
+      {/* SEÇÃO 1: VALOR COMPRADO (igual) */}
       <div>
         <p className="text-sm text-muted-foreground">Valor Comprado no Mês</p>
         <p className="text-4xl font-bold tracking-tighter text-primary">
@@ -77,7 +128,7 @@ export default function MetaEnvio({ totalPurchased, totalIssued }) {
         </p>
       </div>
 
-      {/* ✅ 2. RENDERIZAÇÃO CONDICIONAL DA INTERFACE */}
+      {/* RENDERIZAÇÃO CONDICIONAL (agora usa isAutopilotOn da prop) */}
       {isAutopilotOn ? (
         // --- MODO PILOTO AUTOMÁTICO LIGADO ---
         <div className="bg-muted/50 border-l-4 border-primary p-4 rounded-r-lg">
@@ -90,12 +141,12 @@ export default function MetaEnvio({ totalPurchased, totalIssued }) {
           </p>
         </div>
       ) : (
-        // --- MODO ESTRATÉGICO (MANUAL) ---
         <>
           {/* SEÇÃO DE DEFINIÇÃO DA META */}
           <div className="flex flex-col gap-2">
             <Label>Definir Meta de Emissão</Label>
-            <Tabs value={strategy} onValueChange={setStrategy}>
+            {/* ✅ Usa strategy da prop e chama handleStrategyChange */}
+            <Tabs value={strategy} onValueChange={handleStrategyChange}> 
               <TabsList className="grid w-full grid-cols-3">
                 <TabsTrigger value="coeficiente">Coeficiente (x)</TabsTrigger>
                 <TabsTrigger value="porcentagem">Porcentagem (%)</TabsTrigger>
@@ -103,12 +154,18 @@ export default function MetaEnvio({ totalPurchased, totalIssued }) {
               </TabsList>
             </Tabs>
             <div className="flex items-center gap-2">
-              <Input type="number" value={goalValue} onChange={(e) => setGoalValue(e.target.value)} />
+              {/* ✅ Usa goalValue da prop e chama handleGoalValueChange */}
+              <Input 
+                 type="number" 
+                 // Mostra o valor da prop, converte para string vazia se for 0 para placeholder funcionar
+                 value={goalValue === 0 ? '' : goalValue} 
+                 onChange={handleGoalValueChange} 
+                 placeholder={strategy === 'valor_fixo' ? 'Ex: 400000' : (strategy === 'porcentagem' ? 'Ex: 10' : 'Ex: 2.1')}
+               />
               <span className="font-semibold text-muted-foreground">{goalUnit}</span>
             </div>
           </div>
 
-          {/* SEÇÃO DA BARRA DE PROGRESSO */}
           <div className="flex flex-col gap-2">
             <Progress value={progressPercentage} />
             <div className="flex justify-between text-sm">
@@ -123,17 +180,22 @@ export default function MetaEnvio({ totalPurchased, totalIssued }) {
         </>
       )}
       
-      {/* SEÇÃO 4: AÇÕES (O rodapé) */}
+      {/* SEÇÃO 4: AÇÕES */}
       <div className="flex items-center justify-between mt-2">
-        {/* Agrupamos os botões de ação na esquerda */}
         <div className="flex items-center gap-2">
           {!isAutopilotOn && (
             <>
-              <Button onClick={handleUpdateGoal}>
+              {/* ✅ Chama handleUpdateGoalClick */}
+              <Button onClick={handleUpdateGoalClick}> 
                 <Save className="h-4 w-4 mr-2" />
                 Atualizar Meta
               </Button>
-              <Button variant="secondary" disabled={progressPercentage >= 100}>
+              {/* ✅ Chama handleEmitirMetaClick */}
+              <Button 
+                variant="secondary" 
+                disabled={progressPercentage >= 100} 
+                onClick={handleEmitirMetaClick}
+               >
                 <Target className="h-4 w-4 mr-2" />
                 Atingir Meta Agora
               </Button>
@@ -141,15 +203,15 @@ export default function MetaEnvio({ totalPurchased, totalIssued }) {
           )}
         </div>
         
-        {/* O Switch agora fica isolado na direita */}
         <div className="flex items-center space-x-2 ml-auto">
           <HoverCard>
             <HoverCardTrigger asChild>
               <div className="flex items-center space-x-2">
+                {/* ✅ Usa isAutopilotOn da prop e chama handleAutopilotChange */}
                 <Switch 
                   id="autopilot-mode" 
                   checked={isAutopilotOn}
-                  onCheckedChange={setIsAutopilotOn}
+                  onCheckedChange={handleAutopilotChange} 
                 />
                 <Label htmlFor="autopilot-mode">Piloto Automático</Label>
               </div>
