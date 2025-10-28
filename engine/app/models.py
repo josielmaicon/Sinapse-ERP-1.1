@@ -156,6 +156,7 @@ class Venda(Base):
     # Uma venda tem muitos itens. 'cascade' garante que se uma venda for deletada, seus itens também sejam.
     itens = relationship("VendaItem", back_populates="venda", cascade="all, delete-orphan")
     nota_fiscal_saida = relationship("NotaFiscalSaida", back_populates="venda", uselist=False)
+    forma_pagamento = Column(String(50), nullable=True, default="dinheiro")
 
 class VendaItem(Base):
     __tablename__ = "venda_itens"

@@ -9,6 +9,9 @@ class UsuarioBase(BaseModel):
     nome: str
     funcao: Optional[str] = "operador"
 
+    class Config:
+            from_attributes = True
+
 class UsuarioCreate(UsuarioBase):
     senha_hash: str # No futuro, aqui virá a senha em texto plano
 

@@ -30,13 +30,22 @@ export const pdvColumns = [
       return operador ? operador.nome : "---";
     },
   },
-  {
-    // 🚧 Este campo não vem da API '/api/pdvs' ainda
-    // Vamos deixar um placeholder por enquanto
-    accessorKey: "inRegister",
+{
+    // ✅ 1. CORRIJA O accessorKey
+    accessorKey: "valor_em_caixa", // <--- DE 'inRegister' PARA O NOME REAL DA API
     header: () => <div className="text-right">Caixa (R$)</div>,
-    cell: () => {
-      return <div className="text-right font-medium">R$ 0,00</div>
+    // ✅ 2. ATUALIZE A CÉLULA para ler e formatar o valor
+    cell: ({ row }) => {
+      // Pega o valor numérico da linha
+      const amount = parseFloat(row.getValue("valor_em_caixa"))
+
+      // Formata como moeda brasileira (BRL)
+      const formatted = new Intl.NumberFormat("pt-BR", {
+        style: "currency",
+        currency: "BRL",
+      }).format(amount);
+
+      return <div className="text-right font-medium">{formatted}</div>
     },
   },
   {

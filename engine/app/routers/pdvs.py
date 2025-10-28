@@ -37,23 +37,101 @@ def get_pdv_summary(db: Session = Depends(get_db)):
         "pdvs_totais": pdvs_totais
     }
 
-@router.get("/", response_model=List[schemas.PdvStatus])
+
+@router.get("/", response_model=List[schemas.PdvStatusDetalhado]) 
 def get_all_pdvs(status: Optional[str] = None, db: Session = Depends(get_db)):
     """
-    Busca todos os PDVs. Pode ser filtrado por status.
-    Ex: /api/pdvs?status=aberto
+    Busca todos os PDVs com status detalhado, incluindo cálculos de faturamento
+    do dia (ou desde a abertura), contagem de vendas e alertas pendentes.
+    Pode ser filtrado por status.
     """
-    query = db.query(models.Pdv).options(joinedload(models.Pdv.operador_atual))
+    today = date.today() # Usaremos 'today' como fallback se não houver abertura
 
+    # ✅ MUDANÇA 2: Query mais poderosa para buscar relacionamentos
+    query = db.query(models.Pdv).options(
+        joinedload(models.Pdv.operador_atual),
+        selectinload(models.Pdv.solicitacoes),      # Carrega TODAS
+        selectinload(models.Pdv.vendas),               # Carrega TODAS
+        selectinload(models.Pdv.movimentacoes_caixa) # Carrega TODAS
+    )
+
+    # Lógica de filtro do PDV (continua igual)
     if status and status != "todos":
         if status == "fechados":
-            # Se o filtro for 'fechados', busca tudo que NÃO for 'aberto'
             query = query.filter(models.Pdv.status != "aberto")
         else:
             query = query.filter(models.Pdv.status == status)
     
-    pdvs = query.all()
-    return pdvs
+    pdvs_from_db = query.all()
+
+    # ✅ MUDANÇA 3: A LÓGICA DE CÁLCULO (como na explicação anterior)
+    lista_pdvs_detalhada = []
+    for pdv in pdvs_from_db:
+        
+        # Encontra a ÚLTIMA abertura de caixa para ESTE PDV
+        ultima_abertura_mov = db.query(models.MovimentacaoCaixa)\
+            .filter(models.MovimentacaoCaixa.pdv_id == pdv.id, models.MovimentacaoCaixa.tipo == 'abertura')\
+            .order_by(models.MovimentacaoCaixa.data_hora.desc())\
+            .first()
+
+        valor_abertura = 0.0
+        hora_abertura_dt = None # Guardamos como datetime
+        movimentacoes_periodo = []
+        vendas_periodo = []
+        
+        # Define o período relevante: desde a última abertura OU apenas hoje
+        if ultima_abertura_mov:
+            valor_abertura = ultima_abertura_mov.valor
+            hora_abertura_dt = ultima_abertura_mov.data_hora
+            periodo_inicio = hora_abertura_dt
+        else:
+            # Se não houve abertura, consideramos o início do dia atual como referência
+            periodo_inicio = datetime.combine(today, datetime.min.time())
+
+        # Filtra movimentações e vendas DENTRO DO PERÍODO relevante
+        movimentacoes_periodo = [
+            m for m in pdv.movimentacoes_caixa 
+            if m.data_hora >= periodo_inicio
+        ]
+        vendas_periodo = [
+            v for v in pdv.vendas 
+            if v.data_hora >= periodo_inicio and v.status == 'concluida' 
+        ]
+
+        # Calcula totais DENTRO DO PERÍODO
+        suprimentos = sum(m.valor for m in movimentacoes_periodo if m.tipo == 'suprimento')
+        sangrias = sum(m.valor for m in movimentacoes_periodo if m.tipo == 'sangria')
+        
+        # ❗ ATENÇÃO: Assume que 'forma_pagamento' existe no modelo Venda!
+        entradas_dinheiro_vendas = sum(
+            v.valor_total for v in vendas_periodo 
+            if getattr(v, 'forma_pagamento', 'dinheiro') == 'dinheiro' # Usamos getattr para segurança
+        )
+        
+        # CÁLCULO FINAL
+        valor_em_caixa_calculado = valor_abertura + entradas_dinheiro_vendas + suprimentos - sangrias
+        
+        # Contagem de vendas no período
+        total_vendas_periodo = len(vendas_periodo) 
+        
+        # Acha o primeiro alerta PENDENTE (se houver)
+        alerta = next((s for s in pdv.solicitacoes if s.status == 'pendente'), None)
+
+        # Monta o objeto final usando o schema rico
+        pdv_detalhado = schemas.PdvStatusDetalhado(
+            id=pdv.id,
+            nome=pdv.nome,
+            status=pdv.status,
+            operador_atual=pdv.operador_atual,
+            alerta_pendente=alerta,
+            # Mostra o valor calculado APENAS se o caixa estiver aberto
+            valor_em_caixa=valor_em_caixa_calculado if pdv.status == 'aberto' else 0.0, 
+            total_vendas_dia=total_vendas_periodo, # Renomear schema ou variável se confuso
+            hora_abertura=hora_abertura_dt # Passa o datetime da abertura
+        )
+        lista_pdvs_detalhada.append(pdv_detalhado)
+            
+    return lista_pdvs_detalhada
 
 
 @router.get("/{pdv_id}/revenue", response_model=List[schemas.ChartDataPoint])
