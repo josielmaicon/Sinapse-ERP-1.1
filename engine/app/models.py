@@ -22,7 +22,7 @@ class Usuario(Base):
     movimentacoes_realizadas = relationship( "MovimentacaoCaixa", foreign_keys="[MovimentacaoCaixa.operador_id]", back_populates="operador" )
     pdv_ativo = relationship("Pdv", back_populates="operador_atual", foreign_keys="[Pdv.operador_atual_id]")
     movimentacoes_autorizadas = relationship( "MovimentacaoCaixa", foreign_keys="[MovimentacaoCaixa.autorizado_por_id]", back_populates="autorizador")
-
+    
 class Fornecedor(Base):
     __tablename__ = "fornecedores"
     id = Column(Integer, primary_key=True)
@@ -44,11 +44,8 @@ class Promocao(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     nome = Column(String(100), nullable=False)
-    
-    # Tipo da promoção: desconto em % ou um preço final fixo
     tipo = Column(Enum('percentual', 'preco_fixo', name='tipo_promocao_enum'), nullable=False, default='preco_fixo')
     
-    # O valor: 20.0 (para 20%) ou 9.99 (para R$ 9,99)
     valor = Column(Float, nullable=False)
     
     data_inicio = Column(DateTime, default=datetime.utcnow)
@@ -110,15 +107,36 @@ class Cliente(Base):
     __tablename__ = "clientes"
     id = Column(Integer, primary_key=True)
     nome = Column(String(100), nullable=False, index=True)
-    cpf = Column(String(14), unique=True, index=True)
+    cpf = Column(String(14), unique=True, index=True, nullable=True) # Permitir CPF nulo?
+    telefone = Column(String(20), nullable=True) # Campo útil para edição
+    email = Column(String(100), nullable=True) # Campo útil para edição
     limite_credito = Column(Float, default=0.0)
-    saldo_devedor = Column(Float, default=0.0)
-    status_conta = Column(String(50), default="Em Dia")
-    data_vencimento = Column(Integer, default=10) # Ex: 10 (todo dia 10)
+    saldo_devedor = Column(Float, default=0.0) # Saldo atual
     
-    # Relação: Um cliente pode ter várias vendas
-    vendas = relationship("Venda", back_populates="cliente")
+    trust_mode = Column(Boolean, default=False, nullable=False) 
+    
+    status_conta = Column(Enum('ativo', 'inativo', 'bloqueado', 'atrasado', name='status_conta_enum'), default='ativo', nullable=False) 
+    
+    data_vencimento_fatura = Column(Date, nullable=True) # Próximo vencimento
+    transacoes_crediario = relationship("TransacaoCrediario", back_populates="cliente", cascade="all, delete-orphan")
 
+class TransacaoCrediario(Base):
+    __tablename__ = "transacoes_crediario"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    cliente_id = Column(Integer, ForeignKey("clientes.id"), nullable=False)
+    
+    tipo = Column(Enum('compra', 'pagamento', name='tipo_transacao_crediario_enum'), nullable=False)
+    
+    valor = Column(Float, nullable=False) # Sempre positivo, o 'tipo' define a operação
+    descricao = Column(String(255), nullable=True) # Ex: "Compra na loja", "Pagamento ref. Out/25"
+    data_hora = Column(DateTime, default=datetime.utcnow)
+    
+    venda_id = Column(Integer, ForeignKey("vendas.id"), nullable=True) 
+    
+    # Relações
+    cliente = relationship("Cliente", back_populates="transacoes_crediario")
+    venda_original = relationship("Venda") # Relação simples com a Venda (se aplicável)
 
 class Pdv(Base):
     __tablename__ = "pdvs"
