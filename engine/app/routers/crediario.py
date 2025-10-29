@@ -33,12 +33,10 @@ def get_crediario_summary(db: Session = Depends(get_db)):
 def get_crediario_clientes(db: Session = Depends(get_db)):
     clientes = db.query(models.Cliente).all()
     
-    # Python calcula os campos derivados
     clientes_com_limite = []
     for cliente in clientes:
-        limite_disponivel = cliente.limite_credito - cliente.saldo_devedor
+        limite_disponivel = cliente.limite_credito - cliente.saldo_devedor if not cliente.trust_mode else float('inf')
         
-        # Cria um objeto do schema para a resposta
         cliente_schema = schemas.ClienteCrediario(
             id=cliente.id,
             nome=cliente.nome,
@@ -46,8 +44,12 @@ def get_crediario_clientes(db: Session = Depends(get_db)):
             limite_credito=cliente.limite_credito,
             saldo_devedor=cliente.saldo_devedor,
             status_conta=cliente.status_conta,
-            data_vencimento_fatura=cliente.data_vencimento_fatura,
-            limite_disponivel=limite_disponivel
+            
+            dia_vencimento_fatura=cliente.dia_vencimento_fatura, 
+            
+            limite_disponivel=limite_disponivel,
+            telefone=cliente.telefone,
+            email=cliente.email
         )
         clientes_com_limite.append(cliente_schema)
         

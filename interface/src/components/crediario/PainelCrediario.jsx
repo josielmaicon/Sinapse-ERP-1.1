@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { format, isPast } from "date-fns"
+import { format, isPast, addMonths, setDate } from "date-fns"
 import { ptBR } from "date-fns/locale"
 import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
@@ -33,6 +33,23 @@ const InfoBlock = ({ label, value, valueClassName = "" }) => (
   </div>
 )
 
+
+function calculateNextDueDate(dayOfMonth) {
+  if (!dayOfMonth || dayOfMonth < 1 || dayOfMonth > 31) {
+    return null; // Dia inválido ou não definido
+  }
+  const today = new Date();
+  const currentDay = today.getDate();
+  // Cria a data de vencimento potencial para o MÊS ATUAL
+  let nextDueDate = setDate(today, dayOfMonth); 
+  // Se o dia de vencimento deste mês JÁ PASSOU...
+  if (currentDay > dayOfMonth) {
+    // ...pula para o próximo mês.
+    nextDueDate = addMonths(nextDueDate, 1);
+  }
+  return nextDueDate;
+}
+
 // Componente recebe 'client' (os dados) e 'refetchData' (a função para atualizar)
 export default function ClientDetailPanel({ client, refetchData }) {
   const isLoading = !client; // Define loading baseado na existência do cliente
@@ -40,7 +57,6 @@ export default function ClientDetailPanel({ client, refetchData }) {
   // Deriva o estado bloqueado DIRETAMENTE da prop 'client'
   const isBlocked = client?.status_conta === "bloqueado";
 
-  // Estado local apenas para o Modo Confiança (que terá sua própria API depois)
   const [isTrustMode, setIsTrustMode] = React.useState(client?.trust_mode || false);
 
   // Estados para o AlertDialog de confirmação de status
@@ -106,46 +122,35 @@ export default function ClientDetailPanel({ client, refetchData }) {
         }
     });
   };
-
-  // --- Cálculos para exibição ---
+    
   const name = client?.nome ?? "--";
-
-  // Saldo em atraso (usa 'status_conta' e 'atrasado')
+  const isOverdue = client?.status_conta === 'atrasado'; // Fonte da verdade
+  
   const overdueBalance = client
-    ? (client.status_conta === "atrasado" ? client.saldo_devedor : 0).toLocaleString("pt-BR", {
-        style: "currency", currency: "BRL",
-      })
+    ? (isOverdue ? client.saldo_devedor : 0).toLocaleString(/*...*/)
     : "--";
 
-  // Próximo Vencimento (usa 'data_vencimento_fatura')
-  const dueDate = client?.data_vencimento_fatura
-    ? format(new Date(client.data_vencimento_fatura + 'T00:00:00Z'), "dd/MM/yyyy", { locale: ptBR }) // Adiciona Z para UTC
+  const nextDueDateObj = client ? calculateNextDueDate(client.dia_vencimento_fatura) : null;
+  const dueDate = nextDueDateObj 
+    ? format(nextDueDateObj, "dd/MM/yyyy", { locale: ptBR })
     : "--";
 
-  // Verifica se está vencido (considera apenas a data, sem hora)
-  const isOverdue = client?.data_vencimento_fatura && isPast(new Date(client.data_vencimento_fatura + 'T23:59:59Z')) && client.status_conta !== 'ativo';
-
-  // Limite Disponível (usa o calculado pela API ou recalcula como fallback)
-  // Certifique-se que sua API GET /clientes/{id} retorna 'limite_disponivel'
   const limiteDisponivel = client?.limite_disponivel ?? (client ? (client.limite_credito - client.saldo_devedor) : 0);
 
-  // Limite Gasto
   const spentLimit = client
-    // Se modo confiança, gasto é irrelevante vs limite infinito, mostramos saldo devedor? Ou 0?
     ? (isTrustMode ? client.saldo_devedor : (client.limite_credito - limiteDisponivel)).toLocaleString("pt-BR", {
         style: "currency", currency: "BRL",
       })
     : "--";
 
-  // Limite Total
   const totalLimit = client
     ? isTrustMode
       ? "Confiança"
       : client.limite_credito.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })
     : "--";
 
-  // --- PLACEHOLDERS para próximas implementações ---
-  const handleEditClick = () => {
+
+    const handleEditClick = () => {
     if(isLoading) return;
     // alert(`(WIP) Abrir Sheet de Edição para ${client.nome}`); // Remove alert
     setIsSheetOpen(true); // Abre o Sheet!
@@ -261,7 +266,7 @@ export default function ClientDetailPanel({ client, refetchData }) {
 
         {/* BLOCO DE INFORMAÇÕES */}
         <div className="grid grid-cols-2 gap-3">
-          <InfoBlock label="Saldo em Atraso" value={overdueBalance} valueClassName={client?.status_conta === "atrasado" ? "text-destructive" : ""} />
+          <InfoBlock label="Saldo em Atraso" value={overdueBalance} valueClassName={isOverdue ? "text-destructive" : ""} />
           <InfoBlock label="Próximo Vencimento" value={dueDate} valueClassName={isOverdue ? "text-destructive" : ""} />
           <InfoBlock label="Utilizado / Gasto" value={spentLimit} />
           <InfoBlock label="Limite Total" value={totalLimit} valueClassName={isTrustMode ? "text-primary" : ""} /> {/* Use primary para destaque */}

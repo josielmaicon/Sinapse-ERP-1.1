@@ -14,10 +14,8 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet"
 import { toast } from "sonner"
-import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover"
-import { format, parse } from "date-fns" 
 import { ptBR } from "date-fns/locale"
-import { CalendarIcon, Loader2 } from "lucide-react" // <--- O ÍCONE ESTÁ AQUI
+import { Loader2 } from "lucide-react" // <--- O ÍCONE ESTÁ AQUI
 import { Calendar } from "@/components/ui/calendar"
 
 const API_URL = "http://localhost:8000";
@@ -30,8 +28,7 @@ export function EditClientSheet({ open, onOpenChange, client, refetchData }) {
     cpf: '',
     telefone: '',
     email: '',
-    data_vencimento_obj: null, // O 'Date' object para o Calendar
-    data_vencimento_texto: '', // A 'string' dd/MM/yyyy para o Input
+    dia_vencimento_fatura: '', 
   });
   const [isLoading, setIsLoading] = React.useState(false);
 
@@ -41,15 +38,16 @@ export function EditClientSheet({ open, onOpenChange, client, refetchData }) {
       setFormData({
         nome: client.nome || '',
         cpf: client.cpf || '',
-        telefone: client.telefone || '',
-        email: client.email || '',
-        data_vencimento_fatura: client.data_vencimento_fatura || '',
+        telefone: client.telefone || '',       // <-- Corrigido
+        email: client.email || '',           // <-- Corrigido
+        // Converte o dia (número ou null) vindo da API para string
+        dia_vencimento_fatura: client.dia_vencimento_fatura ? String(client.dia_vencimento_fatura) : '', 
       });
     } else {
-      // Limpa se não houver cliente (embora o sheet não deva abrir sem cliente)
-      setFormData({ nome: '', cpf: '', telefone: '', email: '' });
+      // Limpa todos os campos
+      setFormData({ nome: '', cpf: '', telefone: '', email: '', dia_vencimento_fatura: '' });
     }
-  }, [client]); // Roda sempre que o 'client' mudar
+  }, [client, open]); // Re-popula ao abrir ou ao mudar o cliente
 
   const handleCalendarSelect = (date) => {
     setFormData(prev => ({
@@ -211,30 +209,19 @@ export function EditClientSheet({ open, onOpenChange, client, refetchData }) {
             <div className="grid grid-cols-4 items-center gap-4">
                  <Label htmlFor="data_vencimento_fatura" className="text-right">Vencimento</Label>
                  <div className="col-span-3 flex items-center gap-2">
-                    <Input 
-                      id="data_vencimento_fatura" 
-                      name="data_vencimento_fatura" // O 'name' é só para referência, usamos 'handleDateChange'
-                      placeholder="DD/MM/AAAA" 
-                      value={formData.data_vencimento_texto} // Ligado ao estado de TEXTO
-                      onChange={handleDateChange} // Usa o handler de máscara
-                      maxLength={10}
-                    />
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <Button variant="outline" size="icon">
-                            <CalendarIcon className="h-4 w-4" /> 
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0">
-                        <Calendar 
-                           mode="single" 
-                           selected={formData.data_vencimento_obj} 
-                           onSelect={handleCalendarSelect} 
-                           initialFocus 
-                           locale={ptBR}
+                      <div className="grid grid-cols-4 items-center gap-4">
+                      <Input 
+                          id="dia_vencimento_fatura" 
+                          name="dia_vencimento_fatura"
+                          type="number" 
+                          min="1"
+                          max="31"
+                          placeholder="Ex: 10" 
+                          value={formData.dia_vencimento_fatura} 
+                          onChange={handleChange} 
+                          className="col-span-3" 
                         />
-                      </PopoverContent>
-                    </Popover>
+                    </div>
                  </div>
               </div>
               </div>

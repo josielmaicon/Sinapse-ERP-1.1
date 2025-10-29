@@ -30,7 +30,7 @@ def _build_cliente_response(db_cliente: models.Cliente) -> schemas.Cliente:
         saldo_devedor=db_cliente.saldo_devedor,
         trust_mode=db_cliente.trust_mode,
         status_conta=db_cliente.status_conta,
-        data_vencimento_fatura=db_cliente.data_vencimento_fatura,
+        dia_vencimento_fatura=db_cliente.dia_vencimento_fatura,
         limite_disponivel=limite_disp # Passa o valor calculado AQUI
     )
 
@@ -44,14 +44,29 @@ def get_all_clientes(skip: int = 0, limit: int = 100, db: Session = Depends(get_
     return [_build_cliente_response(cliente) for cliente in clientes]
 
 # --- Rota GET para Detalhes de UM Cliente ---
-@router.get("/{cliente_id}", response_model=schemas.Cliente)
-def get_cliente_details(cliente_id: int, db: Session = Depends(get_db)):
-    cliente = db.query(models.Cliente).filter(models.Cliente.id == cliente_id).first()
-    if not cliente:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cliente não encontrado")
+@router.put("/{cliente_id}", response_model=schemas.Cliente)
+def update_cliente_details(
+    cliente_id: int, 
+    cliente_update: schemas.ClienteUpdatePersonal, # Schema já deve estar atualizado
+    db: Session = Depends(get_db)
+):
+    db_cliente = db.query(models.Cliente).filter(models.Cliente.id == cliente_id).first()
+    if not db_cliente: raise HTTPException(...)
+
+    update_data = cliente_update.model_dump(exclude_unset=True) 
     
-    # Usa a função auxiliar para construir a resposta
-    return _build_cliente_response(cliente)
+    # ✅ Validação para o novo campo
+    if 'dia_vencimento_fatura' in update_data and update_data['dia_vencimento_fatura'] is not None:
+        dia = update_data['dia_vencimento_fatura']
+        if not (1 <= dia <= 31):
+             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Dia de vencimento deve ser entre 1 e 31.")
+            
+    for key, value in update_data.items():
+        setattr(db_cliente, key, value) 
+
+    db.add(db_cliente); db.commit(); db.refresh(db_cliente)
+    
+    return _build_cliente_response(db_cliente)
 
 # --- Rota GET para EXTRATO ---
 @router.get("/{cliente_id}/transacoes", response_model=schemas.ExtratoResponse)

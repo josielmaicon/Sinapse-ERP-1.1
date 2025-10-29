@@ -53,16 +53,15 @@ try:
     # ✅ CORREÇÃO: Usar os valores EXATOS do Enum ('atrasado', 'ativo')
     cliente1 = Cliente(
         nome="José da Silva", cpf="123.456.789-00", limite_credito=500.0, 
-        saldo_devedor=350.50, status_conta="atrasado", # <-- CORRIGIDO
-        data_vencimento_fatura=date.today() - timedelta(days=5) # Exemplo de vencido
+        saldo_devedor=350.50, status_conta="atrasado", 
+        dia_vencimento_fatura=10 # Vence todo dia 10
     )
     cliente2 = Cliente(
         nome="Maria Oliveira", cpf="987.654.321-00", limite_credito=1000.0, 
-        saldo_devedor=120.00, status_conta="ativo", # <-- CORRIGIDO
-        data_vencimento_fatura=date.today() + timedelta(days=15) # Exemplo a vencer
+        saldo_devedor=120.00, status_conta="ativo", 
+        dia_vencimento_fatura=20 # Vence todo dia 20
     )
     db.add_all([cliente1, cliente2])
-    # Commit CLIENTES
     db.commit()
     print("-> Clientes criados.")
 

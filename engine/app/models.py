@@ -128,7 +128,7 @@ class Cliente(Base):
     vendas = relationship("Venda", back_populates="cliente")
     status_conta = Column(Enum('ativo', 'inativo', 'bloqueado', 'atrasado', name='status_conta_enum'), default='ativo', nullable=False) 
     
-    data_vencimento_fatura = Column(Date, nullable=True) # Próximo vencimento
+    dia_vencimento_fatura = Column(Integer, nullable=True)
     transacoes_crediario = relationship("TransacaoCrediario", back_populates="cliente", cascade="all, delete-orphan")
 
 class TransacaoCrediario(Base):

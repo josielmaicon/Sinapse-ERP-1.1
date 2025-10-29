@@ -69,7 +69,7 @@ class Cliente(BaseModel):
     saldo_devedor: float
     trust_mode: bool
     status_conta: str # Mantém string, mas agora virá 'ativo', 'bloqueado', etc.
-    data_vencimento_fatura: date | None = None
+    dia_vencimento_fatura: int | None = None
     limite_disponivel: float # Será calculado na rota
 
     class Config:
@@ -285,7 +285,7 @@ class ClienteCrediario(ClienteBase):
     id: int
     saldo_devedor: float
     status_conta: str
-    data_vencimento_fatura: date | None = None
+    dia_vencimento_fatura: int | None = None
     limite_credito: float
     limite_disponivel: float
 
@@ -405,10 +405,8 @@ class ClienteUpdatePersonal(BaseModel):
     cpf: Optional[str] = None
     telefone: Optional[str] = None
     email: Optional[str] = None
-    # Adicione outros campos pessoais aqui
-    data_vencimento_fatura: Optional[date] = None # Vencimento pode ser editável?
+    dia_vencimento_fatura: Optional[int] = None
 
-# ✅ Schema para ATUALIZAR LIMITE e MODO CONFIANÇA (Restaurado)
 class LimiteUpdateRequest(BaseModel):
     novo_limite: Optional[float] = None 
     trust_mode: bool 
