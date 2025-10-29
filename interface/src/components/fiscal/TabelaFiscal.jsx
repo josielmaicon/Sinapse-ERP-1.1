@@ -333,10 +333,10 @@ export default function FiscalDataTable({ columns, data, refetchData, fiscalConf
       </div>
 
       <div className="flex items-center justify-between py-4">
-        <div className="flex-1 text-sm text-muted-foreground">
+        <div className="flex-1 text-sm text-muted-foreground truncate">
           {numSelected} de {table.getFilteredRowModel().rows.length} linha(s) selecionada(s).
         </div>
-        <div className="flex-1">
+        <div className="flex flex-1 justify-center">
           <Pagination>
             <PaginationContent>
               <PaginationItem>
@@ -376,7 +376,7 @@ export default function FiscalDataTable({ columns, data, refetchData, fiscalConf
             </PaginationContent>
           </Pagination>
         </div>
-        <div className="flex-1" />
+      <div className="flex-1" />
       </div>
     </div>
   );

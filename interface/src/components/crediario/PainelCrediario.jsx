@@ -393,8 +393,8 @@ export default function ClientDetailPanel({ client, refetchData }) {
         open={isSheetOpen} 
         onOpenChange={setIsSheetOpen} 
         client={client} 
+        // ✅ refetchData é passado corretamente AQUI
         refetchData={() => {
-            // Função wrapper para fechar E recarregar
             setIsSheetOpen(false); 
             if (typeof refetchData === 'function') refetchData(); 
         }}
@@ -404,8 +404,9 @@ export default function ClientDetailPanel({ client, refetchData }) {
         open={isDrawerOpen}
         onOpenChange={setIsDrawerOpen}
         client={client}
+        // ✅ PASSE A PROP refetchData AQUI TAMBÉM!
         refetchData={() => {
-            // Função wrapper para fechar E recarregar
+            // Reutiliza a mesma lógica: Fecha e chama o refetch da página
             setIsDrawerOpen(false); 
             if (typeof refetchData === 'function') refetchData(); 
         }}

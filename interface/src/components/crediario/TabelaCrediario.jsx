@@ -225,13 +225,13 @@ React.useEffect(() => {
         </Table>
       </div>
 
-      {/* 📄 Rodapé com Paginação */}
-      <div className="flex items-center justify-between space-x-2 py-4">
-        <div className="flex-1 text-sm text-muted-foreground">
+      <div className="flex items-center justify-between py-4">
+        <div className="flex-1 text-sm text-muted-foreground truncate">
           {Object.keys(rowSelection).length} de{" "}
           {table.getFilteredRowModel().rows.length} linha(s) selecionada(s).
         </div>
 
+        <div className="flex flex-1 justify-center">
           <Pagination>
             <PaginationContent>
               <PaginationItem>
@@ -270,7 +270,9 @@ React.useEffect(() => {
               </PaginationItem>
             </PaginationContent>
           </Pagination>
-      </div>
+        </div>
+      <div className="flex-1" />
     </div>
+  </div>
   )
 }
