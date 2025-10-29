@@ -173,7 +173,7 @@ export default function ClientDetailPanel({ client, refetchData }) {
 
 
   return (
-    <div className="h-full flex flex-col gap-4 p-4 bg-card rounded-lg shadow"> {/* Adicionado fundo e sombra */}
+    <div className="h-full flex flex-col gap-4 p-4 bg-card rounded-lg"> {/* Adicionado fundo e sombra */}
       {/* --- PAINEL SUPERIOR --- */}
       <div className="flex-shrink-0 flex flex-col gap-4">
         <div className="flex justify-between items-start"> {/* items-start para alinhar título */}

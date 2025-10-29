@@ -233,6 +233,15 @@ export default function FiscalDataTable({ columns, data, refetchData, fiscalConf
    });
   };
 
+    // Dentro do componente NotaEntradaDataTable, antes do return
+    React.useEffect(() => {
+        if (table) { // Garante que a tabela já foi inicializada
+            const paginationState = table.getState().pagination;
+
+        }
+    // Adiciona dependências para rodar quando a página mudar
+    }, [table, table?.getState().pagination.pageIndex, table?.getPageCount()]);
+
   return (
     <div className="w-full h-full flex flex-col">
       {/* Barra de Ferramentas */}
@@ -331,25 +340,15 @@ export default function FiscalDataTable({ columns, data, refetchData, fiscalConf
           <Pagination>
             <PaginationContent>
               <PaginationItem>
-                <PaginationPrevious
-                  href="#"
-                  onClick={(e) => { e.preventDefault(); table.previousPage(); }}
-                  disabled={!table.getCanPreviousPage()}
-                >
-                    Anterior
+                <PaginationPrevious href="#" onClick={(e) => { e.preventDefault(); table.previousPage(); }} disabled={!table.getCanPreviousPage()}>
+                  Anterior
                 </PaginationPrevious>
               </PaginationItem>
               {paginationRange.map((pageNumber, index) => {
-                if (pageNumber === DOTS) {
-                  return <PaginationItem key={`dots-${index}`}><PaginationEllipsis /></PaginationItem>;
-                }
+                if (pageNumber === DOTS) { return <PaginationItem key={`dots-${index}`}><PaginationEllipsis /></PaginationItem>; }
                 return (
                   <PaginationItem key={pageNumber}>
-                    <PaginationLink 
-                      href="#" 
-                      onClick={(e) => { e.preventDefault(); table.setPageIndex(pageNumber - 1); }}
-                      isActive={currentPage === pageNumber}
-                    >
+                    <PaginationLink href="#" onClick={(e) => { e.preventDefault(); table.setPageIndex(pageNumber - 1); }} isActive={currentPage === pageNumber}>
                       {pageNumber}
                     </PaginationLink>
                   </PaginationItem>
@@ -358,10 +357,20 @@ export default function FiscalDataTable({ columns, data, refetchData, fiscalConf
               <PaginationItem>
                 <PaginationNext
                   href="#"
-                  onClick={(e) => { e.preventDefault(); table.nextPage(); }}
-                  disabled={!table.getCanNextPage()}
+                  onClick={(e) => { 
+                    e.preventDefault(); 
+                    // ✅ ADICIONE ESTA VERIFICAÇÃO EXTRA:
+                    if (table.getCanNextPage()) { 
+                      table.nextPage(); 
+                    } else {
+                      // Log opcional para confirmar que a barreira funcionou
+                      console.log("Bloqueado: Tentativa de avançar além da última página.");
+                    }
+                  }}
+                  // O disabled continua aqui, como estava
+                  disabled={!table.getCanNextPage()} 
                 >
-                    Próximo
+                  Próximo
                 </PaginationNext>
               </PaginationItem>
             </PaginationContent>

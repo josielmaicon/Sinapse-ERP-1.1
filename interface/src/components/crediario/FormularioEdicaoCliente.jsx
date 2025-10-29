@@ -108,7 +108,7 @@ export function EditClientSheet({ open, onOpenChange, client, refetchData }) {
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent>
+      <SheetContent className="edit-cadastro-cliente">
         <SheetHeader>
           <SheetTitle>Editar Cliente: {client?.nome || '...'}</SheetTitle>
           <SheetDescription>

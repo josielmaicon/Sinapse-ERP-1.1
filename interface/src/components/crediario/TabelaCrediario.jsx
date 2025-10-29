@@ -24,6 +24,7 @@ import {
 import {
   Pagination,
   PaginationContent,
+  PaginationLink,
   PaginationItem,
   PaginationNext,
   PaginationPrevious,
@@ -57,6 +58,44 @@ export function CrediarioDataTable({ columns, data, onClientSelect }) {
 
   const isFiltered = table.getState().columnFilters.length > 0
 
+  const DOTS = '...';
+  const usePaginationRange = ({ totalPageCount, siblingCount = 1, currentPage }) => {
+    return React.useMemo(() => {
+      const totalPageNumbers = siblingCount + 5;
+      if (totalPageNumbers >= totalPageCount) {
+        return Array.from({ length: totalPageCount }, (_, i) => i + 1);
+      }
+      const leftSiblingIndex = Math.max(currentPage - siblingCount, 1);
+      const rightSiblingIndex = Math.min(currentPage + siblingCount, totalPageCount);
+      const shouldShowLeftDots = leftSiblingIndex > 2;
+      const shouldShowRightDots = rightSiblingIndex < totalPageCount - 2;
+      const firstPageIndex = 1;
+      const lastPageIndex = totalPageCount;
+
+      if (!shouldShowLeftDots && shouldShowRightDots) {
+        let leftItemCount = 3 + 2 * siblingCount;
+        let leftRange = Array.from({ length: leftItemCount }, (_, i) => i + 1);
+        return [...leftRange, DOTS, totalPageCount];
+      }
+      if (shouldShowLeftDots && !shouldShowRightDots) {
+        let rightItemCount = 3 + 2 * siblingCount;
+        let rightRange = Array.from({ length: rightItemCount }, (_, i) => totalPageCount - rightItemCount + i + 1);
+        return [firstPageIndex, DOTS, ...rightRange];
+      }
+      if (shouldShowLeftDots && shouldShowRightDots) {
+        let middleRange = Array.from({ length: rightSiblingIndex - leftSiblingIndex + 1 }, (_, i) => leftSiblingIndex + i);
+        return [firstPageIndex, DOTS, ...middleRange, DOTS, lastPageIndex];
+      }
+    }, [totalPageCount, siblingCount, currentPage]);
+  };
+
+  const currentPage = table.getState().pagination.pageIndex + 1;
+  const totalPages = table.getPageCount();
+  const paginationRange = usePaginationRange({
+    totalPageCount: totalPages,
+    currentPage,
+  });
+
   // 🔁 Atualiza o cliente selecionado externamente
   React.useEffect(() => {
     const selectedRows = table.getFilteredSelectedRowModel().rows
@@ -66,19 +105,35 @@ export function CrediarioDataTable({ columns, data, onClientSelect }) {
   }, [rowSelection, onClientSelect, table])
 
   // 🧠 Clique fora da tabela limpa a seleção
-  React.useEffect(() => {
-    const handleClickOutside = (event) => {
-      const clickedInsideTable = event.target.closest(".crediario-table-container")
-      const clickedInsidePanel = event.target.closest(".client-detail-panel")
+React.useEffect(() => {
+  const handleClickOutside = (event) => {
+    const clickedInsideTable = event.target.closest(".crediario-table-container")
+    const clickedInsidePanel = event.target.closest(".client-detail-panel")
+    const clickedInsideCadastroModal = event.target.closest(".edit-cadastro-cliente")
+    const clickedInsidePagamentoModal = event.target.closest(".edit-limite-cliente")
 
-      if (!clickedInsideTable && !clickedInsidePanel) {
-        table.resetRowSelection()
-      }
+    // Se clicou fora de tudo, reseta a seleção
+    if (
+      !clickedInsideTable &&
+      !clickedInsidePanel &&
+      !clickedInsideCadastroModal &&
+      !clickedInsidePagamentoModal
+    ) {
+      table.resetRowSelection()
     }
+  }
 
-    document.addEventListener("click", handleClickOutside)
-    return () => document.removeEventListener("click", handleClickOutside)
-  }, [table])
+  document.addEventListener("click", handleClickOutside)
+  return () => document.removeEventListener("click", handleClickOutside)
+}, [table])
+
+    React.useEffect(() => {
+        if (table) { // Garante que a tabela já foi inicializada
+            const paginationState = table.getState().pagination;
+
+        }
+    // Adiciona dependências para rodar quando a página mudar
+    }, [table, table?.getState().pagination.pageIndex, table?.getPageCount()]);
 
   return (
     <div className="w-full h-full flex flex-col">
@@ -177,25 +232,44 @@ export function CrediarioDataTable({ columns, data, onClientSelect }) {
           {table.getFilteredRowModel().rows.length} linha(s) selecionada(s).
         </div>
 
-        <Pagination>
-          <PaginationContent>
-            <PaginationItem>
-              <PaginationPrevious
-                href="#"
-                onClick={() => table.previousPage()}
-                disabled={!table.getCanPreviousPage()}
-              />
-            </PaginationItem>
-
-            <PaginationItem>
-              <PaginationNext
-                href="#"
-                onClick={() => table.nextPage()}
-                disabled={!table.getCanNextPage()}
-              />
-            </PaginationItem>
-          </PaginationContent>
-        </Pagination>
+          <Pagination>
+            <PaginationContent>
+              <PaginationItem>
+                <PaginationPrevious href="#" onClick={(e) => { e.preventDefault(); table.previousPage(); }} disabled={!table.getCanPreviousPage()}>
+                  Anterior
+                </PaginationPrevious>
+              </PaginationItem>
+              {paginationRange.map((pageNumber, index) => {
+                if (pageNumber === DOTS) { return <PaginationItem key={`dots-${index}`}><PaginationEllipsis /></PaginationItem>; }
+                return (
+                  <PaginationItem key={pageNumber}>
+                    <PaginationLink href="#" onClick={(e) => { e.preventDefault(); table.setPageIndex(pageNumber - 1); }} isActive={currentPage === pageNumber}>
+                      {pageNumber}
+                    </PaginationLink>
+                  </PaginationItem>
+                );
+              })}
+              <PaginationItem>
+                <PaginationNext
+                  href="#"
+                  onClick={(e) => { 
+                    e.preventDefault(); 
+                    // ✅ ADICIONE ESTA VERIFICAÇÃO EXTRA:
+                    if (table.getCanNextPage()) { 
+                      table.nextPage(); 
+                    } else {
+                      // Log opcional para confirmar que a barreira funcionou
+                      console.log("Bloqueado: Tentativa de avançar além da última página.");
+                    }
+                  }}
+                  // O disabled continua aqui, como estava
+                  disabled={!table.getCanNextPage()} 
+                >
+                  Próximo
+                </PaginationNext>
+              </PaginationItem>
+            </PaginationContent>
+          </Pagination>
       </div>
     </div>
   )

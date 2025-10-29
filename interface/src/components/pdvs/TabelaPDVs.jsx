@@ -8,7 +8,7 @@ import { useReactTable, getCoreRowModel, getPaginationRowModel, getSortedRowMode
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Pagination, PaginationContent, PaginationItem, PaginationNext, PaginationPrevious } from "@/components/ui/pagination"
+import { Pagination, PaginationLink, PaginationContent, PaginationItem, PaginationNext, PaginationPrevious } from "@/components/ui/pagination"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { useNavigate } from "react-router-dom";
@@ -47,6 +47,38 @@ export function PdvDataTable({ data: pdvsData, operatorData, onPdvSelect, refetc
         getSortedRowModel: getSortedRowModel(),
         state: { sorting },
     });
+
+
+    const DOTS = '...';
+    const usePaginationRange = ({ totalPageCount, siblingCount = 1, currentPage }) => {
+      return React.useMemo(() => {
+        const totalPageNumbers = siblingCount + 5;
+        if (totalPageNumbers >= totalPageCount) {
+          return Array.from({ length: totalPageCount }, (_, i) => i + 1);
+        }
+        const leftSiblingIndex = Math.max(currentPage - siblingCount, 1);
+        const rightSiblingIndex = Math.min(currentPage + siblingCount, totalPageCount);
+        const shouldShowLeftDots = leftSiblingIndex > 2;
+        const shouldShowRightDots = rightSiblingIndex < totalPageCount - 2;
+        const firstPageIndex = 1;
+        const lastPageIndex = totalPageCount;
+    
+        if (!shouldShowLeftDots && shouldShowRightDots) {
+          let leftItemCount = 3 + 2 * siblingCount;
+          let leftRange = Array.from({ length: leftItemCount }, (_, i) => i + 1);
+          return [...leftRange, DOTS, totalPageCount];
+        }
+        if (shouldShowLeftDots && !shouldShowRightDots) {
+          let rightItemCount = 3 + 2 * siblingCount;
+          let rightRange = Array.from({ length: rightItemCount }, (_, i) => totalPageCount - rightItemCount + i + 1);
+          return [firstPageIndex, DOTS, ...rightRange];
+        }
+        if (shouldShowLeftDots && shouldShowRightDots) {
+          let middleRange = Array.from({ length: rightSiblingIndex - leftSiblingIndex + 1 }, (_, i) => leftSiblingIndex + i);
+          return [firstPageIndex, DOTS, ...middleRange, DOTS, lastPageIndex];
+        }
+      }, [totalPageCount, siblingCount, currentPage]);
+    };
 
     // Função para lidar com o clique na linha
     const handleRowClick = (row) => {
@@ -116,6 +148,21 @@ export function PdvDataTable({ data: pdvsData, operatorData, onPdvSelect, refetc
       setIsModalOpen(true);
     }
 
+    const currentPage = table.getState().pagination.pageIndex + 1;
+    const totalPages = table.getPageCount();
+    const paginationRange = usePaginationRange({
+      totalPageCount: totalPages,
+      currentPage,
+    });
+
+    React.useEffect(() => {
+        if (table) { // Garante que a tabela já foi inicializada
+            const paginationState = table.getState().pagination;
+
+        }
+    // Adiciona dependências para rodar quando a página mudar
+    }, [table, table?.getState().pagination.pageIndex, table?.getPageCount()]);
+
     return (
         <TooltipProvider>
             <div className="w-full h-full flex flex-col min-h-0">
@@ -183,18 +230,38 @@ export function PdvDataTable({ data: pdvsData, operatorData, onPdvSelect, refetc
                   <Pagination>
                     <PaginationContent>
                       <PaginationItem>
-                        <PaginationPrevious
-                          href="#"
-                          onClick={(e) => { e.preventDefault(); table.previousPage(); }}
-                          disabled={!table.getCanPreviousPage()}
-                        />
+                        <PaginationPrevious href="#" onClick={(e) => { e.preventDefault(); table.previousPage(); }} disabled={!table.getCanPreviousPage()}>
+                          Anterior
+                        </PaginationPrevious>
                       </PaginationItem>
+                      {paginationRange.map((pageNumber, index) => {
+                        if (pageNumber === DOTS) { return <PaginationItem key={`dots-${index}`}><PaginationEllipsis /></PaginationItem>; }
+                        return (
+                          <PaginationItem key={pageNumber}>
+                            <PaginationLink href="#" onClick={(e) => { e.preventDefault(); table.setPageIndex(pageNumber - 1); }} isActive={currentPage === pageNumber}>
+                              {pageNumber}
+                            </PaginationLink>
+                          </PaginationItem>
+                        );
+                      })}
                       <PaginationItem>
                         <PaginationNext
                           href="#"
-                          onClick={(e) => { e.preventDefault(); table.nextPage(); }}
-                          disabled={!table.getCanNextPage()}
-                        />
+                          onClick={(e) => { 
+                            e.preventDefault(); 
+                            // ✅ ADICIONE ESTA VERIFICAÇÃO EXTRA:
+                            if (table.getCanNextPage()) { 
+                              table.nextPage(); 
+                            } else {
+                              // Log opcional para confirmar que a barreira funcionou
+                              console.log("Bloqueado: Tentativa de avançar além da última página.");
+                            }
+                          }}
+                          // O disabled continua aqui, como estava
+                          disabled={!table.getCanNextPage()} 
+                        >
+                          Próximo
+                        </PaginationNext>
                       </PaginationItem>
                     </PaginationContent>
                   </Pagination>

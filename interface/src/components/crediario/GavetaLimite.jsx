@@ -59,7 +59,7 @@ export function UpdateLimitDrawer({ open, onOpenChange, client, refetchData }) {
 
   return (
     <Drawer open={open} onOpenChange={onOpenChange}>
-      <DrawerContent className="h-2/5">
+      <DrawerContent className="h-2/5 edit-limite-cliente">
         <div className="mx-auto w-full max-w-sm">
           <DrawerHeader>
             <DrawerTitle>Alterar Limite / Modo Confiança</DrawerTitle>
@@ -134,12 +134,6 @@ export function UpdateLimitDrawer({ open, onOpenChange, client, refetchData }) {
                />
                <Label htmlFor="drawer-trust-mode">Modo Confiança Ativado</Label>
            </div>
-          
-          {/* O form agora envolve apenas a área de submit se necessário, 
-              ou podemos usar onClick no botão Salvar como antes. 
-              Manteremos onClick no botão Salvar por simplicidade.
-          */}
-          {/* <form onSubmit={handleSave} className="p-4 pb-0"> ... </form> */}
 
           <DrawerFooter className="pt-4"> {/* Adiciona padding top */}
             <Button type="button" onClick={handleSave} disabled={isLoading}>
