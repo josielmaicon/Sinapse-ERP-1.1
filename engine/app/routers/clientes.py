@@ -6,68 +6,83 @@ from ..database import get_db
 from datetime import date
 
 router = APIRouter(
-    prefix="/clientes", 
+    prefix="/clientes", # Mantendo seu prefixo
     tags=["Clientes / Crediário"]
 )
 
-# --- Rota GET / (Listar Clientes - Ok) ---
+# --- Função Auxiliar (para não repetir código) ---
+def _build_cliente_response(db_cliente: models.Cliente) -> schemas.Cliente:
+    """Calcula campos derivados e constrói o schema de resposta Cliente."""
+    
+    # Calcula o limite disponível
+    limite_disp = float('inf') # Padrão para Modo Confiança
+    if not db_cliente.trust_mode:
+        limite_disp = (db_cliente.limite_credito or 0.0) - (db_cliente.saldo_devedor or 0.0)
+
+    # Constrói o schema manualmente
+    return schemas.Cliente(
+        id=db_cliente.id,
+        nome=db_cliente.nome,
+        cpf=db_cliente.cpf,
+        telefone=db_cliente.telefone,
+        email=db_cliente.email,
+        limite_credito=db_cliente.limite_credito,
+        saldo_devedor=db_cliente.saldo_devedor,
+        trust_mode=db_cliente.trust_mode,
+        status_conta=db_cliente.status_conta,
+        data_vencimento_fatura=db_cliente.data_vencimento_fatura,
+        limite_disponivel=limite_disp # Passa o valor calculado AQUI
+    )
+
+# --- Rota GET para Listar Clientes ---
+# (Assumindo que /clientes retorna List[schemas.Cliente], não ClienteCrediario)
 @router.get("/", response_model=List[schemas.Cliente])
 def get_all_clientes(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
-    # ... (Seu código está ótimo)
     clientes = db.query(models.Cliente).offset(skip).limit(limit).all()
-    clientes_com_limite = []
-    for cliente in clientes:
-        limite_disp = cliente.limite_credito - cliente.saldo_devedor if not cliente.trust_mode else float('inf') 
-        cliente_schema = schemas.Cliente.model_validate(cliente) 
-        cliente_schema.limite_disponivel = limite_disp
-        clientes_com_limite.append(cliente_schema)
-    return clientes_com_limite
+    
+    # Usa a função auxiliar para construir a resposta para cada cliente
+    return [_build_cliente_response(cliente) for cliente in clientes]
 
-# --- Rota GET /{cliente_id} (Detalhes - Ok) ---
+# --- Rota GET para Detalhes de UM Cliente ---
 @router.get("/{cliente_id}", response_model=schemas.Cliente)
 def get_cliente_details(cliente_id: int, db: Session = Depends(get_db)):
-    # ... (Seu código está ótimo)
     cliente = db.query(models.Cliente).filter(models.Cliente.id == cliente_id).first()
-    if not cliente: raise HTTPException(...)
-    limite_disp = cliente.limite_credito - cliente.saldo_devedor if not cliente.trust_mode else float('inf') 
-    cliente_schema = schemas.Cliente.model_validate(cliente)
-    cliente_schema.limite_disponivel = limite_disp
-    return cliente_schema
+    if not cliente:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cliente não encontrado")
+    
+    # Usa a função auxiliar para construir a resposta
+    return _build_cliente_response(cliente)
 
-# --- ✅ Rota GET para EXTRATO (CORRIGIDA) ---
-@router.get("/{cliente_id}/transacoes", response_model=schemas.ExtratoResponse) # Muda o response_model
+# --- Rota GET para EXTRATO ---
+@router.get("/{cliente_id}/transacoes", response_model=schemas.ExtratoResponse)
 def get_cliente_extrato(cliente_id: int, limit: int = 50, db: Session = Depends(get_db)):
     """Retorna o saldo atual e as últimas transações do crediário."""
-    
-    # Busca o cliente para pegar o saldo atual e verificar se existe
     cliente = db.query(models.Cliente).filter(models.Cliente.id == cliente_id).first()
     if not cliente:
          raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cliente não encontrado")
 
-    # Busca as transações (como antes)
     transacoes = db.query(models.TransacaoCrediario)\
         .filter(models.TransacaoCrediario.cliente_id == cliente_id)\
         .order_by(models.TransacaoCrediario.data_hora.desc())\
         .limit(limit)\
         .all()
         
-    # Retorna o schema ExtratoResponse preenchido
     return schemas.ExtratoResponse(
-        saldo_atual=cliente.saldo_devedor, # Pega o saldo atual do cliente
+        saldo_atual=cliente.saldo_devedor,
         transacoes=transacoes
     )
 
-# --- ✅ Rota PUT para EDITAR DADOS PESSOAIS (SCHEMA CORRIGIDO) ---
+# --- Rota PUT para EDITAR DADOS PESSOAIS ---
 @router.put("/{cliente_id}", response_model=schemas.Cliente)
 def update_cliente_details(
     cliente_id: int, 
-    # Usa o schema específico para dados pessoais
     cliente_update: schemas.ClienteUpdatePersonal, 
     db: Session = Depends(get_db)
 ):
     """Atualiza APENAS os dados pessoais de um cliente."""
     db_cliente = db.query(models.Cliente).filter(models.Cliente.id == cliente_id).first()
-    if not db_cliente: raise HTTPException(...)
+    if not db_cliente:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cliente não encontrado")
 
     update_data = cliente_update.model_dump(exclude_unset=True) 
     for key, value in update_data.items():
@@ -77,65 +92,54 @@ def update_cliente_details(
     db.commit()
     db.refresh(db_cliente)
     
-    # ... (Recalcula e retorna o schema Cliente)
-    limite_disp = db_cliente.limite_credito - db_cliente.saldo_devedor if not db_cliente.trust_mode else float('inf') 
-    cliente_schema = schemas.Cliente.model_validate(db_cliente)
-    cliente_schema.limite_disponivel = limite_disp
-    return cliente_schema
+    # Usa a função auxiliar para construir a resposta
+    return _build_cliente_response(db_cliente)
 
-# --- Rota PUT para ALTERAR LIMITE / MODO CONFIANÇA (Ok) ---
+# --- Rota PUT para ALTERAR LIMITE / MODO CONFIANÇA ---
 @router.put("/{cliente_id}/limite", response_model=schemas.Cliente)
 def update_cliente_limite(
     cliente_id: int,
-    # Usa o schema específico LimiteUpdateRequest (restaurado)
     limite_update: schemas.LimiteUpdateRequest, 
     db: Session = Depends(get_db)
 ):
-    # ... (Sua lógica está ótima aqui)
+    """Atualiza o limite de crédito e/ou o modo confiança de um cliente."""
     db_cliente = db.query(models.Cliente).filter(models.Cliente.id == cliente_id).first()
-    if not db_cliente: raise HTTPException(...)
+    if not db_cliente:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cliente não encontrado")
+
     db_cliente.trust_mode = limite_update.trust_mode
     if not limite_update.trust_mode and limite_update.novo_limite is not None:
-         if limite_update.novo_limite < 0: raise HTTPException(...)
+         if limite_update.novo_limite < 0:
+              raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Limite de crédito não pode ser negativo.")
          db_cliente.limite_credito = limite_update.novo_limite
+         
     db.add(db_cliente)
     db.commit()
     db.refresh(db_cliente)
-    # ... (Recalcula e retorna o schema Cliente)
-    limite_disp = db_cliente.limite_credito - db_cliente.saldo_devedor if not db_cliente.trust_mode else float('inf') 
-    cliente_schema = schemas.Cliente.model_validate(db_cliente)
-    cliente_schema.limite_disponivel = limite_disp
-    return cliente_schema
+    
+    # Usa a função auxiliar para construir a resposta
+    return _build_cliente_response(db_cliente)
 
-# --- ✅ Rota PUT para BLOQUEAR/DESBLOQUEAR (VALIDAÇÃO CORRIGIDA) ---
+# --- Rota PUT para BLOQUEAR/DESBLOQUEAR ---
 @router.put("/{cliente_id}/status", response_model=schemas.Cliente)
 def update_cliente_status(
     cliente_id: int,
-    # Usa o schema específico StatusUpdateRequest (restaurado)
     status_update: schemas.StatusUpdateRequest, 
     db: Session = Depends(get_db)
 ):
     """Atualiza o status da conta de um cliente (ex: bloqueado, ativo)."""
     db_cliente = db.query(models.Cliente).filter(models.Cliente.id == cliente_id).first()
-    if not db_cliente: raise HTTPException(...)
+    if not db_cliente:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cliente não encontrado")
 
-    # ✅ Validação usa os valores do Enum do MODELO
-    allowed_statuses_update = ['ativo', 'bloqueado'] # Status que o usuário pode SETAR
+    allowed_statuses_update = ['ativo', 'bloqueado'] 
     if status_update.novo_status not in allowed_statuses_update:
-         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Status inválido. Permitidos para alteração: {', '.join(allowed_statuses_update)}")
+         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Status inválido. Permitidos: {', '.join(allowed_statuses_update)}")
          
-    # Adicionar lógica extra aqui se necessário? 
-    # Ex: Não permitir ativar se estiver 'atrasado'? Ou permitir?
-    # if db_cliente.status_conta == 'atrasado' and status_update.novo_status == 'ativo':
-    #    raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Não é possível ativar conta com saldo atrasado.")
-
     db_cliente.status_conta = status_update.novo_status
     db.add(db_cliente)
     db.commit()
     db.refresh(db_cliente)
     
-    # ... (Recalcula e retorna o schema Cliente)
-    limite_disp = db_cliente.limite_credito - db_cliente.saldo_devedor if not db_cliente.trust_mode else float('inf') 
-    cliente_schema = schemas.Cliente.model_validate(db_cliente)
-    cliente_schema.limite_disponivel = limite_disp
-    return cliente_schema
+    # Usa a função auxiliar para construir a resposta
+    return _build_cliente_response(db_cliente)

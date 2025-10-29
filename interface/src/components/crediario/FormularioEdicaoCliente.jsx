@@ -14,7 +14,13 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet"
 import { toast } from "sonner"
-import { Loader2 } from "lucide-react"
+import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover"
+import { format, parse } from "date-fns" 
+import { ptBR } from "date-fns/locale"
+import { CalendarIcon, Loader2 } from "lucide-react" // <--- O ÍCONE ESTÁ AQUI
+import { Calendar } from "@/components/ui/calendar"
+
+const API_URL = "http://localhost:8000";
 
 // Componente recebe props para controlar visibilidade, dados e atualização
 export function EditClientSheet({ open, onOpenChange, client, refetchData }) {
@@ -24,7 +30,8 @@ export function EditClientSheet({ open, onOpenChange, client, refetchData }) {
     cpf: '',
     telefone: '',
     email: '',
-    // data_vencimento_fatura: '', // Adicionar se for editável
+    data_vencimento_obj: null, // O 'Date' object para o Calendar
+    data_vencimento_texto: '', // A 'string' dd/MM/yyyy para o Input
   });
   const [isLoading, setIsLoading] = React.useState(false);
 
@@ -36,7 +43,7 @@ export function EditClientSheet({ open, onOpenChange, client, refetchData }) {
         cpf: client.cpf || '',
         telefone: client.telefone || '',
         email: client.email || '',
-        // data_vencimento_fatura: client.data_vencimento_fatura || '',
+        data_vencimento_fatura: client.data_vencimento_fatura || '',
       });
     } else {
       // Limpa se não houver cliente (embora o sheet não deva abrir sem cliente)
@@ -44,6 +51,40 @@ export function EditClientSheet({ open, onOpenChange, client, refetchData }) {
     }
   }, [client]); // Roda sempre que o 'client' mudar
 
+  const handleCalendarSelect = (date) => {
+    setFormData(prev => ({
+      ...prev,
+      data_vencimento_obj: date,
+      data_vencimento_texto: date ? format(date, "dd/MM/yyyy", { locale: ptBR }) : ""
+    }));
+    // O Popover do shadcn/ui fecha sozinho no onSelect, o que é ótimo
+  };
+
+  const handleDateChange = (e) => {
+    let value = e.target.value;
+    // Máscara (simplificada): dd/MM/yyyy
+    value = value.replace(/[^0-9]/g, ''); // Remove não-números
+    if (value.length > 2) value = value.slice(0, 2) + '/' + value.slice(2);
+    if (value.length > 5) value = value.slice(0, 5) + '/' + value.slice(5, 9);
+    
+    let dateObj = null;
+    // Tenta converter o texto de volta para um Date object
+    if (value.length === 10) {
+      try {
+        const parsedDate = parse(value, 'dd/MM/yyyy', new Date());
+        if (!isNaN(parsedDate)) {
+          dateObj = parsedDate; // Sincroniza o calendário
+        }
+      } catch { /* data inválida, ignora */ }
+    }
+    
+    setFormData(prev => ({
+        ...prev,
+        data_vencimento_texto: value, // Atualiza o texto
+        data_vencimento_obj: dateObj  // Atualiza o Date (ou null se inválido)
+    }));
+  };
+  
   // Handler para atualizar o estado do formulário
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -75,7 +116,7 @@ export function EditClientSheet({ open, onOpenChange, client, refetchData }) {
     }
 
     // Chama a API PUT /clientes/{id}
-    const apiPromise = fetch(`/clientes/${client.id}`, { // Assume URL base ou relativa
+    const apiPromise = fetch(`${API_URL}/clientes/${client.id}`, { // <-- USA API_URL
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(changedData) // Envia apenas o que mudou
@@ -167,8 +208,38 @@ export function EditClientSheet({ open, onOpenChange, client, refetchData }) {
                     className="col-span-3" 
                   />
               </div>
-              {/* Adicionar outros campos aqui (ex: Data Vencimento Fatura, se editável) */}
-           </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+                 <Label htmlFor="data_vencimento_fatura" className="text-right">Vencimento</Label>
+                 <div className="col-span-3 flex items-center gap-2">
+                    <Input 
+                      id="data_vencimento_fatura" 
+                      name="data_vencimento_fatura" // O 'name' é só para referência, usamos 'handleDateChange'
+                      placeholder="DD/MM/AAAA" 
+                      value={formData.data_vencimento_texto} // Ligado ao estado de TEXTO
+                      onChange={handleDateChange} // Usa o handler de máscara
+                      maxLength={10}
+                    />
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button variant="outline" size="icon">
+                            <CalendarIcon className="h-4 w-4" /> 
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0">
+                        <Calendar 
+                           mode="single" 
+                           selected={formData.data_vencimento_obj} 
+                           onSelect={handleCalendarSelect} 
+                           initialFocus 
+                           locale={ptBR}
+                        />
+                      </PopoverContent>
+                    </Popover>
+                 </div>
+              </div>
+              </div>
+
+
 
            <SheetFooter>
               {/* SheetClose é um botão que chama onOpenChange(false) */}

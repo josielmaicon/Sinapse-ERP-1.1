@@ -404,9 +404,7 @@ export default function ClientDetailPanel({ client, refetchData }) {
         open={isDrawerOpen}
         onOpenChange={setIsDrawerOpen}
         client={client}
-        // ✅ PASSE A PROP refetchData AQUI TAMBÉM!
         refetchData={() => {
-            // Reutiliza a mesma lógica: Fecha e chama o refetch da página
             setIsDrawerOpen(false); 
             if (typeof refetchData === 'function') refetchData(); 
         }}

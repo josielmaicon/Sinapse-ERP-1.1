@@ -19,7 +19,7 @@ export default function CrediarioPage() {
     });
     const [isLoading, setIsLoading] = React.useState(true);
 
-    const fetchData = async () => {
+const fetchData = async () => {
         setIsLoading(true);
         try {
             const [summaryRes, clientsRes] = await Promise.all([
@@ -32,10 +32,21 @@ export default function CrediarioPage() {
             }
             
             const summary = await summaryRes.json();
-            const clients = await clientsRes.json();
+            const clients = await clientsRes.json(); // Nova lista de clientes
             
             setSummaryData(summary);
             setTableData(clients);
+            
+            if (selectedClient && selectedClient.id) {
+                const updatedSelectedClient = clients.find(c => c.id === selectedClient.id);
+                if (updatedSelectedClient) {
+                    setSelectedClient(updatedSelectedClient);
+                    console.log("Painel lateral sincronizado com dados atualizados.");
+                } else {
+                    setSelectedClient(null);
+                }
+            }
+            
         } catch (error) {
             console.error(error);
         } finally {
@@ -73,7 +84,7 @@ export default function CrediarioPage() {
                 />
             }
             PainelLateral1={
-                <ClientDetailPanel client={selectedClient}/>
+                <ClientDetailPanel client={selectedClient} refetchData={fetchData}/>
             }
         />
     );

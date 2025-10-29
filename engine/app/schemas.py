@@ -59,10 +59,19 @@ class ClienteBase(BaseModel):
 class ClienteCreate(ClienteBase):
     pass
 
-class Cliente(ClienteBase):
+class Cliente(BaseModel): 
     id: int
+    nome: str
+    cpf: str | None = None
+    telefone: str | None = None
+    email: str | None = None
+    limite_credito: float
     saldo_devedor: float
-    status_conta: str
+    trust_mode: bool
+    status_conta: str # Mantém string, mas agora virá 'ativo', 'bloqueado', etc.
+    data_vencimento_fatura: date | None = None
+    limite_disponivel: float # Será calculado na rota
+
     class Config:
         from_attributes = True
 
@@ -408,23 +417,6 @@ class LimiteUpdateRequest(BaseModel):
 class StatusUpdateRequest(BaseModel):
     # Usa os valores do Enum do modelo ('ativo', 'bloqueado')
     novo_status: str 
-
-# Schema Cliente (Resposta da API - Seu código estava ótimo)
-class Cliente(BaseModel): 
-    id: int
-    nome: str
-    cpf: str | None = None
-    telefone: str | None = None
-    email: str | None = None
-    limite_credito: float
-    saldo_devedor: float
-    trust_mode: bool
-    status_conta: str # Mantém string, mas agora virá 'ativo', 'bloqueado', etc.
-    data_vencimento_fatura: date | None = None
-    limite_disponivel: float # Será calculado na rota
-
-    class Config:
-        from_attributes = True
 
 # Schema TransacaoCrediario (Seu código estava ótimo)
 class TransacaoCrediario(BaseModel):
