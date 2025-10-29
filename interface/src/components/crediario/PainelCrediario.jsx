@@ -24,14 +24,6 @@ import { toast } from "sonner"
 import { EditClientSheet } from "./FormularioEdicaoCliente"
 import { UpdateLimitDrawer } from "./GavetaLimite"
 
-// MOCK de histórico (manter por enquanto, conectar à API depois)
-const transactionHistory = [
-  { id: "TRN-105", date: "2025-10-15", description: "Compra na loja", debit: 45.50, credit: 0 },
-  { id: "TRN-104", date: "2025-10-12", description: "Pagamento da fatura", debit: 0, credit: 200.00 },
-  { id: "TRN-103", date: "2025-10-10", description: "Compra na loja", debit: 120.00, credit: 0 },
-  { id: "TRN-102", date: "2025-10-08", description: "Compra na loja", debit: 85.75, credit: 0 },
-  { id: "TRN-101", date: "2025-10-01", description: "Pagamento da fatura", debit: 0, credit: 300.00 },
-].sort((a, b) => new Date(b.date) - new Date(a.date)); // Ordenar mock
 
 // Mini Card de informações (sem mudanças)
 const InfoBlock = ({ label, value, valueClassName = "" }) => (
@@ -70,6 +62,9 @@ export default function ClientDetailPanel({ client, refetchData }) {
 
   const [isSheetOpen, setIsSheetOpen] = React.useState(false);
   const [isDrawerOpen, setIsDrawerOpen] = React.useState(false);
+
+  const [extratoData, setExtratoData] = React.useState([]);
+  const [isLoadingExtrato, setIsLoadingExtrato] = React.useState(true); // Começa carregando
 
   // Função chamada ao confirmar no AlertDialog
   const handleConfirmStatusChange = async () => {
@@ -171,6 +166,77 @@ export default function ClientDetailPanel({ client, refetchData }) {
   }
   // --- Fim dos Placeholders ---
 
+  React.useEffect(() => {
+    setIsTrustMode(client?.trust_mode || false);
+    setIsSheetOpen(false);
+    //setIsDrawerOpen(false); // Manter aberto se estava editando limite? Opcional.
+  }, [client]);
+
+  const API_URL = "http://localhost:8000";
+
+  React.useEffect(() => {
+    // Log para depurar: O useEffect está rodando? Qual o cliente?
+    console.log("ClientDetailPanel useEffect [client] triggered. Client:", client);
+
+    // Só busca se TIVER um cliente selecionado com ID válido
+    if (client && client.id) {
+      console.log(`Iniciando busca do extrato para cliente ID: ${client.id}`); // Log
+      const fetchExtrato = async () => {
+        setIsLoadingExtrato(true); 
+        setExtratoData([]); 
+        try {
+          // ✅ CORREÇÃO: Usar a URL COMPLETA com API_URL
+          const url = `${API_URL}/clientes/${client.id}/transacoes`;
+          console.log("Fetching extrato from:", url); // Log da URL
+          
+          const response = await fetch(url); 
+          
+          // Log da resposta crua para depuração
+          console.log(`Resposta da API para ${url}: Status ${response.status}`);
+          
+          if (!response.ok) {
+             // Tenta ler o corpo do erro como texto para ver se é HTML ou JSON de erro
+             let errorBody = await response.text();
+             console.error("Erro na resposta da API:", errorBody);
+             // Tenta parsear como JSON se possível, senão usa o texto
+             let detail = "Erro desconhecido";
+             try { detail = JSON.parse(errorBody).detail; } catch (e) {}
+             throw new Error(detail || `Falha ao buscar extrato (Status: ${response.status})`);
+          }
+
+          // Se a resposta está OK, TENTA parsear como JSON
+          const data = await response.json();
+          console.log("Dados do extrato recebidos:", data); // Log dos dados
+
+          // Valida se a resposta tem a estrutura esperada
+          if (data && Array.isArray(data.transacoes)) {
+            setExtratoData(data.transacoes); 
+          } else {
+             console.warn("Estrutura da resposta inesperada:", data);
+             setExtratoData([]); // Define como vazio se a estrutura não bater
+             throw new Error("Formato de resposta do extrato inválido."); // Informa o usuário
+          }
+
+        } catch (error) {
+          console.error("Erro ao buscar extrato:", error);
+          // Mostra a mensagem de erro específica no toast
+          toast.error("Erro ao carregar extrato", { description: error.message }); 
+          setExtratoData([]); 
+        } finally {
+          setIsLoadingExtrato(false); 
+        }
+      };
+
+      fetchExtrato();
+    } else {
+      // Se não há cliente, limpa o extrato e para o loading
+      console.log("Cliente não selecionado ou sem ID, limpando extrato."); // Log
+      setExtratoData([]);
+      setIsLoadingExtrato(false); 
+    }
+  }, [client]); // Roda sempre que 'client' mudar
+
+  
 
   return (
     <div className="h-full flex flex-col gap-4 p-4 bg-card rounded-lg"> {/* Adicionado fundo e sombra */}
@@ -239,9 +305,10 @@ export default function ClientDetailPanel({ client, refetchData }) {
 
         {/* Área rolável do extrato */}
         <div className="flex-grow overflow-y-auto rounded-md border">
-          {isLoading ? ( // Mostra skeleton se o CLIENTE ainda está carregando
+          {/* ✅ 3. USA O ESTADO isLoadingExtrato */}
+          {isLoadingExtrato ? ( 
             <div className="p-4 flex flex-col gap-4">
-              {Array.from({ length: 4 }).map((_, i) => ( // Aumentei para 4 skeletons
+              {Array.from({ length: 4 }).map((_, i) => ( 
                 <div key={i} className="flex justify-between items-center">
                   <Skeleton className="h-4 w-1/4" />
                   <Skeleton className="h-4 w-1/2" />
@@ -250,28 +317,41 @@ export default function ClientDetailPanel({ client, refetchData }) {
               ))}
             </div>
           ) : (
-            // AQUI VAI A LÓGICA PARA BUSCAR E MOSTRAR O EXTRATO REAL
-            // Por enquanto, mostra o MOCK
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="w-[80px]">Data</TableHead> {/* Largura fixa */}
+                  <TableHead className="w-[80px]">Data</TableHead>
                   <TableHead>Descrição</TableHead>
-                  <TableHead className="text-right w-[120px]">Valor (R$)</TableHead> {/* Largura fixa */}
+                  <TableHead className="text-right w-[120px]">Valor (R$)</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {transactionHistory.length > 0 ? transactionHistory.map((tx) => (
-                  <TableRow key={tx.id}>
-                    <TableCell className="text-xs">{format(new Date(tx.date + 'T00:00:00Z'), "dd/MM/yy", { locale: ptBR })}</TableCell>
-                    <TableCell className="text-xs">{tx.description}</TableCell>
-                    <TableCell className={`text-right text-xs font-medium ${tx.credit > 0 ? "text-green-600" : "text-destructive"}`}>
-                      {tx.credit > 0
-                        ? `+${tx.credit.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}` // Simplificado
-                        : (tx.debit > 0 ? `-${tx.debit.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}` : "0,00")}
-                    </TableCell>
-                  </TableRow>
-                )) : (
+                {/* ✅ 4. MAPEIA extratoData (vindo da API) */}
+                {extratoData.length > 0 ? extratoData.map((tx) => {
+                  // Determina se é crédito (pagamento) ou débito (compra)
+                  const isCredit = tx.tipo === 'pagamento';
+                  // Formata o valor, adicionando sinal +/-
+                  const formattedValue = `${isCredit ? '+' : '-'}${tx.valor.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`;
+
+                  return (
+                    <TableRow key={tx.id}>
+                      {/* Formata a data/hora vinda da API */}
+                      <TableCell className="text-xs">
+                        {format(new Date(tx.data_hora), "dd/MM/yy HH:mm", { locale: ptBR })}
+                      </TableCell>
+                      {/* Usa a descrição da API ou um fallback */}
+                      <TableCell className="text-xs">
+                        {tx.descricao || (isCredit ? "Pagamento Recebido" : "Compra Registrada")}
+                        {/* Opcional: Adicionar link para a venda se tx.venda_id existir */}
+                        {tx.venda_id && <span className="text-muted-foreground ml-1">(Venda #{tx.venda_id})</span>}
+                      </TableCell>
+                      {/* Aplica a cor e mostra o valor formatado */}
+                      <TableCell className={`text-right text-xs font-medium ${isCredit ? "text-green-600" : "text-destructive"}`}>
+                        {formattedValue}
+                      </TableCell>
+                    </TableRow>
+                  );
+                }) : (
                   <TableRow>
                     <TableCell colSpan={3} className="h-24 text-center text-muted-foreground">
                       Nenhuma transação encontrada.
@@ -334,4 +414,3 @@ export default function ClientDetailPanel({ client, refetchData }) {
     </div>
   )
 }
-

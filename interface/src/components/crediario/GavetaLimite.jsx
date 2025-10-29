@@ -22,6 +22,7 @@ export function UpdateLimitDrawer({ open, onOpenChange, client, refetchData }) {
   const [limiteCreditoStr, setLimiteCreditoStr] = React.useState(''); // Guarda como string para o input
   const [trustMode, setTrustMode] = React.useState(false);
   const [isLoading, setIsLoading] = React.useState(false);
+  const API_URL = "http://localhost:8000";
 
   React.useEffect(() => {
     if (client) {
@@ -34,18 +35,58 @@ export function UpdateLimitDrawer({ open, onOpenChange, client, refetchData }) {
     }
   }, [client, open]);
 
-  const handleSave = async (e) => {
+const handleSave = async (e) => {
     e.preventDefault();
-    // ... (Sua lógica de validação e API call continua igual)
     if (!client || isLoading) return;
-    const novoLimiteNum = parseFloat(limiteCreditoStr); // Usa o estado string
+    const novoLimiteNum = parseFloat(limiteCreditoStr); 
     if (!trustMode && (isNaN(novoLimiteNum) || novoLimiteNum < 0)) {
         toast.error("Valor do limite inválido."); return;
     }
     setIsLoading(true);
     const updateData = { novo_limite: trustMode ? 0 : novoLimiteNum, trust_mode: trustMode };
-    const apiPromise = fetch(`/clientes/${client.id}/limite`, { /* ... */ });
-    toast.promise(apiPromise, { /* ... */ });
+    
+    // Log para depuração ANTES do fetch
+    console.log(`Enviando para ${API_URL}/clientes/${client.id}/limite:`, updateData);
+
+    // ✅ CORREÇÃO: Usar a URL COMPLETA
+    const apiPromise = fetch(`${API_URL}/clientes/${client.id}/limite`, { 
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updateData)
+    })
+    .then(async (response) => {
+        // Log da resposta crua
+        console.log(`Resposta da API ${response.url}: Status ${response.status}`);
+        const result = await response.json().catch(async (err) => {
+            // Se falhar o JSON.parse, tenta ler como texto
+            const text = await response.text();
+            console.error("Falha ao parsear JSON. Resposta Texto:", text);
+            throw new Error(`Resposta inválida do servidor (Status ${response.status})`);
+        });
+        if (!response.ok) {
+            console.error("Erro da API:", result); // Loga o erro vindo do backend
+            throw new Error(result.detail || "Erro ao atualizar limite/confiança.");
+        }
+        console.log("Sucesso da API:", result); // Loga o sucesso
+        return result; 
+    });
+
+    toast.promise(apiPromise, {
+        loading: `Atualizando crédito para ${client.nome}...`,
+        success: (updatedClient) => {
+            onOpenChange(false); 
+            if (typeof refetchData === 'function') refetchData(); 
+            return "Crédito atualizado com sucesso!"; // Mensagem mais genérica
+        },
+        error: (err) => {
+            console.error("Erro pego pelo Toast:", err); // Log extra no erro do toast
+            return err.message; // Mostra a mensagem detalhada do erro
+        },
+        finally: () => {
+            console.log("Finally do Toast executado."); // Log para confirmar finally
+            setIsLoading(false); 
+        }
+    });
   };
 
   // ✅ Função para ajustar o valor (similar ao exemplo, opcional)
