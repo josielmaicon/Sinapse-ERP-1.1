@@ -14,32 +14,32 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet"
 import { toast } from "sonner"
-import { ptBR } from "date-fns/locale"
-import { Loader2 } from "lucide-react" // <--- O ÍCONE ESTÁ AQUI
-import { Calendar } from "@/components/ui/calendar"
+import { Loader2 } from "lucide-react"
+// ❌ Removemos todos os imports de Popover, Calendar, date-fns, CalendarIcon
 
-const API_URL = "http://localhost:8000";
+const API_URL = "http://localhost:8000"; // Ou sua URL base
 
-// Componente recebe props para controlar visibilidade, dados e atualização
 export function EditClientSheet({ open, onOpenChange, client, refetchData }) {
-  // Estado local para o formulário
+  
+  // ✅ 1. Estado SIMPLIFICADO para o dia (string)
   const [formData, setFormData] = React.useState({
     nome: '',
     cpf: '',
     telefone: '',
     email: '',
-    dia_vencimento_fatura: '', 
+    dia_vencimento_fatura: '', // Armazena o dia (1-31) como string
   });
   const [isLoading, setIsLoading] = React.useState(false);
 
-  // Preenche o formulário quando o 'client' (prop) mudar
+  // ✅ 2. useEffect CORRIGIDO (Preenche TODOS os campos)
   React.useEffect(() => {
     if (client) {
+      console.log("Preenchendo Sheet com dados do cliente:", client); // Log de depuração
       setFormData({
         nome: client.nome || '',
         cpf: client.cpf || '',
-        telefone: client.telefone || '',       // <-- Corrigido
-        email: client.email || '',           // <-- Corrigido
+        telefone: client.telefone || '',       // <-- BUG CORRIGIDO
+        email: client.email || '',           // <-- BUG CORRIGIDO
         // Converte o dia (número ou null) vindo da API para string
         dia_vencimento_fatura: client.dia_vencimento_fatura ? String(client.dia_vencimento_fatura) : '', 
       });
@@ -49,75 +49,57 @@ export function EditClientSheet({ open, onOpenChange, client, refetchData }) {
     }
   }, [client, open]); // Re-popula ao abrir ou ao mudar o cliente
 
-  const handleCalendarSelect = (date) => {
-    setFormData(prev => ({
-      ...prev,
-      data_vencimento_obj: date,
-      data_vencimento_texto: date ? format(date, "dd/MM/yyyy", { locale: ptBR }) : ""
-    }));
-    // O Popover do shadcn/ui fecha sozinho no onSelect, o que é ótimo
-  };
-
-  const handleDateChange = (e) => {
-    let value = e.target.value;
-    // Máscara (simplificada): dd/MM/yyyy
-    value = value.replace(/[^0-9]/g, ''); // Remove não-números
-    if (value.length > 2) value = value.slice(0, 2) + '/' + value.slice(2);
-    if (value.length > 5) value = value.slice(0, 5) + '/' + value.slice(5, 9);
-    
-    let dateObj = null;
-    // Tenta converter o texto de volta para um Date object
-    if (value.length === 10) {
-      try {
-        const parsedDate = parse(value, 'dd/MM/yyyy', new Date());
-        if (!isNaN(parsedDate)) {
-          dateObj = parsedDate; // Sincroniza o calendário
-        }
-      } catch { /* data inválida, ignora */ }
-    }
-    
-    setFormData(prev => ({
-        ...prev,
-        data_vencimento_texto: value, // Atualiza o texto
-        data_vencimento_obj: dateObj  // Atualiza o Date (ou null se inválido)
-    }));
-  };
-  
-  // Handler para atualizar o estado do formulário
+  // Handler genérico (funciona para type="number" também)
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
-  // Handler para salvar as alterações
+  // Handler para salvar
   const handleSave = async (e) => {
-    e.preventDefault(); // Previne reload da página
+    e.preventDefault(); 
     if (!client || isLoading) return;
-
     setIsLoading(true);
 
-    // Encontra apenas os dados que foram realmente alterados
-    const changedData = {};
-    for (const key in formData) {
-      // Compara com o valor original do cliente, tratando null/undefined como string vazia para comparação
-      if (formData[key] !== (client[key] ?? '')) { 
-        // Envia null se o campo ficou vazio, senão envia o valor
-        changedData[key] = formData[key] === '' ? null : formData[key]; 
-      }
+    const diaVencNum = formData.dia_vencimento_fatura ? parseInt(formData.dia_vencimento_fatura, 10) : null;
+    if (diaVencNum !== null && (diaVencNum < 1 || diaVencNum > 31)) {
+         toast.error("Dia de vencimento inválido. Use um número de 1 a 31.");
+         setIsLoading(false);
+         return;
     }
+    
+    // Objeto de dados limpos para enviar
+    const dataToSend = {
+        nome: formData.nome || null,
+        cpf: formData.cpf || null,
+        telefone: formData.telefone || null,
+        email: formData.email || null,
+        dia_vencimento_fatura: diaVencNum // Envia o número (ou null)
+    };
 
-    if (Object.keys(changedData).length === 0) {
+    // Verifica se algo realmente mudou
+    const hasChanges = (
+        dataToSend.nome !== (client.nome || null) ||
+        dataToSend.cpf !== (client.cpf || null) ||
+        dataToSend.telefone !== (client.telefone || null) ||
+        dataToSend.email !== (client.email || null) ||
+        dataToSend.dia_vencimento_fatura !== (client.dia_vencimento_fatura || null)
+    );
+
+    if (!hasChanges) {
       toast.info("Nenhuma alteração detectada.");
       setIsLoading(false);
-      onOpenChange(false); // Fecha o sheet
+      onOpenChange(false);
       return;
     }
 
-    // Chama a API PUT /clientes/{id}
-    const apiPromise = fetch(`${API_URL}/clientes/${client.id}`, { // <-- USA API_URL
+    // A API que edita dados pessoais é a /clientes/{id} (PUT)
+    // Precisamos ter certeza que o schema ClienteUpdatePersonal aceita dia_vencimento_fatura
+    const apiPromise = fetch(`${API_URL}/clientes/${client.id}`, { 
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(changedData) // Envia apenas o que mudou
+        // Lembre-se que esta rota usa o schema ClienteUpdatePersonal
+        body: JSON.stringify(dataToSend) 
     })
     .then(async (response) => {
         const result = await response.json().catch(() => ({}));
@@ -128,108 +110,68 @@ export function EditClientSheet({ open, onOpenChange, client, refetchData }) {
     });
 
     toast.promise(apiPromise, {
-        loading: `Salvando alterações para ${client.nome}...`,
+        loading: `Salvando alterações...`,
         success: (updatedClient) => {
             if (typeof refetchData === 'function') {
-                 // refetchData já fecha o sheet (conforme passamos na prop)
-                refetchData(); 
+                refetchData(); // refetchData deve fechar o sheet
             } else {
-                 onOpenChange(false); // Fecha manualmente se refetchData não existir
+                 onOpenChange(false); 
             }
-            return "Dados do cliente atualizados com sucesso!";
+            return "Dados do cliente atualizados!";
         },
         error: (err) => err.message, 
-        finally: () => {
-            setIsLoading(false); 
-        }
+        finally: () => setIsLoading(false) 
     });
   };
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="edit-cadastro-cliente">
+      <SheetContent className="edit-cadastro-cliente sm:max-w-lg overflow-y-auto">
         <SheetHeader>
           <SheetTitle>Editar Cliente: {client?.nome || '...'}</SheetTitle>
           <SheetDescription>
-            Faça alterações nos dados cadastrais do cliente aqui. Clique em salvar quando terminar.
+            Faça alterações nos dados cadastrais do cliente aqui.
           </SheetDescription>
         </SheetHeader>
         
-        {/* Formulário de Edição */}
         <form onSubmit={handleSave}>
-           <div className="grid gap-4 p-4">
-              {/* Campo Nome */}
+           <div className="grid gap-4 p-6">
+              {/* Campos Nome, CPF, Telefone, Email */}
               <div className="grid grid-cols-4 items-center gap-4">
                  <Label htmlFor="nome" className="text-right">Nome</Label>
-                 <Input 
-                    id="nome" 
-                    name="nome" // IMPORTANTE: name deve corresponder à chave no formData
-                    value={formData.nome} 
-                    onChange={handleChange} 
-                    className="col-span-3" 
-                    required // Nome é obrigatório?
-                 />
+                 <Input id="nome" name="nome" value={formData.nome} onChange={handleChange} className="col-span-3" required />
               </div>
-              {/* Campo CPF */}
               <div className="grid grid-cols-4 items-center gap-4">
                  <Label htmlFor="cpf" className="text-right">CPF</Label>
-                 <Input 
-                    id="cpf" 
-                    name="cpf"
-                    value={formData.cpf} 
-                    onChange={handleChange} 
-                    className="col-span-3" 
-                    // Adicionar máscara de CPF aqui seria ideal
-                  />
+                 <Input id="cpf" name="cpf" value={formData.cpf} onChange={handleChange} className="col-span-3" />
               </div>
-              {/* Campo Telefone */}
               <div className="grid grid-cols-4 items-center gap-4">
                  <Label htmlFor="telefone" className="text-right">Telefone</Label>
-                 <Input 
-                    id="telefone" 
-                    name="telefone"
-                    value={formData.telefone} 
-                    onChange={handleChange} 
-                    className="col-span-3" 
-                    // Adicionar máscara de telefone aqui seria ideal
-                  />
+                 <Input id="telefone" name="telefone" value={formData.telefone} onChange={handleChange} className="col-span-3" />
               </div>
-              {/* Campo Email */}
               <div className="grid grid-cols-4 items-center gap-4">
                  <Label htmlFor="email" className="text-right">Email</Label>
+                 <Input id="email" name="email" type="email" value={formData.email} onChange={handleChange} className="col-span-3" />
+              </div>
+              
+              {/* ✅ 3. CAMPO DE DATA SIMPLIFICADO */}
+              <div className="grid grid-cols-4 items-center gap-4">
+                 <Label htmlFor="dia_vencimento_fatura" className="text-right">Dia Vencim.</Label>
                  <Input 
-                    id="email" 
-                    name="email"
-                    type="email" // Validação básica de email
-                    value={formData.email} 
+                    id="dia_vencimento_fatura" 
+                    name="dia_vencimento_fatura"
+                    type="number" 
+                    min="1"
+                    max="31"
+                    placeholder="Ex: 10" 
+                    value={formData.dia_vencimento_fatura} 
                     onChange={handleChange} 
                     className="col-span-3" 
                   />
               </div>
-            <div className="grid grid-cols-4 items-center gap-4">
-                 <Label htmlFor="data_vencimento_fatura" className="text-right">Vencimento</Label>
-                 <div className="col-span-3 flex items-center gap-2">
-                      <div className="grid grid-cols-4 items-center gap-4">
-                      <Input 
-                          id="dia_vencimento_fatura" 
-                          name="dia_vencimento_fatura"
-                          type="number" 
-                          min="1"
-                          max="31"
-                          placeholder="Ex: 10" 
-                          value={formData.dia_vencimento_fatura} 
-                          onChange={handleChange} 
-                          className="col-span-3" 
-                        />
-                    </div>
-                 </div>
-              </div>
-              </div>
+           </div> 
 
-
-
-           <SheetFooter>
-              {/* SheetClose é um botão que chama onOpenChange(false) */}
+           <SheetFooter className="mt-4">
               <SheetClose asChild> 
                  <Button type="button" variant="outline" disabled={isLoading}>Cancelar</Button>
               </SheetClose>
@@ -239,7 +181,6 @@ export function EditClientSheet({ open, onOpenChange, client, refetchData }) {
               </Button>
            </SheetFooter>
         </form>
-
       </SheetContent>
     </Sheet>
   )

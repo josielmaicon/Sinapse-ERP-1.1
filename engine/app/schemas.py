@@ -54,8 +54,9 @@ class Fornecedor(FornecedorBase):
 class ClienteBase(BaseModel):
     nome: str
     cpf: Optional[str] = None
-    limite_credito: Optional[float] = 0.0
-
+    telefone: Optional[str] = None
+    email: Optional[str] = None
+    
 class ClienteCreate(ClienteBase):
     pass
 
