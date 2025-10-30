@@ -10,7 +10,7 @@ Card4_MainValue, Card4_Description, Card4_Children,
 TabelaProdutos, PainelLateral
 }) {
   return (
-    <div className="flex-1 p-2 pt-4 flex flex-col">  
+    <div className="flex-1 p-2 pt-0 flex flex-col">  
         <div className="flex-grow grid grid-rows-[0.2fr_0.8fr] gap-2">
             <div className="flex-grow grid grid-cols-[1fr_1fr_1fr_1fr] gap-2">
                 <CardInfo mainvalue={Card1_MainValue} description={Card1_Description}>{Card1_Children}</CardInfo>

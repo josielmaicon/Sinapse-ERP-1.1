@@ -126,13 +126,12 @@
     @apply text-[13px]
   }
 }
+
     /* * {
   border: 1px solid red !important;
 } */
 
-/* ================================
-   Scrollbar global style
-================================ */
+
 @layer base {
   /* Chrome, Edge, Safari */
   ::-webkit-scrollbar {

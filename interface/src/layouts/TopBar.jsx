@@ -24,7 +24,7 @@ import { cn } from "@/lib/utils";
 
 export function TopBar() {
   return (
-<header className="w-full flex h-20 items-center justify-between px-4 md:px-6 ">
+<header className="w-full flex h-1/13 items-center justify-between px-4 md:px-6 ">
   {/* Esquerda */}
   <div className="flex items-center gap-2 pr-4">
     <Logo variant="icon" width="36px" height="33px"/>

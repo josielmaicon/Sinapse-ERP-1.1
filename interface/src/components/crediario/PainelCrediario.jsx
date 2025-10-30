@@ -121,6 +121,8 @@ export default function ClientDetailPanel({ client, refetchData }) {
 
     
   const name = client?.nome ?? "--";
+  const cpf = client?.cpf ?? "--";
+  const telefone = client?.telefone ?? "--";
   const isOverdue = client?.status_conta === 'atrasado'; // Fonte da verdade
   
   const overdueBalance = client
@@ -286,8 +288,8 @@ export default function ClientDetailPanel({ client, refetchData }) {
           <div className="flex flex-col">
             <h3 className="text-xl font-semibold">{name}</h3>
             {/* Opcional: Mostrar CPF ou Telefone aqui */}
-            {client?.cpf && <p className="text-sm text-muted-foreground">CPF: {client.cpf}</p>}
-            {client?.telefone && <p className="text-sm text-muted-foreground">Tel: {client.telefone}</p>}
+            <p className="text-sm text-muted-foreground">CPF: {cpf}</p>
+            <p className="text-sm text-muted-foreground">Tel: {telefone}</p>
           </div>
           <Button
             variant="outline"

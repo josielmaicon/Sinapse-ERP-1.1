@@ -2,7 +2,7 @@ import CardBodyNoTitle from "@/components/CardBodyNoTitle";
 
 export default function PdvsPageLayout({ HoldPrincipal, StatCard1, StatCard2, StatCard3, HistoricoVendas, ListaPDVs, StatCardInterno1, StatCardInterno2}) {
   return (
-    <div className="flex-1 p-2 pt-4 flex flex-col">  
+    <div className="flex-1 p-2 pt-0 flex flex-col">  
         <div className="flex-grow grid grid-cols-[1fr_2fr] gap-2">
             <div className="flex-grow grid grid-rows-[1fr_3fr] gap-2">
                 <div>{StatCard1}</div>

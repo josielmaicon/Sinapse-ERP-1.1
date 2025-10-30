@@ -11,6 +11,7 @@ import { format, isPast, addDays } from "date-fns" // Importe 'addDays'
 const StatusBadge = ({ status }) => {
   let className = "";
   let text = status;
+  let variant = "secondary";
 
   if (!status) {
     status = "inativo"; // Define um padrão
@@ -21,8 +22,7 @@ const StatusBadge = ({ status }) => {
   switch (normalizedStatus) {
     case "ativo":
       text = "Ativo";
-      // Classes para Azul (fundo claro, texto escuro)
-      className = "bg-blue-100 text-blue-800 border-transparent hover:bg-blue-100/80 dark:bg-blue-900/50 dark:text-blue-400";
+      variant = "outline";
       break;
     case "atrasado":
       text = "Atrasado";
@@ -44,7 +44,7 @@ const StatusBadge = ({ status }) => {
 
   // Retorna a Badge com as classes customizadas (para Ativo e Atrasado)
   // 'cn' mescla as classes padrão da Badge com as nossas
-  return <Badge className={cn(className)}>{text}</Badge>;
+  return <Badge variant={variant} className={cn(className)}>{text}</Badge>;
 };
 
 export const crediarioColumns = [
