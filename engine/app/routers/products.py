@@ -1,11 +1,12 @@
 # app/routers/products.py
 from typing import List
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from datetime import date, timedelta
 from .. import models, schemas
 from sqlalchemy import and_
 from ..database import get_db, engine
+
 
 models.Base.metadata.create_all(bind=engine)
 router = APIRouter(
@@ -157,3 +158,21 @@ def get_produto_historico(produto_id: int, db: Session = Depends(get_db)):
     # No futuro, você pode adicionar 'entradas' e 'ajustes' aqui
     
     return historico
+
+@router.get("/barcode/{codigo_barras}", response_model=schemas.Produto)
+def get_produto_por_codigo_barras(codigo_barras: str, db: Session = Depends(get_db)):
+    """
+    Busca um único produto pelo seu 'codigo_barras'.
+    Usado pelo Ponto de Venda (PDV).
+    """
+    db_produto = db.query(models.Produto).filter(
+        models.Produto.codigo_barras == codigo_barras
+    ).first()
+    
+    if not db_produto:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Produto com código de barras '{codigo_barras}' não encontrado."
+        )
+        
+    return db_produto

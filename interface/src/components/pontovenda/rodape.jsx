@@ -1,50 +1,46 @@
-// src/components/pos/PosFooterStatus.jsx
-
 "use client"
 
 import { cn } from "@/lib/utils";
+import { Loader2 } from "lucide-react"; // ✅ Importar Loader
 
-// ✅ 1. MAPEAMENTO DE ESTADOS PARA ESTILOS
-// Um objeto para organizar o texto e as classes de cada estado.
-// Facilita a manutenção e deixa o código JSX mais limpo.
 const statusDetails = {
-    livre: {
-        text: "Caixa Livre",
-        className: "text-green-600",
-    },
-    em_andamento: {
-        text: "Compra em Andamento",
-        className: "text-blue-600",
-    },
-    pagamento: {
-        text: "Aguardando Pagamento",
-        className: "text-yellow-500",
-    },
-    gaveta_aberta: {
-        text: "ATENÇÃO: Gaveta Aberta",
-        className: "text-red-600 animate-pulse", // Efeito de pulsar para alertas
-    },
-    bloqueado: {
-        text: "Caixa Bloqueado - Digite a Senha",
-        className: "text-gray-700",
-    },
+    livre: { text: "Caixa Livre", className: "text-green-600" },
+    em_andamento: { text: "Compra em Andamento", className: "text-blue-600" },
+    // ✅ Novo status "digitando"
+    typing: { text: "...", className: "text-muted-foreground" }, // O texto será substituído
+    // ✅ Novo status "carregando"
+    loading: { text: "Buscando...", className: "text-blue-600" },
+    pagamento: { text: "Aguardando Pagamento", className: "text-yellow-500" },
+    gaveta_aberta: { text: "ATENÇÃO: Gaveta Aberta", className: "text-red-600 animate-pulse" },
+    bloqueado: { text: "Caixa Bloqueado", className: "text-gray-700" },
 };
 
-export default function PosFooterStatus({ status = "livre" }) {
-    // Busca os detalhes do status atual, com um fallback para 'bloqueado' se o status for desconhecido
+// ✅ Recebe 'status' e o novo 'buffer'
+export default function PosFooterStatus({ status = "livre", buffer = "" }) {
     const currentStatus = statusDetails[status] || statusDetails.bloqueado;
 
+    let displayText = currentStatus.text;
+    let showLoader = status === 'loading';
+
+    // ✅ Lógica da sua ideia: Se estiver digitando (ou livre com buffer), mostra o buffer!
+    if ((status === 'typing' || (status === 'livre' && buffer.length > 0))) {
+        displayText = buffer || "..."; // Mostra o buffer ou "..."
+    }
+
     return (
-        // ✅ 2. RENDERIZAÇÃO DINÂMICA
-        // O componente aplica a classe e o texto correspondentes ao status recebido
         <div
             className={cn(
                 "w-full h-full flex items-center justify-center rounded-xl",
                 "text-6xl font-bold tracking-wider font-mono transition-colors",
-                currentStatus.className // Aplica as classes de cor dinamicamente
+                currentStatus.className
             )}
         >
-            {currentStatus.text}
+            {showLoader && <Loader2 className="mr-4 h-12 w-12 animate-spin" />}
+            {displayText}
+            {/* Opcional: Adiciona um cursor piscando */}
+            {(status === 'typing' || (status === 'livre' && buffer.length > 0)) && (
+                <span className="animate-pulse">_</span>
+            )}
         </div>
     );
 }

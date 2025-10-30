@@ -4,17 +4,8 @@
 
 import * as React from "react"
 import { format } from "date-fns"
-import { ptBR } from "date-fns/locale"
 import { Badge } from "@/components/ui/badge"
 import { cn } from "@/lib/utils"
-
-const mockPdvSession = {
-  pdvId: "Caixa 01",
-  operatorName: "Josiel Maicon",
-  status: "aberto",
-  currentSaleId: "001254",
-  isOnline: true,
-};
 
 const statusColors = {
   aberto: "text-base bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-400",
@@ -29,16 +20,27 @@ const InfoItem = ({ label, value, className}) => (
   </div>
 );
 
-export default function PosHeaderStatus({ session = mockPdvSession }) {
+export default function PosHeaderStatus({ session }) { 
   const [currentTime, setCurrentTime] = React.useState(new Date());
 
   React.useEffect(() => {
-    const timerId = setInterval(() => {
-      setCurrentTime(new Date());
-    }, 1000);
-
+    const timerId = setInterval(() => setCurrentTime(new Date()), 1000);
     return () => clearInterval(timerId);
   }, []);
+
+  // ✅ Lida com o estado de 'session' ser nula (enquanto carrega)
+  if (!session) {
+      return (
+          <div className="w-full h-full flex items-center text-xl justify-between font-mono p-4">
+              <Skeleton className="h-8 w-24" />
+              <div className="flex items-center gap-6">
+                  <Skeleton className="h-12 w-32" />
+                  <Skeleton className="h-12 w-24" />
+                  <Skeleton className="h-12 w-24" />
+              </div>
+          </div>
+      )
+  }
 
   return (
     <div className="w-full h-full flex items-center text-xl justify-between font-mono p-4">
@@ -53,11 +55,10 @@ export default function PosHeaderStatus({ session = mockPdvSession }) {
       </div>
 
       <div className="flex items-center gap-6">
-        <InfoItem label="Operador" className="text-2xl" value={session.operatorName} />
-        <InfoItem label="Caixa" value={session.pdvId} />
-        <InfoItem label="Venda Nº" value={session.currentSaleId} />
-        
-        {/* ✅ CORREÇÃO: "Info_Item" foi trocado para "InfoItem" */}
+      {/* ✅ Lê dados reais da prop 'session' */}
+        <InfoItem label="Operador" className="text-2xl" value={session.operador_atual.nome} />
+        <InfoItem label="Caixa" value={session.nome} /> {/* O nome do PDV */}
+        <InfoItem label="Venda Nº" value={session.currentSaleId || "---"} />
         <InfoItem label="Horário" value={format(currentTime, "HH:mm:ss")} />
       </div>
     </div>

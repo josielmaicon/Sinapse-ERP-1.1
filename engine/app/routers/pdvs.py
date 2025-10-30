@@ -436,3 +436,77 @@ def close_pdv(
     updated_pdv = db.query(models.Pdv).filter(models.Pdv.id == pdv_id).one()
     # Mapeia diretamente, frontend fará refetch
     return updated_pdv
+
+@router.get("/{pdv_id}/session", response_model=schemas.PdvStatusDetalhado) 
+def get_pdv_session_details(pdv_id: int, db: Session = Depends(get_db)):
+    """
+    Busca os detalhes da sessão atual de um PDV.
+    Usado pela interface de Ponto de Venda para inicializar.
+    """
+    
+    # Busca o PDV com o operador_atual pré-carregado
+    pdv = db.query(models.Pdv).options(
+        joinedload(models.Pdv.operador_atual)
+    ).filter(models.Pdv.id == pdv_id).first()
+
+    if not pdv:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="PDV não encontrado."
+        )
+        
+    if pdv.status != 'aberto' or not pdv.operador_atual:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, # 403 Proibido
+            detail=f"Caixa {pdv.nome} não está aberto ou nenhum operador está logado."
+        )
+
+    # Reutiliza a lógica de cálculo de valor_em_caixa da sua rota GET /
+    # (Ou, idealmente, refatore essa lógica para uma função auxiliar)
+    
+    # --- Início da Lógica de Cálculo (copiada/adaptada da sua GET /) ---
+    ultima_abertura = db.query(models.MovimentacaoCaixa)\
+        .filter(models.MovimentacaoCaixa.pdv_id == pdv.id, models.MovimentacaoCaixa.tipo == 'abertura')\
+        .order_by(models.MovimentacaoCaixa.data_hora.desc())\
+        .first()
+
+    valor_abertura = 0.0
+    hora_abertura_dt = None
+    movimentacoes_periodo = []
+    vendas_periodo = []
+    
+    periodo_inicio = datetime.combine(date.today(), datetime.min.time()) # Padrão
+    
+    if ultima_abertura:
+        valor_abertura = ultima_abertura.valor
+        hora_abertura_dt = ultima_abertura.data_hora
+        periodo_inicio = hora_abertura_dt # O período começa na abertura
+
+    # Filtra transações desde o início do período
+    movimentacoes_periodo = [m for m in pdv.movimentacoes_caixa if m.data_hora >= periodo_inicio]
+    vendas_periodo = [v for v in pdv.vendas if v.data_hora >= periodo_inicio and v.status == 'concluida']
+
+    suprimentos = sum(m.valor for m in movimentacoes_periodo if m.tipo == 'suprimento')
+    sangrias = sum(m.valor for m in movimentacoes_periodo if m.tipo == 'sangria')
+    
+    entradas_dinheiro_vendas = sum(
+        v.valor_total for v in vendas_periodo 
+        if getattr(v, 'forma_pagamento', 'dinheiro') == 'dinheiro'
+    )
+    
+    valor_em_caixa_calculado = valor_abertura + entradas_dinheiro_vendas + suprimentos - sangrias
+    total_vendas_dia = len(vendas_periodo) 
+    alerta = next((s for s in pdv.solicitacoes if s.status == 'pendente'), None)
+    # --- Fim da Lógica de Cálculo ---
+
+    # Retorna o schema "rico" que o PdvStatusDetalhado espera
+    return schemas.PdvStatusDetalhado(
+        id=pdv.id,
+        nome=pdv.nome,
+        status=pdv.status,
+        operador_atual=pdv.operador_atual, # Objeto UsuarioBase
+        alerta_pendente=alerta,
+        valor_em_caixa=valor_em_caixa_calculado,
+        total_vendas_dia=total_vendas_dia,
+        hora_abertura=hora_abertura_dt
+    )

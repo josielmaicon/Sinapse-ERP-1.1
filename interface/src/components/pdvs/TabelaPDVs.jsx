@@ -135,11 +135,23 @@ export function PdvDataTable({ data: pdvsData, operatorData, onPdvSelect, refetc
     const isPdvOpen = selectedRow?.status === 'aberto';
 
     const ToggleIcon = isPdvOpen ? PowerOff : Power; // Escolhe o ícone correto
-    const toggleButtonTooltip = isPdvOpen ? "Fechar Caixa" : "Abrir Caixa"; // Escolhe o texto do tooltip       
+    const toggleButtonTooltip = isPdvOpen ? "Fechar Caixa" : "Abrir Caixa";
+    
+    
     const handleOpenInterface = () => {
-            // A função 'navigate' nos leva para a rota definida no seu routes.jsx
-            navigate("/pontovenda");
-        };
+        // Verifica se realmente temos uma linha selecionada e um ID
+        if (selectedRow && selectedRow.id) {
+            // Verifica se o caixa selecionado está 'aberto'
+            if (selectedRow.status !== 'aberto') {
+                toast.error("Este caixa está fechado!", { description: "Abra o caixa antes de iniciar a interface." });
+                return;
+            }
+            // Navega para a URL dinâmica, passando o ID do PDV
+            navigate(`/pontovenda/${selectedRow.id}`);
+        } else {
+            toast.error("Nenhum PDV selecionado.");
+        }
+    };
 
     const handleOpenModal = () => {
       if (!selectedRow) return;
