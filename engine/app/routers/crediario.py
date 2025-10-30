@@ -29,28 +29,34 @@ def get_crediario_summary(db: Session = Depends(get_db)):
     }
 
 # --- Endpoint para a Tabela de Clientes ---
-@router.get("/clientes", response_model=List[schemas.ClienteCrediario])
+@router.get("/clientes", response_model=List[schemas.ClienteCrediario]) # Usa seu schema ClienteCrediario
 def get_crediario_clientes(db: Session = Depends(get_db)):
     clientes = db.query(models.Cliente).all()
     
     clientes_com_limite = []
     for cliente in clientes:
-        limite_disponivel = cliente.limite_credito - cliente.saldo_devedor if not cliente.trust_mode else float('inf')
+        # ✅ LÓGICA CORRIGIDA: Calcula o limite numérico. Não usa float('inf').
+        limite_disponivel_calculado = (cliente.limite_credito or 0.0) - (cliente.saldo_devedor or 0.0)
         
-        cliente_schema = schemas.ClienteCrediario(
-            id=cliente.id,
-            nome=cliente.nome,
-            cpf=cliente.cpf,
-            limite_credito=cliente.limite_credito,
-            saldo_devedor=cliente.saldo_devedor,
-            status_conta=cliente.status_conta,
+        # Cria o objeto do schema para a resposta
+        try:
+            cliente_schema = schemas.ClienteCrediario(
+                id=cliente.id,
+                nome=cliente.nome,
+                cpf=cliente.cpf,
+                telefone=cliente.telefone, # Adicionado (herda de ClienteBase)
+                email=cliente.email,       # Adicionado (herda de ClienteBase)
+                limite_credito=cliente.limite_credito,
+                saldo_devedor=cliente.saldo_devedor,
+                status_conta=cliente.status_conta,
+                
+                dia_vencimento_fatura=cliente.dia_vencimento_fatura, 
+                limite_disponivel=limite_disponivel_calculado,
+                trust_mode=cliente.trust_mode 
+            )
+            clientes_com_limite.append(cliente_schema)
+        except Exception as e:
+            # Log de erro se o Pydantic falhar na validação
+            print(f"Erro ao validar cliente ID {cliente.id} para schema ClienteCrediario: {e}")
             
-            dia_vencimento_fatura=cliente.dia_vencimento_fatura, 
-            
-            limite_disponivel=limite_disponivel,
-            telefone=cliente.telefone,
-            email=cliente.email
-        )
-        clientes_com_limite.append(cliente_schema)
-        
     return clientes_com_limite

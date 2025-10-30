@@ -141,9 +141,9 @@ React.useEffect(() => {
       <div className="flex items-center gap-2 py-4">
         <Input
           placeholder="Buscar por nome ou CPF..."
-          value={table.getColumn("clientName")?.getFilterValue() ?? ""}
+          value={table.getColumn("nome")?.getFilterValue() ?? ""}
           onChange={(event) =>
-            table.getColumn("clientName")?.setFilterValue(event.target.value)
+            table.getColumn("nome")?.setFilterValue(event.target.value)
           }
           className="max-w-sm"
         />

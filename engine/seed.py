@@ -53,7 +53,7 @@ try:
     # ✅ CORREÇÃO: Usar os valores EXATOS do Enum ('atrasado', 'ativo')
     cliente1 = Cliente(
         nome="José da Silva", cpf="123.456.789-00", limite_credito=500.0, 
-        saldo_devedor=350.50, status_conta="atrasado", 
+        saldo_devedor=350.50, status_conta="ativo", 
         dia_vencimento_fatura=10 # Vence todo dia 10
     )
     cliente2 = Cliente(

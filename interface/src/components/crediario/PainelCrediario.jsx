@@ -24,12 +24,13 @@ import { toast } from "sonner"
 import { EditClientSheet } from "./FormularioEdicaoCliente"
 import { UpdateLimitDrawer } from "./GavetaLimite"
 
+const API_URL = "http://localhost:8000";
 
 // Mini Card de informações (sem mudanças)
 const InfoBlock = ({ label, value, valueClassName = "" }) => (
-  <div className="bg-muted p-3 rounded-lg text-center flex flex-col justify-center min-h-[70px]"> {/* Altura mínima */}
+  <div className="bg-muted p-3 rounded-lg text-center flex flex-col justify-center min-h-[70px]"> 
     <p className="text-xs text-muted-foreground">{label}</p>
-    <p className={`font-bold text-lg md:text-xl tracking-tight ${valueClassName}`}>{value}</p> {/* Ajuste leve no tamanho da fonte */}
+    <p className={`font-bold text-lg md:text-xl tracking-tight ${valueClassName}`}>{value}</p> 
   </div>
 )
 
@@ -52,7 +53,10 @@ function calculateNextDueDate(dayOfMonth) {
 
 // Componente recebe 'client' (os dados) e 'refetchData' (a função para atualizar)
 export default function ClientDetailPanel({ client, refetchData }) {
+
   const isLoading = !client; // Define loading baseado na existência do cliente
+
+  const [isUpdatingTrust, setIsUpdatingTrust] = React.useState(false);
 
   // Deriva o estado bloqueado DIRETAMENTE da prop 'client'
   const isBlocked = client?.status_conta === "bloqueado";
@@ -85,13 +89,12 @@ export default function ClientDetailPanel({ client, refetchData }) {
   // Função chamada ao confirmar no AlertDialog
   const handleConfirmStatusChange = async () => {
     if (!client || isUpdatingStatus) return;
-
     setIsUpdatingStatus(true);
-    const newStatus = alertAction === 'block' ? 'bloqueado' : 'ativo'; // Status para enviar à API
+    const newStatus = alertAction === 'block' ? 'bloqueado' : 'ativo';
     const actionText = alertAction === 'block' ? 'Bloqueando' : 'Desbloqueando';
 
-    // Chama a API PUT /clientes/{id}/status
-    const apiPromise = fetch(`/clientes/${client.id}/status`, { // Assume URL base configurada ou relativa
+    // ✅ 3. URL CORRIGIDA (agora 'API_URL' está visível)
+    const apiPromise = fetch(`${API_URL}/clientes/${client.id}/status`, { 
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ novo_status: newStatus })
@@ -107,21 +110,15 @@ export default function ClientDetailPanel({ client, refetchData }) {
     toast.promise(apiPromise, {
         loading: `${actionText} conta de ${client.nome}...`,
         success: (updatedClient) => {
-            setIsAlertOpen(false); // Fecha o AlertDialog
-            if (typeof refetchData === 'function') {
-                refetchData(); // Chama a função da página pai para buscar dados atualizados
-            } else {
-                 console.warn("ClientDetailPanel: prop refetchData não encontrada ou não é função.");
-            }
-            // Usa o nome do cliente retornado pela API para garantir consistência
-            return `Conta de ${updatedClient.nome} ${actionText.toLowerCase().replace('ando', 'ada')} com sucesso!`;
+            setIsAlertOpen(false); 
+            if (typeof refetchData === 'function') refetchData(); 
+            return `Conta ${actionText.toLowerCase().replace('ando', 'ada')}!`;
         },
-        error: (err) => err.message, // Mostra o erro no toast
-        finally: () => {
-            setIsUpdatingStatus(false); // Libera o botão do AlertDialog
-        }
+        error: (err) => err.message, 
+        finally: () => setIsUpdatingStatus(false)
     });
   };
+
     
   const name = client?.nome ?? "--";
   const isOverdue = client?.status_conta === 'atrasado'; // Fonte da verdade
@@ -129,6 +126,7 @@ export default function ClientDetailPanel({ client, refetchData }) {
   const overdueBalance = client
     ? (isOverdue ? client.saldo_devedor : 0).toLocaleString(/*...*/)
     : "--";
+
 
   const nextDueDateObj = client ? calculateNextDueDate(client.dia_vencimento_fatura) : null;
   const dueDate = nextDueDateObj 
@@ -163,12 +161,51 @@ export default function ClientDetailPanel({ client, refetchData }) {
   }
 
   const handleTrustModeChange = (checked) => {
-     if(isLoading) return;
-     // ATENÇÃO: Apenas atualiza estado local. Precisa chamar API!
-     setIsTrustMode(checked); 
-     alert(`(WIP) Chamar API para ${checked ? 'ATIVAR' : 'DESATIVAR'} Modo Confiança para ${client.nome}`);
-     // Aqui vamos implementar a chamada para PUT /clientes/{id}/limite
+     if(isLoading || isUpdatingTrust || !client) return;
+
+     setIsUpdatingTrust(true);
+     const actionText = checked ? "Ativando" : "Desativando";
+
+     // Chama a API PUT /clientes/{id}/limite
+     // (Envia o limite ATUAL, apenas mudando o trust_mode)
+     const updateData = {
+         novo_limite: client.limite_credito, // Mantém o limite salvo
+         trust_mode: checked
+     };
+     
+     const apiPromise = fetch(`${API_URL}/clientes/${client.id}/limite`, { 
+         method: 'PUT',
+         headers: { 'Content-Type': 'application/json' },
+         body: JSON.stringify(updateData)
+     })
+     .then(async (response) => {
+         const result = await response.json().catch(() => ({}));
+         if (!response.ok) {
+             throw new Error(result.detail || "Erro ao salvar Modo Confiança.");
+         }
+         return result; 
+     });
+
+     toast.promise(apiPromise, {
+         loading: `${actionText} Modo Confiança...`,
+         success: () => {
+             if (typeof refetchData === 'function') {
+                 refetchData(); // Recarrega o cliente
+             }
+             return "Modo Confiança atualizado!";
+         },
+         error: (err) => {
+             // Se falhar, reverte o switch (embora o refetch faria isso)
+             // (Não precisamos reverter 'isTrustMode' localmente
+             //  porque ele é derivado da prop 'client' que será recarregada)
+             return err.message;
+         },
+         finally: () => {
+             setIsUpdatingTrust(false);
+         }
+     });
   }
+  
   // --- Fim dos Placeholders ---
 
   React.useEffect(() => {
@@ -176,8 +213,6 @@ export default function ClientDetailPanel({ client, refetchData }) {
     setIsSheetOpen(false);
     //setIsDrawerOpen(false); // Manter aberto se estava editando limite? Opcional.
   }, [client]);
-
-  const API_URL = "http://localhost:8000";
 
   React.useEffect(() => {
     // Log para depurar: O useEffect está rodando? Qual o cliente?
@@ -269,7 +304,7 @@ export default function ClientDetailPanel({ client, refetchData }) {
           <InfoBlock label="Saldo em Atraso" value={overdueBalance} valueClassName={isOverdue ? "text-destructive" : ""} />
           <InfoBlock label="Próximo Vencimento" value={dueDate} valueClassName={isOverdue ? "text-destructive" : ""} />
           <InfoBlock label="Utilizado / Gasto" value={spentLimit} />
-          <InfoBlock label="Limite Total" value={totalLimit} valueClassName={isTrustMode ? "text-primary" : ""} /> {/* Use primary para destaque */}
+          <InfoBlock label="Limite Total" value={totalLimit} valueClassName={isTrustMode ? "text-primary" : ""} />
         </div>
 
         {/* AÇÕES */}
@@ -292,8 +327,10 @@ export default function ClientDetailPanel({ client, refetchData }) {
           <div className="flex items-center space-x-2 justify-end"> {/* Alinhado à direita */}
             <Switch 
                id="trust-mode" 
+               // Lê o 'isTrustMode' derivado da prop
                checked={isTrustMode} 
-               disabled={isLoading} 
+               // Desabilita se o cliente geral estiver carregando OU se o próprio switch estiver em loading
+               disabled={isLoading || isUpdatingTrust} 
                onCheckedChange={handleTrustModeChange} 
              />
             <Label htmlFor="trust-mode">Modo Confiança</Label>

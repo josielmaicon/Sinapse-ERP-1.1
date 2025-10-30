@@ -12,12 +12,16 @@ router = APIRouter(
 
 # --- Função Auxiliar (para não repetir código) ---
 def _build_cliente_response(db_cliente: models.Cliente) -> schemas.Cliente:
-    """Calcula campos derivados e constrói o schema de resposta Cliente."""
+    """
+    Calcula campos derivados (sem 'inf') e constrói o schema de resposta Cliente.
+    """
     
-    # Calcula o limite disponível
-    limite_disp = float('inf') # Padrão para Modo Confiança
-    if not db_cliente.trust_mode:
-        limite_disp = (db_cliente.limite_credito or 0.0) - (db_cliente.saldo_devedor or 0.0)
+    # ✅ CORREÇÃO: O backend agora só calcula o limite disponível REAL.
+    #    Ele não se importa mais com 'trust_mode' ou 'float('inf')'.
+    #    O frontend (que recebe 'trust_mode') decidirá se usa
+    #    este valor ou se mostra "Ilimitado".
+    limite_disp = (db_cliente.limite_credito or 0.0) - (db_cliente.saldo_devedor or 0.0)
+    # (Isso resultará em um número, ex: 500.0, -150.0, etc. Perfeito para JSON)
 
     # Constrói o schema manualmente
     return schemas.Cliente(
@@ -28,10 +32,10 @@ def _build_cliente_response(db_cliente: models.Cliente) -> schemas.Cliente:
         email=db_cliente.email,
         limite_credito=db_cliente.limite_credito,
         saldo_devedor=db_cliente.saldo_devedor,
-        trust_mode=db_cliente.trust_mode,
+        trust_mode=db_cliente.trust_mode, # <-- O frontend usa ESTE campo
         status_conta=db_cliente.status_conta,
         dia_vencimento_fatura=db_cliente.dia_vencimento_fatura,
-        limite_disponivel=limite_disp # Passa o valor calculado AQUI
+        limite_disponivel=limite_disp # <-- Agora é sempre um número JSON-compatível
     )
 
 # --- Rota GET para Listar Clientes ---

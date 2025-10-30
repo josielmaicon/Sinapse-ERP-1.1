@@ -9,8 +9,42 @@ import { format, isPast, addDays } from "date-fns" // Importe 'addDays'
 
 // Componente auxiliar para a Badge de status
 const StatusBadge = ({ status }) => {
-  const variant = status === "Em Dia" ? "success" : "destructive";
-  return <Badge variant={variant}>{status}</Badge>;
+  let className = "";
+  let text = status;
+
+  if (!status) {
+    status = "inativo"; // Define um padrão
+  }
+
+  const normalizedStatus = status.toLowerCase(); // Garante consistência
+
+  switch (normalizedStatus) {
+    case "ativo":
+      text = "Ativo";
+      // Classes para Azul (fundo claro, texto escuro)
+      className = "bg-blue-100 text-blue-800 border-transparent hover:bg-blue-100/80 dark:bg-blue-900/50 dark:text-blue-400";
+      break;
+    case "atrasado":
+      text = "Atrasado";
+      // Classes para Amarelo (fundo claro, texto escuro)
+      className = "bg-yellow-100 text-yellow-800 border-transparent hover:bg-yellow-100/80 dark:bg-yellow-900/50 dark:text-yellow-400";
+      break;
+    case "bloqueado":
+      text = "Bloqueado";
+      // Usa a variant 'destructive' (vermelho) que já existe
+      return <Badge variant="destructive">{text}</Badge>;
+    case "inativo":
+      text = "Inativo";
+      // Usa a variant 'secondary' (cinza) que já existe
+      return <Badge variant="secondary">{text}</Badge>;
+    default:
+      text = status; // Mostra o status desconhecido
+      return <Badge variant="secondary">{text}</Badge>;
+  }
+
+  // Retorna a Badge com as classes customizadas (para Ativo e Atrasado)
+  // 'cn' mescla as classes padrão da Badge com as nossas
+  return <Badge className={cn(className)}>{text}</Badge>;
 };
 
 export const crediarioColumns = [
@@ -65,7 +99,7 @@ export const crediarioColumns = [
     },
   },
   {
-    accessorKey: "data_vencimento",
+    accessorKey: "dia_vencimento_fatura",
     header: ({ column }) => (
         <Button variant="ghost" onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}>
             Dia Vencimento
@@ -73,14 +107,17 @@ export const crediarioColumns = [
         </Button>
     ),
     cell: ({ row }) => {
-        // ✅ CORREÇÃO: Lendo os dados corretos
-        const dia_vencimento = row.getValue("data_vencimento");
+        // ✅ 3. CORREÇÃO DA LEITURA
+        const dia_vencimento = row.getValue("dia_vencimento_fatura");
         const status = row.original.status_conta; // Pega o status real
+
+        // ✅ 4. CORREÇÃO DA LÓGICA DE STATUS
+        const isOverdue = status === "atrasado"; // <--- VERIFICA O VALOR CORRETO
         
-        const isOverdue = status === "Atrasado";
         return (
             <div className={cn("text-center", isOverdue && "text-destructive font-semibold")}>
-                {dia_vencimento}
+                {/* Mostra 'Dia X' ou '---' se não houver dia */}
+                {dia_vencimento ? `Dia ${dia_vencimento}` : "---"}
             </div>
         )
     },
@@ -95,9 +132,16 @@ export const crediarioColumns = [
     accessorKey: "limite_disponivel",
     header: () => <div className="text-right">Limite Disponível</div>,
     cell: ({ row }) => {
-      // ✅ CORREÇÃO: Usando a chave correta
+      // ✅ LÓGICA CORRIGIDA: Ler 'trust_mode' para decidir
+      
+      const isTrustMode = row.original.trust_mode; // Pega o FATO
+      
+      if (isTrustMode) {
+        return <div className="text-right font-medium text-primary">Ilimitado</div>
+      }
+      
       const amount = parseFloat(row.getValue("limite_disponivel"))
-      return <div className="text-right">{amount > 0 ? amount.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : "---"}</div>;
-    },
+      // Mostra '---' se o limite disponível for 0 ou negativo (ou seja, estourado)
+      return <div className="text-right">{amount > 0 ? amount.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : "---"}</div>;    },
   },
 ];

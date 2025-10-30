@@ -288,7 +288,8 @@ class ClienteCrediario(ClienteBase):
     dia_vencimento_fatura: int | None = None
     limite_credito: float
     limite_disponivel: float
-
+    trust_mode: bool
+    
     class Config:
         from_attributes = True
 
