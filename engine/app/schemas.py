@@ -8,7 +8,8 @@ from typing import List, Optional
 class UsuarioBase(BaseModel):
     nome: str
     funcao: Optional[str] = "operador"
-
+    status: str
+    
     class Config:
             from_attributes = True
 

@@ -138,12 +138,6 @@ export function PdvDataTable({ data: pdvsData, operatorData, onPdvSelect, refetc
             toast.error("Ação inválida", { description: "Você só pode abrir a interface do PDV desta máquina."});
             return;
         }
-
-        if (selectedRow.status !== 'aberto') {
-            toast.error("Este caixa está fechado!", { description: "Abra o caixa antes de iniciar a interface de venda." });
-            return;
-        }
-
         localStorage.setItem('ACTIVE_PDV_NAME', selectedRow.nome);
         console.log(`Definindo PDV Ativo (Nome: ${selectedRow.nome}) e navegando...`);
       

@@ -442,13 +442,6 @@ def _get_pdv_session_details_logic(pdv: models.Pdv, db: Session) -> schemas.PdvS
     Função interna que calcula os detalhes da sessão para um PDV já buscado.
     Usada por GET /{id}/session e GET /session-by-name/{nome}.
     """
-    
-    # 1. Verifica se o PDV está realmente aberto e com operador
-    if pdv.status != 'aberto' or not pdv.operador_atual:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, # 403 Proibido
-            detail=f"Caixa {pdv.nome} não está aberto ou nenhum operador está logado."
-        )
 
     # 2. Lógica de Cálculo de Caixa (A mesma da sua rota GET /)
     ultima_abertura = db.query(models.MovimentacaoCaixa)\

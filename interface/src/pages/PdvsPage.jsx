@@ -30,7 +30,6 @@ export default function PdvsPage() {
   const fetchData = async () => {
       setIsLoading(true);
       try {
-        // Usamos Promise.all para buscar tudo em paralelo
         const [summaryRes, pdvsRes, operatorsRes] = await Promise.all([
           fetch('http://localhost:8000/api/pdvs/summary'),
           fetch('http://localhost:8000/api/pdvs/'),
@@ -111,6 +110,7 @@ export default function PdvsPage() {
           operatorData={operatorData}
           onPdvSelect={handlePdvSelect}
           refetchData={fetchData}
+          selectedPdv={selectedPdv}
         />
       }
 
