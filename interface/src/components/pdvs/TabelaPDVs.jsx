@@ -89,8 +89,7 @@ export function PdvDataTable({ data: pdvsData, operatorData, onPdvSelect, refetc
             onPdvSelect(viewMode === "pdvs" ? newSelectedRow : null);
         }
     }
-
-    // ✅ 1. NOVA FUNÇÃO ASYNC PARA ABRIR/FECHAR
+    
     const handleTogglePdvStatus = async () => {
       if (!selectedRow || isTogglingStatus) return; // Não faz nada se já estiver carregando
 
@@ -99,7 +98,6 @@ export function PdvDataTable({ data: pdvsData, operatorData, onPdvSelect, refetc
       const currentStatus = selectedRow.status;
       const actionText = currentStatus === 'aberto' ? "Fechando" : "Abrindo";
 
-      // (Exemplo) ID do operador logado - pegue isso do seu contexto de Auth no futuro
       const operadorId = 1; 
 
       const apiPromise = fetch(`${API_URL}/api/pdvs/${pdvId}/toggle-status`, {
@@ -112,15 +110,13 @@ export function PdvDataTable({ data: pdvsData, operatorData, onPdvSelect, refetc
         if (!response.ok) {
           throw new Error(result.detail || `Erro ao ${actionText.toLowerCase()} o caixa`);
         }
-        return result; // Retorna o PDV atualizado
+        return result;
       });
 
       toast.promise(apiPromise, {
         loading: `${actionText} caixa ${selectedRow.nome}...`,
         success: (updatedPdv) => {
-          refetchData(); // ✅ Recarrega os dados da PÁGINA INTEIRA
-          // Opcional: Atualizar o selectedRow localmente para feedback mais rápido
-          // setSelectedRow(updatedPdv); 
+          refetchData();
           return `Caixa ${updatedPdv.nome} ${updatedPdv.status === 'aberto' ? 'aberto' : 'fechado'} com sucesso!`;
         },
         error: (err) => err.message,
@@ -137,22 +133,24 @@ export function PdvDataTable({ data: pdvsData, operatorData, onPdvSelect, refetc
     const ToggleIcon = isPdvOpen ? PowerOff : Power; // Escolhe o ícone correto
     const toggleButtonTooltip = isPdvOpen ? "Fechar Caixa" : "Abrir Caixa";
     
-    
     const handleOpenInterface = () => {
-        // Verifica se realmente temos uma linha selecionada e um ID
-        if (selectedRow && selectedRow.id) {
-            // Verifica se o caixa selecionado está 'aberto'
-            if (selectedRow.status !== 'aberto') {
-                toast.error("Este caixa está fechado!", { description: "Abra o caixa antes de iniciar a interface." });
-                return;
-            }
-            // Navega para a URL dinâmica, passando o ID do PDV
-            navigate(`/pontovenda/${selectedRow.id}`);
-        } else {
-            toast.error("Nenhum PDV selecionado.");
+        if (!isCurrentMachineSelected) {
+            toast.error("Ação inválida", { description: "Você só pode abrir a interface do PDV desta máquina."});
+            return;
         }
-    };
 
+        if (selectedRow.status !== 'aberto') {
+            toast.error("Este caixa está fechado!", { description: "Abra o caixa antes de iniciar a interface de venda." });
+            return;
+        }
+
+        localStorage.setItem('ACTIVE_PDV_NAME', selectedRow.nome);
+        console.log(`Definindo PDV Ativo (Nome: ${selectedRow.nome}) e navegando...`);
+      
+      navigate("/pontovenda");
+    };
+            
+    
     const handleOpenModal = () => {
       if (!selectedRow) return;
       const action = selectedRow.status === 'aberto' ? 'close' : 'open';
@@ -170,7 +168,6 @@ export function PdvDataTable({ data: pdvsData, operatorData, onPdvSelect, refetc
     React.useEffect(() => {
         if (table) { // Garante que a tabela já foi inicializada
             const paginationState = table.getState().pagination;
-
         }
     // Adiciona dependências para rodar quando a página mudar
     }, [table, table?.getState().pagination.pageIndex, table?.getPageCount()]);
@@ -188,8 +185,7 @@ export function PdvDataTable({ data: pdvsData, operatorData, onPdvSelect, refetc
                     </Tabs>
                     <Input placeholder={`Filtrar por nome...`} className="w-1/2" />
                 </div>
-
-                {/* ÁREA DA TABELA */}
+                
                 <div className="flex-grow overflow-y-auto mb-2">
                   <div className="border rounded-md overflow-auto h-full">
                     <Table>

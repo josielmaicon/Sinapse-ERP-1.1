@@ -6,6 +6,7 @@ import * as React from "react"
 import { format } from "date-fns"
 import { Badge } from "@/components/ui/badge"
 import { cn } from "@/lib/utils"
+import { Skeleton } from "@/components/ui/skeleton"; 
 
 const statusColors = {
   aberto: "text-base bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-400",

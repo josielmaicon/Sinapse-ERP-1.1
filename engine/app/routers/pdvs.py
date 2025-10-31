@@ -437,34 +437,20 @@ def close_pdv(
     # Mapeia diretamente, frontend fará refetch
     return updated_pdv
 
-@router.get("/{pdv_id}/session", response_model=schemas.PdvStatusDetalhado) 
-def get_pdv_session_details(pdv_id: int, db: Session = Depends(get_db)):
+def _get_pdv_session_details_logic(pdv: models.Pdv, db: Session) -> schemas.PdvStatusDetalhado:
     """
-    Busca os detalhes da sessão atual de um PDV.
-    Usado pela interface de Ponto de Venda para inicializar.
+    Função interna que calcula os detalhes da sessão para um PDV já buscado.
+    Usada por GET /{id}/session e GET /session-by-name/{nome}.
     """
     
-    # Busca o PDV com o operador_atual pré-carregado
-    pdv = db.query(models.Pdv).options(
-        joinedload(models.Pdv.operador_atual)
-    ).filter(models.Pdv.id == pdv_id).first()
-
-    if not pdv:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="PDV não encontrado."
-        )
-        
+    # 1. Verifica se o PDV está realmente aberto e com operador
     if pdv.status != 'aberto' or not pdv.operador_atual:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN, # 403 Proibido
             detail=f"Caixa {pdv.nome} não está aberto ou nenhum operador está logado."
         )
 
-    # Reutiliza a lógica de cálculo de valor_em_caixa da sua rota GET /
-    # (Ou, idealmente, refatore essa lógica para uma função auxiliar)
-    
-    # --- Início da Lógica de Cálculo (copiada/adaptada da sua GET /) ---
+    # 2. Lógica de Cálculo de Caixa (A mesma da sua rota GET /)
     ultima_abertura = db.query(models.MovimentacaoCaixa)\
         .filter(models.MovimentacaoCaixa.pdv_id == pdv.id, models.MovimentacaoCaixa.tipo == 'abertura')\
         .order_by(models.MovimentacaoCaixa.data_hora.desc())\
@@ -472,17 +458,16 @@ def get_pdv_session_details(pdv_id: int, db: Session = Depends(get_db)):
 
     valor_abertura = 0.0
     hora_abertura_dt = None
-    movimentacoes_periodo = []
-    vendas_periodo = []
-    
     periodo_inicio = datetime.combine(date.today(), datetime.min.time()) # Padrão
-    
+
     if ultima_abertura:
         valor_abertura = ultima_abertura.valor
         hora_abertura_dt = ultima_abertura.data_hora
-        periodo_inicio = hora_abertura_dt # O período começa na abertura
+        periodo_inicio = hora_abertura_dt
 
     # Filtra transações desde o início do período
+    # (Nota: pdv.vendas e pdv.movimentacoes_caixa precisam ser carregados)
+    # (Se esta função for lenta, otimizar com 'selectinload' na query chamadora)
     movimentacoes_periodo = [m for m in pdv.movimentacoes_caixa if m.data_hora >= periodo_inicio]
     vendas_periodo = [v for v in pdv.vendas if v.data_hora >= periodo_inicio and v.status == 'concluida']
 
@@ -497,16 +482,62 @@ def get_pdv_session_details(pdv_id: int, db: Session = Depends(get_db)):
     valor_em_caixa_calculado = valor_abertura + entradas_dinheiro_vendas + suprimentos - sangrias
     total_vendas_dia = len(vendas_periodo) 
     alerta = next((s for s in pdv.solicitacoes if s.status == 'pendente'), None)
-    # --- Fim da Lógica de Cálculo ---
 
-    # Retorna o schema "rico" que o PdvStatusDetalhado espera
+    # 3. Retorna o schema "rico"
     return schemas.PdvStatusDetalhado(
         id=pdv.id,
         nome=pdv.nome,
         status=pdv.status,
-        operador_atual=pdv.operador_atual, # Objeto UsuarioBase
+        operador_atual=pdv.operador_atual,
         alerta_pendente=alerta,
         valor_em_caixa=valor_em_caixa_calculado,
         total_vendas_dia=total_vendas_dia,
         hora_abertura=hora_abertura_dt
     )
+
+# --- Rota GET /{pdv_id}/session (Agora usa a função auxiliar) ---
+@router.get("/{pdv_id}/session", response_model=schemas.PdvStatusDetalhado) 
+def get_pdv_session_details(pdv_id: int, db: Session = Depends(get_db)):
+    """Busca os detalhes da sessão atual de um PDV pelo ID."""
+    
+    # Query otimizada para carregar tudo que a função auxiliar precisa
+    pdv = db.query(models.Pdv).options(
+        joinedload(models.Pdv.operador_atual),
+        selectinload(models.Pdv.solicitacoes),
+        selectinload(models.Pdv.vendas),
+        selectinload(models.Pdv.movimentacoes_caixa)
+    ).filter(models.Pdv.id == pdv_id).first()
+
+    if not pdv:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="PDV não encontrado.")
+        
+    # Chama a lógica centralizada
+    return _get_pdv_session_details_logic(pdv, db)
+
+# --- ✅ SUA NOVA ROTA (BY NAME) ---
+@router.get("/session-by-name/{nome_pdv}", response_model=schemas.PdvStatusDetalhado)
+def get_pdv_session_by_name(nome_pdv: str, db: Session = Depends(get_db)):
+    """
+    Busca os detalhes da sessão atual de um PDV pelo NOME DA MÁQUINA.
+    Usado pela interface de Ponto de Venda para inicializar.
+    """
+    
+    # Query otimizada para carregar tudo
+    pdv = db.query(models.Pdv).options(
+        joinedload(models.Pdv.operador_atual),
+        selectinload(models.Pdv.solicitacoes),
+        selectinload(models.Pdv.vendas),
+        selectinload(models.Pdv.movimentacoes_caixa)
+    ).filter(
+        # Compara em minúsculas para evitar erros (Caixa 01 vs caixa 01)
+        func.lower(models.Pdv.nome) == func.lower(nome_pdv) 
+    ).first()
+
+    if not pdv:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"PDV com nome '{nome_pdv}' não encontrado ou não cadastrado."
+        )
+        
+    # Chama a mesma lógica centralizada
+    return _get_pdv_session_details_logic(pdv, db)
