@@ -435,3 +435,39 @@ class TransacaoCrediario(BaseModel):
 class ExtratoResponse(BaseModel):
     saldo_atual: float 
     transacoes: List[TransacaoCrediario] = []
+
+
+class PdvVendaItem(BaseModel):
+    """Item individual enviado pelo PDV para finalizar a venda."""
+    db_id: int # O models.Produto.id
+    quantity: int
+    unitPrice: float # O preço unitário no momento da venda
+
+class PdvPagamento(BaseModel):
+    """Detalhes do pagamento."""
+    # Ex: 'dinheiro', 'cartao_credito', 'crediario'
+    tipo: str 
+    valor: float
+
+class PdvVendaRequest(BaseModel):
+    """O JSON completo que o PDV envia ao finalizar a venda."""
+    pdv_db_id: int
+    operador_db_id: int
+    
+    # Opcional: ID do cliente (para crediário ou identificação)
+    cliente_db_id: Optional[int] = None 
+    
+    # Lista de itens no carrinho
+    itens: List[PdvVendaItem]
+    
+    # Lista de pagamentos (pode ser mais de um)
+    pagamentos: List[PdvPagamento]
+    
+    # O total calculado pelo frontend (para verificação dupla)
+    total_calculado: float 
+    
+class PdvVendaResponse(BaseModel):
+    """Resposta ao finalizar uma venda com sucesso."""
+    venda_id: int
+    mensagem: str
+    troco: float = 0.0 # O troco dado ao cliente

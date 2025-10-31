@@ -13,7 +13,8 @@ import PosFooterStatus from "@/components/pontovenda/rodape";
 import Logo from "@/components/Logo";
 import { Skeleton } from "@/components/ui/skeleton"; 
 import { OpenClosePdvModal } from "@/components/pdvs/modalAberturaFechamento";
-import { Power, Loader2 } from "lucide-react"; // Importar Loader2
+import { Power, Loader2 } from "lucide-react";
+import { PaymentModal } from "@/components/pontovenda/modalVenda"
 
 const API_URL = "http://localhost:8000/api"; 
 
@@ -36,6 +37,7 @@ export default function PontoVenda() {
   const [isModalOpen, setIsModalOpen] = React.useState(false);
   const [operatorData, setOperatorData] = React.useState([]);
   const [isLoadingOperators, setIsLoadingOperators] = React.useState(false);
+  const [isPaymentModalOpen, setIsPaymentModalOpen] = React.useState(false); 
 
   const fetchPdvSession = async (isInitialLoad = false) => {
 
@@ -107,26 +109,49 @@ export default function PontoVenda() {
       }
   };
 
+
   React.useEffect(() => {
     const handleKeyPress = (e) => {
-        if (isModalOpen || isAddingItem) return;
+        // Ignora se o modal estiver aberto ou buscando
+        if (isModalOpen || isPaymentModalOpen || isAddingItem) return;
+
+        // F1 (Contextual) - Abrir/Finalizar
         if (e.key === 'F1') {
            e.preventDefault();
-           console.log("F1 Pressionado - Chamando Modal");
+           // Lógica F1: Abrir Modal de Gestão da Sessão
            handleOpenCloseModalToggle();
            return;
         }
         
+        // ✅ NOVO GATILHO: F2 para FINALIZAR VENDA
+        if (e.key === 'F2') {
+           e.preventDefault();
+           // Verifica se o caixa está aberto e tem itens, senão informa o erro
+           if (pdvSession?.status === 'aberto' && cartItems.length > 0) {
+               console.log("F2 Pressionado - Iniciando Pagamento");
+               handlePaymentStart(); // Chama a função que muda o status e abre o PaymentModal
+           } else if (pdvSession?.status !== 'aberto') {
+               toast.warning("Caixa Fechado", { description: "Use F1 para abrir o caixa antes de finalizar." });
+           } else {
+               toast.info("Carrinho Vazio", { description: "Adicione itens para finalizar a venda." });
+           }
+           return;
+        }
+
+
+        // F3, F4, etc. (Outros Atalhos)
         if (e.key.startsWith('F')) {
             e.preventDefault();
             console.log(`Atalho ${e.key} pressionado (lógica a implementar).`);
             return;
         }
-
+        
+        // --- A partir daqui, só funciona se o caixa estiver ABERTO ---
         if (pdvSession?.status !== 'aberto') {
             return; 
         }
-        
+
+        // Lógica de digitação (Enter, Escape, Backspace, caractere)
         if (e.key === 'Enter') {
             e.preventDefault();
             if (barcodeBuffer.trim().length > 0) {
@@ -142,7 +167,7 @@ export default function PontoVenda() {
     document.addEventListener('keydown', handleKeyPress);
     return () => document.removeEventListener('keydown', handleKeyPress);
   
-  }, [barcodeBuffer, isAddingItem, saleStatus, pdvSession, isModalOpen, operatorData, isLoadingOperators]); 
+  }, [barcodeBuffer, isAddingItem, saleStatus, pdvSession, isModalOpen, isPaymentModalOpen, cartItems]); // Dependências completas
 
   React.useEffect(() => {
       const handleOnline = () => setPdvSession(prev => (prev ? { ...prev, isOnline: true } : null));
@@ -155,41 +180,89 @@ export default function PontoVenda() {
       };
   }, []);
 
-  const handleBarcodeSubmit = async (codigo) => {
-    setIsAddingItem(true);
+const handleBarcodeSubmit = async (codigo) => {
+    setIsAddingItem(true);
+    try {
+      const response = await fetch(`${API_URL}/produtos/barcode/${codigo}`); 
+      
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        throw new Error(err.detail || `Produto '${codigo}' não encontrado.`);
+      }
 
-    try {
-      const response = await fetch(`${API_URL}/produtos/barcode/${codigo}`); 
-      
-      if (!response.ok) {
-        const err = await response.json().catch(() => ({}));
-        throw new Error(err.detail || `Produto '${codigo}' não encontrado.`);
-      }
-      const produto = await response.json(); 
-      setCartItems(prevItems => { /* ... (lógica do carrinho) ... */ });
-    } catch (error) {
-      console.error(error);
-      toast.error(error.message);
-    } finally {
-      setIsAddingItem(false);
-      setBarcodeBuffer(""); 
-    }
-  };
+      const produto = await response.json(); 
+      setCartItems(prevItems => {
+        const existingItem = prevItems.find(item => item.id === produto.codigo_barras);
+        
+        if (existingItem) {
+          return prevItems.map(item =>
+            item.id === produto.codigo_barras
+              ? { 
+                  ...item, 
+                  quantity: item.quantity + 1, 
+                  totalPrice: (item.quantity + 1) * item.unitPrice 
+                }
+              : item // Mantém os outros itens
+          );
+        } else {
+          const newItem = {
+            id: produto.codigo_barras, // Código de barras como ID
+            name: produto.nome,
+            quantity: 1,
+            unitPrice: produto.preco_venda,
+            totalPrice: produto.preco_venda,
+            db_id: produto.id // Guarda o ID real do produto no banco para a finalização
+          };
+          return [newItem, ...prevItems]; 
+        }
+      });
+      
+    } catch (error) {
+      console.error(error);
+      toast.error(error.message);
+    } finally {
+      setIsAddingItem(false);
+      setBarcodeBuffer(""); // Limpa o buffer
+    }
+  };
 
   React.useEffect(() => {
     if (isAddingItem) setSaleStatus("loading");
     else if (barcodeBuffer.length > 0) setSaleStatus("typing");
+    else if (saleStatus === 'pagamento');
     else if (cartItems.length > 0) setSaleStatus("em_andamento");
-    else if (pdvSession?.status === 'aberto') setSaleStatus("livre");
-    else if (pdvSession?.status) setSaleStatus(pdvSession.status); // Ex: 'fechado'
-  }, [cartItems, barcodeBuffer, isAddingItem, pdvSession]);
+    else if (pdvSession?.status) setSaleStatus(pdvSession.status);
+    else setSaleStatus("loading");
+  }, [cartItems, barcodeBuffer, isAddingItem, pdvSession, saleStatus]);
 
   const lastItem = cartItems.length > 0 ? cartItems[0] : null;
 
   if (!pdvSession) {
       return <PosLoadingSkeleton />;
   }
-  
+
+  const handleSaleSuccess = (vendaId, troco) => {
+      toast.success(`Venda #${vendaId} finalizada!`, {
+          description: troco > 0 ? `Troco: ${troco.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}` : "Pagamento concluído.",
+          duration: 10000, 
+      });
+      setCartItems([]); 
+      setIsPaymentModalOpen(false); 
+  }
+
+  const handlePaymentStart = () => {
+      if (cartItems.length === 0) {
+          toast.info("Carrinho vazio!", { description: "Adicione itens antes de finalizar a venda." });
+          return;
+      }
+      if (pdvSession?.status !== 'aberto') {
+          toast.error("Caixa não está aberto!", { description: "Abra o caixa (F1) para iniciar uma venda." });
+          return;
+      }
+      console.log("Iniciando pagamento...");
+      setSaleStatus("pagamento"); // Muda o status do rodapé (ex: 'Aguardando Pagamento')
+      setIsPaymentModalOpen(true); // Abre o modal
+  };
 
   return (
     <>

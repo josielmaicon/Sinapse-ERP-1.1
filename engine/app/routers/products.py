@@ -163,16 +163,14 @@ def get_produto_historico(produto_id: int, db: Session = Depends(get_db)):
 def get_produto_por_codigo_barras(codigo_barras: str, db: Session = Depends(get_db)):
     """
     Busca um único produto pelo seu 'codigo_barras'.
-    Usado pelo Ponto de Venda (PDV).
+    Usado pelo Ponto de Venda (PDV) para adicionar itens ao carrinho.
     """
     db_produto = db.query(models.Produto).filter(
         models.Produto.codigo_barras == codigo_barras
     ).first()
-    
     if not db_produto:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Produto com código de barras '{codigo_barras}' não encontrado."
+            detail=f"Produto com código de barras '{codigo_barras}' não encontrado no estoque."
         )
-        
     return db_produto

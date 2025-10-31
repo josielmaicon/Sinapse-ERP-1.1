@@ -2,10 +2,11 @@
 from typing import List, Dict
 from datetime import date
 from sqlalchemy import func
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session, joinedload
 from .. import models, schemas
 from ..database import get_db
+from datetime import datetime
 
 router = APIRouter(prefix="/vendas", tags=["Vendas"])
 
@@ -177,3 +178,133 @@ def get_all_vendas(db: Session = Depends(get_db)):
         print("Venda ID:", venda.id, "Nota:", venda.nota_fiscal_saida)
     
     return vendas
+
+@router.post("/finalizar", response_model=schemas.PdvVendaResponse)
+def finalizar_venda_pdv(
+    request: schemas.PdvVendaRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Processa e finaliza uma nova venda vinda do Ponto de Venda (PDV).
+    Esta operação é ATÔMICA: ou tudo funciona, ou nada é salvo.
+    """
+    
+    valor_total_pago = sum(p.valor for p in request.pagamentos)
+    valor_troco = max(0, valor_total_pago - request.total_calculado)
+
+    # Inicia a transação atômica
+    try:
+        with db.begin():
+            # 1. Cria a Venda principal
+            db_venda = models.Venda(
+                valor_total=request.total_calculado,
+                status="concluida",
+                status_fiscal="pendente", # Default para o fiscal processar depois
+                pdv_id=request.pdv_db_id,
+                operador_id=request.operador_db_id,
+                cliente_id=request.cliente_db_id,
+                data_hora=datetime.utcnow() 
+                # (Assumindo uma forma de pagamento por venda, ou salvar pagamentos em outra tabela)
+                # Para simplificar, vamos pegar o tipo do primeiro pagamento:
+                ,forma_pagamento=request.pagamentos[0].tipo if request.pagamentos else "dinheiro"
+            )
+            db.add(db_venda)
+            db.flush() # Força a Venda a ter um 'db_venda.id'
+
+            # 2. Processa Itens e Estoque
+            for item in request.itens:
+                # Cria o VendaItem
+                db_item_venda = models.VendaItem(
+                    venda_id=db_venda.id,
+                    produto_id=item.db_id,
+                    quantidade=item.quantity,
+                    preco_unitario_na_venda=item.unitPrice
+                )
+                db.add(db_item_venda)
+                
+                # Atualiza o estoque (com lock para segurança)
+                db_produto = db.query(models.Produto).filter(
+                    models.Produto.id == item.db_id
+                ).with_for_update().first() # "with_for_update()" trava a linha no DB
+                
+                if not db_produto:
+                    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Produto ID {item.db_id} não encontrado durante a transação.")
+                
+                if db_produto.quantidade_estoque < item.quantity:
+                    raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Estoque insuficiente para '{db_produto.nome}'.")
+                    
+                db_produto.quantidade_estoque -= item.quantity
+                db.add(db_produto)
+
+            # 3. Processa Pagamentos (Crediário, Dinheiro)
+            for pagamento in request.pagamentos:
+                if pagamento.tipo == 'crediario':
+                    if not request.cliente_db_id:
+                        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cliente não identificado para venda em crediário.")
+                    
+                    db_cliente = db.query(models.Cliente).filter(
+                        models.Cliente.id == request.cliente_db_id
+                    ).with_for_update().first()
+                    
+                    if not db_cliente:
+                        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cliente do crediário não encontrado.")
+                        
+                    # Verifica limite (a menos que esteja em modo confiança)
+                    limite_disponivel = (db_cliente.limite_credito - db_cliente.saldo_devedor)
+                    if not db_cliente.trust_mode and pagamento.valor > limite_disponivel:
+                         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Limite de crédito (R$ {limite_disponivel:.2f}) insuficiente para {db_cliente.nome}.")
+                    
+                    # Atualiza saldo do cliente
+                    db_cliente.saldo_devedor += pagamento.valor
+                    db.add(db_cliente)
+                    
+                    # Cria a transação no extrato
+                    db_transacao = models.TransacaoCrediario(
+                        cliente_id=request.cliente_db_id,
+                        tipo='compra',
+                        valor=pagamento.valor,
+                        descricao=f"Referente à Venda #{db_venda.id}",
+                        venda_id=db_venda.id
+                    )
+                    db.add(db_transacao)
+                
+                if pagamento.tipo == 'dinheiro':
+                    # Registra a entrada de caixa
+                    db_mov = models.MovimentacaoCaixa(
+                        tipo='suprimento', # Ou um novo tipo 'venda_dinheiro'
+                        valor=pagamento.valor, # O valor recebido
+                        pdv_id=request.pdv_db_id,
+                        operador_id=request.operador_db_id
+                    )
+                    db.add(db_mov)
+                    
+                    # (Se o troco foi dado em dinheiro, precisamos registrar uma 'sangria' do troco)
+                    if valor_troco > 0:
+                        db_troco_mov = models.MovimentacaoCaixa(
+                            tipo='sangria', # Troco é uma saída
+                            valor=valor_troco, # Valor positivo, 'sangria' define a direção
+                            descricao=f"Troco Venda #{db_venda.id}",
+                            pdv_id=request.pdv_db_id,
+                            operador_id=request.operador_db_id
+                        )
+                        db.add(db_troco_mov)
+
+            # 4. Fim da transação: db.begin() faz o COMMIT aqui se tudo deu certo
+            
+            return schemas.PdvVendaResponse(
+                venda_id=db_venda.id,
+                mensagem=f"Venda #{db_venda.id} finalizada com sucesso!",
+                troco=valor_troco
+            )
+            
+    except HTTPException as e:
+        # Se um erro HTTP (estoque, limite) foi levantado, repassa
+        raise e
+    except Exception as e:
+        # Se qualquer outro erro de DB (ex: constraint) ocorrer, o db.begin()
+        # fará o ROLLBACK automaticamente
+        print(f"ERRO DE TRANSAÇÃO: {e}") # Logar o erro
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erro interno ao processar a venda: {e}"
+        )
