@@ -100,7 +100,7 @@ export function PdvDataTable({ data: pdvsData, operatorData, onPdvSelect, refetc
 
       const operadorId = 1; 
 
-      const apiPromise = fetch(`${API_URL}/api/pdvs/${pdvId}/toggle-status`, {
+      const apiPromise = fetch(`${API_URL}/pdvs/${pdvId}/toggle-status`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ operador_id: operadorId }) 

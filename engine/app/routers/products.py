@@ -10,7 +10,7 @@ from ..database import get_db, engine
 
 models.Base.metadata.create_all(bind=engine)
 router = APIRouter(
-    prefix="/api/produtos",
+    prefix="/produtos",
     tags=["Produtos"]
 )
 

@@ -6,7 +6,7 @@ from sqlalchemy import func
 from .. import models, schemas
 from ..database import get_db
 
-router = APIRouter(prefix="/api/crediario", tags=["Crediário"])
+router = APIRouter(prefix="/crediario", tags=["Crediário"])
 
 # --- Endpoint para os StatCards ---
 @router.get("/summary", response_model=schemas.CrediarioSummary)

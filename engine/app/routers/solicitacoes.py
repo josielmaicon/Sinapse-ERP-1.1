@@ -7,7 +7,7 @@ from ..database import get_db
 from ..websockets import manager # ✅ Importa nosso gerenciador de conexões
 
 router = APIRouter(
-    prefix="/api/solicitacoes",
+    prefix="/solicitacoes",
     tags=["Solicitações"]
 )
 

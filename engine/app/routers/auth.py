@@ -5,7 +5,7 @@ from ..database import get_db
 from ..utils.security import verify_password
 
 router = APIRouter(
-    prefix="/api/auth",
+    prefix="/auth",
     tags=["Autenticação"]
 )
 

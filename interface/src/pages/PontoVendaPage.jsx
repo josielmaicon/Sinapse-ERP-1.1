@@ -16,7 +16,7 @@ import { OpenClosePdvModal } from "@/components/pdvs/modalAberturaFechamento";
 import { Power, Loader2 } from "lucide-react";
 import { PaymentModal } from "@/components/pontovenda/modalVenda"
 
-const API_URL = "http://localhost:8000/api"; 
+const API_URL = "http://localhost:8000"; 
 
 const PosLoadingSkeleton = () => (
    <div className="h-screen w-screen flex flex-col items-center justify-center p-12 gap-4">
@@ -32,6 +32,7 @@ export default function PontoVenda() {
   const [saleStatus, setSaleStatus] = React.useState("loading"); 
   const [barcodeBuffer, setBarcodeBuffer] = React.useState(""); 
   const [isAddingItem, setIsAddingItem] = React.useState(false); 
+  const [currentSaleId, setCurrentSaleId] = React.useState(null);
   const navigate = useNavigate();
   
   const [isModalOpen, setIsModalOpen] = React.useState(false);
@@ -180,60 +181,107 @@ export default function PontoVenda() {
       };
   }, []);
 
+// --- HANDLE BARCODE SUBMIT ---
 const handleBarcodeSubmit = async (codigo) => {
-    setIsAddingItem(true);
-    try {
-      const response = await fetch(`${API_URL}/produtos/barcode/${codigo}`); 
-      
-      if (!response.ok) {
-        const err = await response.json().catch(() => ({}));
-        throw new Error(err.detail || `Produto '${codigo}' não encontrado.`);
-      }
+  setIsAddingItem(true);
+  try {
+    // 1️⃣ Busca produto pelo código de barras
+    const response = await fetch(`${API_URL}/produtos/barcode/${codigo}`);
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      throw new Error(err.detail || `Produto '${codigo}' não encontrado.`);
+    }
 
-      const produto = await response.json(); 
-      setCartItems(prevItems => {
-        const existingItem = prevItems.find(item => item.id === produto.codigo_barras);
-        
-        if (existingItem) {
-          return prevItems.map(item =>
-            item.id === produto.codigo_barras
-              ? { 
-                  ...item, 
-                  quantity: item.quantity + 1, 
-                  totalPrice: (item.quantity + 1) * item.unitPrice 
-                }
-              : item // Mantém os outros itens
-          );
-        } else {
-          const newItem = {
-            id: produto.codigo_barras, // Código de barras como ID
-            name: produto.nome,
-            quantity: 1,
-            unitPrice: produto.preco_venda,
-            totalPrice: produto.preco_venda,
-            db_id: produto.id // Guarda o ID real do produto no banco para a finalização
-          };
-          return [newItem, ...prevItems]; 
-        }
-      });
-      
-    } catch (error) {
-      console.error(error);
-      toast.error(error.message);
-    } finally {
-      setIsAddingItem(false);
-      setBarcodeBuffer(""); // Limpa o buffer
-    }
-  };
+    const produto = await response.json();
 
-  React.useEffect(() => {
-    if (isAddingItem) setSaleStatus("loading");
-    else if (barcodeBuffer.length > 0) setSaleStatus("typing");
-    else if (saleStatus === 'pagamento');
-    else if (cartItems.length > 0) setSaleStatus("em_andamento");
-    else if (pdvSession?.status) setSaleStatus(pdvSession.status);
-    else setSaleStatus("loading");
-  }, [cartItems, barcodeBuffer, isAddingItem, pdvSession, saleStatus]);
+    // 2️⃣ Cria venda caso ainda não exista uma ativa
+    let vendaId = currentSaleId;
+    if (!vendaId) {
+      const iniciarRes = await fetch(`${API_URL}/vendas/iniciar`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          pdv_id: pdvSession.id,
+          operador_id: pdvSession.operador_atual.id,
+        }),
+      });
+
+      if (!iniciarRes.ok) {
+        const err = await iniciarRes.json().catch(() => ({}));
+        throw new Error(err.detail || "Erro ao iniciar venda.");
+      }
+
+      const novaVenda = await iniciarRes.json();
+      vendaId = novaVenda.id;
+      setCurrentSaleId(vendaId);
+      setSaleStatus("em_andamento"); // ✅ marca explicitamente que existe uma venda ativa
+    }
+
+    // 3️⃣ Adiciona o item à venda
+    const addItemRes = await fetch(`${API_URL}/vendas/${vendaId}/adicionar-item`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        produto_id: produto.id,
+        quantidade: 1,
+      }),
+    });
+
+    if (!addItemRes.ok) {
+      const err = await addItemRes.json().catch(() => ({}));
+      throw new Error(err.detail || "Erro ao adicionar produto à venda.");
+    }
+
+    // 4️⃣ Atualiza o carrinho local
+    setCartItems((prevItems) => {
+      const existingItem = prevItems.find((item) => item.id === produto.codigo_barras);
+      if (existingItem) {
+        return prevItems.map((item) =>
+          item.id === produto.codigo_barras
+            ? {
+                ...item,
+                quantity: item.quantity + 1,
+                totalPrice: (item.quantity + 1) * item.unitPrice,
+              }
+            : item
+        );
+      } else {
+        return [
+          {
+            id: produto.codigo_barras,
+            name: produto.nome,
+            quantity: 1,
+            unitPrice: produto.preco_venda,
+            totalPrice: produto.preco_venda,
+            db_id: produto.id,
+          },
+          ...prevItems,
+        ];
+      }
+    });
+  } catch (error) {
+    console.error(error);
+    toast.error(error.message);
+  } finally {
+    setIsAddingItem(false);
+    setBarcodeBuffer("");
+  }
+};
+
+React.useEffect(() => {
+  if (isAddingItem) return setSaleStatus("loading");
+  if (saleStatus === "pagamento") return; // mantém durante o pagamento
+
+  if (cartItems.length > 0 && currentSaleId) {
+    setSaleStatus("em_andamento");
+  } else if (pdvSession?.status === "aberto") {
+    setSaleStatus("livre");
+  } else {
+    setSaleStatus(pdvSession?.status || "loading");
+  }
+}, [cartItems, isAddingItem, pdvSession, currentSaleId, saleStatus]);
+
+
 
   const lastItem = cartItems.length > 0 ? cartItems[0] : null;
 
@@ -241,14 +289,48 @@ const handleBarcodeSubmit = async (codigo) => {
       return <PosLoadingSkeleton />;
   }
 
-  const handleSaleSuccess = (vendaId, troco) => {
-      toast.success(`Venda #${vendaId} finalizada!`, {
-          description: troco > 0 ? `Troco: ${troco.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}` : "Pagamento concluído.",
-          duration: 10000, 
-      });
-      setCartItems([]); 
-      setIsPaymentModalOpen(false); 
+const handleSaleSuccess = async (troco, formaPagamento) => {
+  try {
+    if (!currentSaleId) {
+      throw new Error("Nenhuma venda em andamento para finalizar.");
+    }
+
+    // 1️⃣ Finaliza a venda no backend
+    const finalizarRes = await fetch(`${API_URL}/vendas/${currentSaleId}/finalizar`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ forma_pagamento: formaPagamento }),
+    });
+
+    if (!finalizarRes.ok) {
+      const err = await finalizarRes.json().catch(() => ({}));
+      throw new Error(err.detail || "Erro ao finalizar venda.");
+    }
+
+    const vendaFinalizada = await finalizarRes.json();
+
+    // 2️⃣ Feedback visual
+    toast.success(`Venda #${vendaFinalizada.id} finalizada!`, {
+      description:
+        troco > 0
+          ? `Troco: ${troco.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}`
+          : "Pagamento concluído.",
+      duration: 10000,
+    });
+
+    // 3️⃣ Limpa o estado local
+    setCartItems([]);
+    setIsPaymentModalOpen(false);
+    setCurrentSaleId(null);
+    setSaleStatus("livre"); // ✅ volta ao estado pronto pra próxima venda
+
+  } catch (error) {
+    console.error(error);
+    toast.error(error.message || "Erro ao concluir venda.");
   }
+};
+
+
 
   const handlePaymentStart = () => {
       if (cartItems.length === 0) {

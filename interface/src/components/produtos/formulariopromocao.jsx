@@ -58,7 +58,7 @@ export function PromocaoForm({ open, onOpenChange, selectedProducts, onPromotion
 
     const produto_ids = selectedProducts.map(p => p.id)
     
-    const apiPromise = fetch('http://localhost:8000/api/promocoes/', {
+    const apiPromise = fetch('http://localhost:8000/promocoes/', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({

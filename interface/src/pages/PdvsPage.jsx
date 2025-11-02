@@ -31,9 +31,9 @@ export default function PdvsPage() {
       setIsLoading(true);
       try {
         const [summaryRes, pdvsRes, operatorsRes] = await Promise.all([
-          fetch('http://localhost:8000/api/pdvs/summary'),
-          fetch('http://localhost:8000/api/pdvs/'),
-          fetch('http://localhost:8000/api/usuarios/performance')
+          fetch('http://localhost:8000/pdvs/summary'),
+          fetch('http://localhost:8000/pdvs/'),
+          fetch('http://localhost:8000/usuarios/performance')
         ]);
 
         if (!summaryRes.ok) throw new Error('Falha ao buscar resumo');
@@ -69,7 +69,7 @@ export default function PdvsPage() {
 
     const fetchPdvStats = async () => {
       try {
-        const res = await fetch(`http://localhost:8000/api/pdvs/${selectedPdv.id}/stats`);
+        const res = await fetch(`http://localhost:8000/pdvs/${selectedPdv.id}/stats`);
         const data = await res.json();
         setPdvStats(data);
       } catch (e) {
@@ -83,7 +83,7 @@ export default function PdvsPage() {
 
   const handlePdvSelect = (pdv) => {
     setSelectedPdv(pdv);
-    // ✅ Lógica de Alerta (precisará de um endpoint /api/solicitacoes)
+    // ✅ Lógica de Alerta (precisará de um endpoint /solicitacoes)
     // if (pdv?.pendingAlert) {
     //   setMainView('alerta');
     // } else {

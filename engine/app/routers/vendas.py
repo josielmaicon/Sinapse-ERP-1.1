@@ -308,3 +308,61 @@ def finalizar_venda_pdv(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Erro interno ao processar a venda: {e}"
         )
+
+@router.post("/iniciar", response_model=schemas.Venda)
+def iniciar_venda(request: schemas.IniciarVendaRequest, db: Session = Depends(get_db)):
+    pdv = db.query(models.PDV).filter(models.PDV.id == request.pdv_id).first()
+    if not pdv:
+        raise HTTPException(status_code=404, detail="PDV não encontrado")
+
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    codigo_venda = f"VENDA_{timestamp}_{pdv.nome.upper()}"
+
+    venda = models.Venda(
+        pdv_id=request.pdv_id,
+        operador_id=request.operador_id,
+        status="em_andamento",
+        codigo_venda=codigo_venda
+    )
+    db.add(venda)
+    db.commit()
+    db.refresh(venda)
+    return venda
+
+
+@router.post("/{venda_id}/adicionar-item", response_model=schemas.Venda)
+def adicionar_item_venda(venda_id: int, item: schemas.VendaItemCreate, db: Session = Depends(get_db)):
+    venda = db.query(models.Venda).filter(models.Venda.id == venda_id).first()
+    if not venda or venda.status != "em_andamento":
+        raise HTTPException(status_code=400, detail="Venda não encontrada ou já finalizada.")
+    
+    produto = db.query(models.Produto).filter(models.Produto.id == item.produto_id).first()
+    if not produto:
+        raise HTTPException(status_code=404, detail="Produto não encontrado.")
+    
+    # Cria o item
+    venda_item = models.VendaItem(
+        venda_id=venda.id,
+        produto_id=item.produto_id,
+        quantidade=item.quantidade,
+        preco_unitario_na_venda=produto.preco_venda
+    )
+    db.add(venda_item)
+
+    # Atualiza o total acumulado
+    venda.valor_total += item.quantidade * produto.preco_venda
+    db.commit()
+    db.refresh(venda)
+    return venda
+
+@router.post("/{venda_id}/finalizar", response_model=schemas.Venda)
+def finalizar_venda_existente(venda_id: int, pagamento: schemas.FinalizarVendaRequest, db: Session = Depends(get_db)):
+    venda = db.query(models.Venda).filter(models.Venda.id == venda_id).first()
+    if not venda or venda.status != "em_andamento":
+        raise HTTPException(status_code=400, detail="Venda não encontrada ou já concluída.")
+
+    venda.status = "concluida"
+    venda.forma_pagamento = pagamento.forma_pagamento
+    db.commit()
+    db.refresh(venda)
+    return venda

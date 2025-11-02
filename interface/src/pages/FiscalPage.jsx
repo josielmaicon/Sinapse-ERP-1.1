@@ -43,9 +43,9 @@ export default function FiscalPage() {
             try {
                 // ✅ 3. BUSCA TUDO EM PARALELO (incluindo notas de entrada)
                 const [summaryRes, tableRes, configRes, entradaRes] = await Promise.all([
-                    fetch('http://localhost:8000/api/fiscal/summary'),
+                    fetch('http://localhost:8000/fiscal/summary'),
                     fetch('http://localhost:8000/vendas/'),
-                    fetch('http://localhost:8000/api/fiscal/config'), 
+                    fetch('http://localhost:8000/fiscal/config'), 
                     fetch('http://localhost:8000/notas-fiscais-entrada/') // ✅ Busca notas de entrada
                 ]);
             
@@ -75,7 +75,7 @@ export default function FiscalPage() {
         };
 
     const handleConfigSave = async (newConfig) => {
-        const apiPromise = fetch('http://localhost:8000/api/fiscal/config', {
+        const apiPromise = fetch('http://localhost:8000/fiscal/config', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(newConfig)
@@ -100,7 +100,7 @@ export default function FiscalPage() {
     };
 
     const handleEmitirMeta = async () => {
-         const apiPromise = fetch('http://localhost:8000/api/fiscal/emitir-meta', {
+         const apiPromise = fetch('http://localhost:8000/fiscal/emitir-meta', {
              method: 'POST',
          })
          .then(async (response) => {

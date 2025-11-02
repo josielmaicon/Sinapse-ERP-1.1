@@ -34,7 +34,7 @@ export default function HourlyRevenueChart({ pdv }) {
     const fetchData = async () => {
       setIsLoading(true);
       try {
-        const response = await fetch(`http://localhost:8000/api/pdvs/${pdv.id}/revenue?range=${timeRange}`);
+        const response = await fetch(`http://localhost:8000/pdvs/${pdv.id}/revenue?range=${timeRange}`);
         if (!response.ok) {
           throw new Error("Falha ao buscar dados do gráfico");
         }

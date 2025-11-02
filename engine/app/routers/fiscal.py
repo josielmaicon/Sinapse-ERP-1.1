@@ -9,7 +9,7 @@ import random
 import string
 
 router = APIRouter(
-    prefix="/api/fiscal",
+    prefix="/fiscal",
     tags=["Fiscal"]
 )
 

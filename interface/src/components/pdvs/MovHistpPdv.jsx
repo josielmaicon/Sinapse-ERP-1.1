@@ -37,8 +37,8 @@ export default function PdvHistoryLog({ pdv }) {
       // Se 'pdv' for fornecido, busca o histórico específico.
       // Senão, busca o histórico geral.
       const url = pdv 
-        ? `http://localhost:8000/api/pdvs/${pdv.id}/history` 
-        : `http://localhost:8000/api/history/general`;
+        ? `http://localhost:8000/pdvs/${pdv.id}/history` 
+        : `http://localhost:8000/history/general`;
 
       try {
         const response = await fetch(url);

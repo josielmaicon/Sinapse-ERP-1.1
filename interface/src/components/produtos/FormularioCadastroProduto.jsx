@@ -68,7 +68,7 @@ export function ProductForm({ open, onOpenChange, onProductCreated }) {
     setIsLoading(true);
     setErrors({});
     try {
-      const response = await fetch(`http://localhost:8000/api/produtos/barcode/${formData.codigo_barras}`);
+      const response = await fetch(`http://localhost:8000/produtos/barcode/${formData.codigo_barras}`);
       if (response.ok) {
         const productData = await response.json();
         setFormData({
@@ -162,7 +162,7 @@ export function ProductForm({ open, onOpenChange, onProductCreated }) {
     };
     
     const isUpdate = isExistingProduct;
-    const url = isUpdate ? `http://localhost:8000/api/produtos/entrada-estoque` : 'http://localhost:8000/api/produtos';
+    const url = isUpdate ? `http://localhost:8000/produtos/entrada-estoque` : 'http://localhost:8000/produtos';
     const method = isUpdate ? 'PUT' : 'POST';
 
     try {

@@ -3,7 +3,7 @@ from typing import List
 from .. import schemas
 
 router = APIRouter(
-    prefix="/api/impressao",  # O prefixo da nossa rota
+    prefix="/impressao",  # O prefixo da nossa rota
     tags=["Impressão"]
 )
 

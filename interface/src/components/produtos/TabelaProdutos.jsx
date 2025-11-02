@@ -132,7 +132,7 @@ export function ProductDataTable({ columns, data, rowSelection, onRowSelectionCh
 
     try {
       for (const product of productsToDelete) {
-        const response = await fetch(`http://localhost:8000/api/produtos/${product.id}`, {
+        const response = await fetch(`http://localhost:8000/produtos/${product.id}`, {
           method: 'DELETE',
         });
 
@@ -170,7 +170,7 @@ export function ProductDataTable({ columns, data, rowSelection, onRowSelectionCh
       }));
 
       // Cria a "promessa" que o toast vai observar
-      const apiPromise = fetch('http://localhost:8000/api/impressao/etiquetas', {
+      const apiPromise = fetch('http://localhost:8000/impressao/etiquetas', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(labelData)

@@ -23,8 +23,8 @@ const fetchData = async () => {
         setIsLoading(true);
         try {
             const [summaryRes, clientsRes] = await Promise.all([
-                fetch('http://localhost:8000/api/crediario/summary'),
-                fetch('http://localhost:8000/api/crediario/clientes')
+                fetch('http://localhost:8000/crediario/summary'),
+                fetch('http://localhost:8000/crediario/clientes')
             ]);
             
             if (!summaryRes.ok || !clientsRes.ok) {

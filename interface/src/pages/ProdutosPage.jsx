@@ -22,8 +22,8 @@ export default function ProdutosPage() {
     setIsLoading(true);
     try {
       const [productsRes, historyRes] = await Promise.all([
-        fetch('http://localhost:8000/api/produtos'),
-        fetch('http://localhost:8000/api/produtos/stats-history?limit=7')
+        fetch('http://localhost:8000/produtos'),
+        fetch('http://localhost:8000/produtos/stats-history?limit=7')
       ]);
 
       if (!productsRes.ok) throw new Error('Falha ao buscar produtos');

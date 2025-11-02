@@ -6,7 +6,7 @@ from .. import models, schemas
 from ..database import get_db
 from datetime import datetime, date, timedelta
 
-router = APIRouter(prefix="/api/pdvs", tags=["PDVs"])
+router = APIRouter(prefix="/pdvs", tags=["PDVs"])
 
 @router.get("/summary", response_model=schemas.PdvDashboardSummary)
 def get_pdv_summary(db: Session = Depends(get_db)):

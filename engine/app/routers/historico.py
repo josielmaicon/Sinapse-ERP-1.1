@@ -6,7 +6,7 @@ from ..database import get_db
 from datetime import datetime
 
 router = APIRouter(
-    prefix="/api/history",
+    prefix="/history",
     tags=["Histórico"]
 )
 

@@ -56,7 +56,7 @@ export function OpenClosePdvModal({ open, onOpenChange, actionType, pdv, refetch
     try {
       if (step === 'admin_password') {
         // ✅ 1. CHAMADA REAL para verificar senha
-        const response = await fetch(`${API_URL}/api/auth/verify-admin`, {
+        const response = await fetch(`${API_URL}/auth/verify-admin`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ password: adminPassword })
@@ -72,7 +72,7 @@ export function OpenClosePdvModal({ open, onOpenChange, actionType, pdv, refetch
           setStep('operator_select');
         } else {
           // ✅ 2. CHAMADA REAL para verificar vendas ativas
-          const salesCheckResponse = await fetch(`${API_URL}/api/pdvs/${pdv.id}/has-active-sales`);
+          const salesCheckResponse = await fetch(`${API_URL}/pdvs/${pdv.id}/has-active-sales`);
           const salesCheckResult = await salesCheckResponse.json();
           if (!salesCheckResponse.ok) {
               throw new Error(salesCheckResult.detail || "Erro ao verificar vendas ativas.");
@@ -98,7 +98,7 @@ export function OpenClosePdvModal({ open, onOpenChange, actionType, pdv, refetch
 
         if (isOpening) {
           // ✅ 3. PREPARAÇÃO para chamada real de ABRIR
-          endpoint = `${API_URL}/api/pdvs/${pdv.id}/open`;
+          endpoint = `${API_URL}/pdvs/${pdv.id}/open`;
           body = { 
             admin_id: verifiedAdminId, 
             operador_id: parseInt(selectedOperatorId), 
@@ -106,7 +106,7 @@ export function OpenClosePdvModal({ open, onOpenChange, actionType, pdv, refetch
           };
         } else { // Fechamento
           // ✅ 4. PREPARAÇÃO para chamada real de FECHAR
-          endpoint = `${API_URL}/api/pdvs/${pdv.id}/close`;
+          endpoint = `${API_URL}/pdvs/${pdv.id}/close`;
           body = { 
             admin_id: verifiedAdminId, 
             valor_fechamento: value 

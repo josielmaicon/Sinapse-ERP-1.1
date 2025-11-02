@@ -22,7 +22,7 @@ export default function HomePage() {
     const fetchStockAlerts = async () => {
       setIsLoading(true);
       try {
-        const response = await fetch("http://localhost:8000/api/produtos/dashboard-stats/");
+        const response = await fetch("http://localhost:8000/produtos/dashboard-stats/");
         if (!response.ok) throw new Error("Falha ao buscar alertas de estoque");
         const data = await response.json();
         setStockAlerts({

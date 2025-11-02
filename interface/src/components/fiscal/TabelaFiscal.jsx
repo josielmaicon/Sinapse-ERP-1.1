@@ -82,7 +82,7 @@ export default function FiscalDataTable({ columns, data, refetchData, fiscalConf
 
     setSendingIds(prev => new Set(prev).add(vendaId)); // Adiciona ao Set (imutável)
 
-    const apiPromise = fetch(`${API_URL}/api/fiscal/emitir/${vendaId}`, { // ✅ Chamada para NOVA ROTA
+    const apiPromise = fetch(`${API_URL}/fiscal/emitir/${vendaId}`, { // ✅ Chamada para NOVA ROTA
       method: 'POST',
       // Headers e Body se necessários (ex: token de autenticação)
     })
@@ -165,7 +165,7 @@ export default function FiscalDataTable({ columns, data, refetchData, fiscalConf
     
     // Chama a API de lote
     setIsBatchLoading(true);
-    const apiPromise = fetch(`${API_URL}/api/fiscal/emitir/lote`, { 
+    const apiPromise = fetch(`${API_URL}/fiscal/emitir/lote`, { 
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ venda_ids: idsToEmit })
@@ -209,7 +209,7 @@ export default function FiscalDataTable({ columns, data, refetchData, fiscalConf
   
    // Chama a API de emitir todas as pendentes
    setIsBatchLoading(true);
-   const apiPromise = fetch(`${API_URL}/api/fiscal/emitir/pendentes`, { 
+   const apiPromise = fetch(`${API_URL}/fiscal/emitir/pendentes`, { 
        method: 'POST',
    })
    .then(async (response) => {

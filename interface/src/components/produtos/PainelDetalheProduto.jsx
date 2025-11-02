@@ -154,7 +154,7 @@ export default function ProductDetailPanel({ selectedProducts, refetchData, acti
       const fetchHistory = async () => {
         setIsLoadingLog(true);
         try {
-          const res = await fetch(`http://localhost:8000/api/produtos/${product.id}/historico`);
+          const res = await fetch(`http://localhost:8000/produtos/${product.id}/historico`);
           if (!res.ok) throw new Error("Falha ao buscar histórico");
           const data = await res.json();
           setMovementLog(data);
@@ -194,7 +194,7 @@ export default function ProductDetailPanel({ selectedProducts, refetchData, acti
           return;
         }
 
-        const response = await fetch(`http://localhost:8000/api/produtos/${productId}`, {
+        const response = await fetch(`http://localhost:8000/produtos/${productId}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(changedData),

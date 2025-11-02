@@ -20,7 +20,7 @@ export default function PdvStatusTable() {
       setIsLoading(true);
       try {
         // O filtro é passado como um parâmetro na URL
-        const response = await fetch(`http://localhost:8000/api/pdvs?status=${filter}`);
+        const response = await fetch(`http://localhost:8000/pdvs?status=${filter}`);
         if (!response.ok) throw new Error("Falha ao buscar dados dos PDVs");
         const data = await response.json();
         setPdvData(data);

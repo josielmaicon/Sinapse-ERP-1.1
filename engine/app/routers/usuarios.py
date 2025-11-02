@@ -8,7 +8,7 @@ from .. import models, schemas
 from ..database import get_db
 from datetime import datetime, date
 
-router = APIRouter(prefix="/api/usuarios", tags=["Usuarios"])
+router = APIRouter(prefix="/usuarios", tags=["Usuarios"])
 
 @router.get("/", response_model=List[schemas.Usuario])
 def get_all_usuarios(db: Session = Depends(get_db)):
