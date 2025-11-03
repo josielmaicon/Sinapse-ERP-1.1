@@ -15,6 +15,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { OpenClosePdvModal } from "@/components/pdvs/modalAberturaFechamento";
 import { Power, Loader2 } from "lucide-react";
 import { PaymentModal } from "@/components/pontovenda/modalVenda"
+import { CancelItemModal } from "@/components/pontovenda/CancelItemModal"
 
 const API_URL = "http://localhost:8000"; 
 
@@ -38,8 +39,11 @@ export default function PontoVenda() {
   const [operatorData, setOperatorData] = React.useState([]);
   const [isLoadingOperators, setIsLoadingOperators] = React.useState(false);
   const [isPaymentModalOpen, setIsPaymentModalOpen] = React.useState(false); 
-  console.log("📦 pdvSession antes de iniciar venda DIGITADO ERRADO:", pdvSession);
 
+  const [isAuthModalOpen, setIsAuthModalOpen] = React.useState(false);
+  const [isCancelItemModalOpen, setIsCancelItemModalOpen] = React.useState(false); 
+  const [authActionContext, setAuthActionContext] = React.useState(null);
+  
   const fetchPdvSession = async (isInitialLoad = false) => {
 
     const machineName = localStorage.getItem('ACTIVE_PDV_NAME'); 
@@ -175,6 +179,12 @@ export default function PontoVenda() {
            handleOpenCloseModalToggle();
            return;
         }
+
+        if (e.key === 'F4') {
+          e.preventDefault();
+          handleCancelSale(); // Chama a função que abre a modal de autorização
+          return;
+        }
         
         // ✅ NOVO GATILHO: F2 para FINALIZAR VENDA
         if (e.key === 'F2') {
@@ -189,14 +199,6 @@ export default function PontoVenda() {
                toast.info("Carrinho Vazio", { description: "Adicione itens para finalizar a venda." });
            }
            return;
-        }
-
-
-        // F3, F4, etc. (Outros Atalhos)
-        if (e.key.startsWith('F')) {
-            e.preventDefault();
-            console.log(`Atalho ${e.key} pressionado (lógica a implementar).`);
-            return;
         }
         
         // --- A partir daqui, só funciona se o caixa estiver ABERTO ---
@@ -231,68 +233,39 @@ document.addEventListener('keydown', handleKeyPress);
           window.removeEventListener('offline', handleOffline);
       };
   }, []);
-
-// --- HANDLE BARCODE SUBMIT ---
+  
 const handleBarcodeSubmit = async (codigo) => {
   setIsAddingItem(true);
-  // 'currentSale' é 'activeSale' (pode ser null)
-  let currentSale = activeSale; 
+  // Não precisamos de 'let currentSale' aqui
 
   try {
-    // 1️⃣ Busca produto (igual)
-    const response = await fetch(`${API_URL}/produtos/barcode/${codigo}`);
-    if (!response.ok) {
-      const err = await response.json().catch(() => ({}));
-      throw new Error(err.detail || `Produto '${codigo}' não encontrado.`);
-    }
-    const produto = await response.json();
-
-    // 2️⃣ Cria venda (igual, mas usando 'currentSale')
-    if (!currentSale) {
-      const iniciarRes = await fetch(`${API_URL}/vendas/iniciar`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          pdv_id: pdvSession.id,
-          operador_id: pdvSession.operador_atual.id,
-        }),
-      });
-
-      if (!iniciarRes.ok) {
-        const err = await iniciarRes.json().catch(() => ({}));
-        throw new Error(err.detail || "Erro ao iniciar venda.");
-      }
-      
-      currentSale = await iniciarRes.json(); // Pega a nova venda
-      // NÃO precisa 'setCurrentSaleId', 'currentSale' é uma var local
+    // 1. VALIDAÇÃO DE SESSÃO (Ainda necessária)
+    if (!pdvSession || !pdvSession.operador_atual || !pdvSession.operador_atual.id) {
+      toast.error("Sessão Inválida", { description: "Operador não identificado. Tente reabrir o caixa (F1)." });
+      throw new Error("Operador não encontrado na sessão.");
     }
 
-    // 3️⃣ Adiciona o item à venda (igual)
-    // (Presume que sua rota é /adicionar-item, como no seu código)
-    const addItemRes = await fetch(`${API_URL}/vendas/${currentSale.id}/adicionar-item`, {
+    // 2. FAZ A CHAMADA ÚNICA PARA A ROTA "INTELIGENTE"
+    const response = await fetch(`${API_URL}/vendas/adicionar-item-smart`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        produto_id: produto.id,
-        quantidade: 1,
+        codigo_barras: codigo,
+        pdv_id: pdvSession.id,
+        operador_id: pdvSession.operador_atual.id,
+        quantidade: 1 
       }),
     });
 
-    if (!addItemRes.ok) {
-      const err = await addItemRes.json().catch(() => ({}));
-      throw new Error(err.detail || "Erro ao adicionar produto à venda.");
+    const updatedSale = await response.json();
+
+    if (!response.ok) {
+      throw new Error(updatedSale.detail || "Erro ao adicionar item.");
     }
-
-    // 4️⃣ ATUALIZA O ESTADO COM A RESPOSTA DA API
-    // (Presume que a rota '/adicionar-item' retorna a Venda completa e atualizada)
-    const updatedSale = await addItemRes.json();
-    setActiveSale(updatedSale); // Esta é a FONTE DA VERDADE
-
-    // A lógica 'setCartItems((prevItems) => ...)' é REMOVIDA.
-    // O 'useMemo' vai cuidar de atualizar 'cartItems' sozinho.
+    setActiveSale(updatedSale);
 
   } catch (error) {
-    console.error(error);
+    console.error("Erro em handleBarcodeSubmit:", error);
     toast.error(error.message);
   } finally {
     setIsAddingItem(false);
@@ -301,19 +274,18 @@ const handleBarcodeSubmit = async (codigo) => {
 };
 
 React.useEffect(() => {
-  if (isAddingItem) return setSaleStatus("loading");
-  if (saleStatus === "pagamento") return; // mantém durante o pagamento
-
-  if (cartItems.length > 0 && activeSale) {
+  if (isAddingItem) {
+    setSaleStatus("loading");
+  } else if (isPaymentModalOpen) {
+    setSaleStatus("pagamento");
+  } else if (activeSale && cartItems.length > 0) {
     setSaleStatus("em_andamento");
-  } else if (pdvSession?.status === "aberto") {
+  } else if (pdvSession?.status === 'aberto') {
     setSaleStatus("livre");
-  } else {
-    setSaleStatus(pdvSession?.status || "loading");
+  } else if (pdvSession?.status) {
+    setSaleStatus(pdvSession.status);
   }
-}, [cartItems, activeSale, isAddingItem, pdvSession, saleStatus]);
-
-
+}, [cartItems.length, activeSale, pdvSession, isAddingItem, isPaymentModalOpen]);
 
   const lastItem = cartItems.length > 0 ? cartItems[0] : null;
 
@@ -321,21 +293,16 @@ React.useEffect(() => {
       return <PosLoadingSkeleton />;
   }
 
-const handleSaleSuccess = (vendaId, troco) => {
+  const handleSaleSuccess = (vendaId, troco) => {
       toast.success(`Venda #${vendaId} finalizada!`, {
           description: troco > 0 ? `Troco: ${troco.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}` : "Pagamento concluído.",
           duration: 10000, 
       });
-      
-      // Limpa o estado local
       setIsPaymentModalOpen(false); 
-      setActiveSale(null); // Limpa a venda, o 'useMemo' vai limpar 'cartItems'
-      // O 'useEffect' de status vai mudar para 'livre'
+      setActiveSale(null);
   }
 
-
-
-  const handlePaymentStart = () => {
+    const handlePaymentStart = () => {
       if (cartItems.length === 0) {
           toast.info("Carrinho vazio!", { description: "Adicione itens antes de finalizar a venda." });
           return;
@@ -349,11 +316,75 @@ const handleSaleSuccess = (vendaId, troco) => {
       setIsPaymentModalOpen(true); // Abre o modal
   };
 
+  const handleCancelSale = () => {
+    if (!activeSale) {
+        toast.info("Nenhuma venda em andamento para cancelar.");
+        return;
+    }
+    // Seta o contexto e abre o modal de AUTORIZAÇÃO
+    setAuthActionContext({ type: 'cancel_sale', saleId: activeSale.id });
+    setIsAuthModalOpen(true);
+};
+
+// --- AÇÃO 2: INICIAR O CANCELAMENTO DE ITEM (abre o modal de seleção) ---
+  const handleRemoveItem = () => {
+    if (!activeSale || cartItems.length === 0) {
+        toast.info("Nenhum item na venda para remover.");
+        return;
+    }
+    setIsCancelItemModalOpen(true); // Abre o modal específico de itens
+};
+
+// --- AÇÃO 3: FUNÇÃO CENTRALIZADORA DE AUDITORIA (chama a API) ---
+// Esta função é passada para o AdminAuthModal
+const executeAuditedAction = async (authCredentials) => {
+    if (!authActionContext) return;
+
+    let apiEndpoint = '';
+    let apiMethod = '';
+    let successMessage = '';
+
+    // 1. Ação de Cancelar Venda
+    if (authActionContext.type === 'cancel_sale') {
+        apiEndpoint = `${API_URL}/vendas/${authActionContext.saleId}/cancelar`;
+        apiMethod = 'DELETE'; // Ou POST, dependendo da sua rota (usamos DELETE para o backend)
+        successMessage = `Venda #${authActionContext.saleId} cancelada.`;
+    } 
+    // [Se você tivesse uma tela de cancelamento de item, a lógica estaria aqui]
+    // if (authActionContext.type === 'remove_item_final') { ... }
+
+    // O corpo da requisição será as credenciais do Admin
+    const requestBody = JSON.stringify(authCredentials);
+
+    try {
+        const response = await fetch(apiEndpoint, {
+            method: apiMethod,
+            headers: { 'Content-Type': 'application/json' },
+            body: requestBody
+        });
+
+        // O backend (no DELETE) vai retornar 204 se for sucesso.
+        if (response.status === 204 || response.ok) { 
+            toast.success(successMessage);
+            setActiveSale(null); // Limpa o carrinho
+            setAuthActionContext(null);
+            return true; // Sucesso na auditoria/ação
+        }
+
+        const result = await response.json().catch(() => ({}));
+        throw new Error(result.detail || 'Erro na autorização ou ação de auditoria.');
+
+    } catch (error) {
+        // Se a rota falhar, o AdminAuthModal irá capturar este erro.
+        throw error; 
+    }
+};
+
   return (
     <>
       <ComprasPageLayout
         Header1={<Logo variant="full" size="180px" />}
-        Header2={<PosHeaderStatus session={pdvSession} />} 
+        Header2={<PosHeaderStatus session={pdvSession} activeSale={activeSale} />}
         SidePanel={<PosSidePanel lastItem={lastItem} />}
         MainContent={
           <div
@@ -386,6 +417,17 @@ const handleSaleSuccess = (vendaId, troco) => {
         pdvSession={pdvSession}
         onSaleSuccess={handleSaleSuccess}
       />
+
+      <CancelItemModal
+       open={isCancelItemModalOpen}
+       onOpenChange={setIsCancelItemModalOpen}
+       activeSale={activeSale}
+       onStartAuth={(itemData) => {
+          setIsCancelItemModalOpen(false); // Fecha a modal de seleção
+          setAuthActionContext({ type: 'remove_item_selection', ...itemData }); // Contexto
+          setIsAuthModalOpen(true); // Abre a modal de autorização
+       }}
+    />
     </>
   );
 }

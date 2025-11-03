@@ -3,8 +3,9 @@ from typing import List, Dict
 from datetime import date
 from sqlalchemy import func
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session, joinedload, selectinload
 from .. import models, schemas
+from ..utils.security import verify_password
 from ..database import get_db
 from datetime import datetime
 
@@ -194,3 +195,139 @@ def finalizar_venda_existente(venda_id: int, pagamento: schemas.FinalizarVendaRe
     db.commit()
     db.refresh(venda)
     return venda
+
+@router.post("/adicionar-item-smart", response_model=schemas.Venda)
+def adicionar_item_smart(request: schemas.AdicionarItemSmartRequest, db: Session = Depends(get_db)):
+    """
+    Uma rota otimizada que faz 3 coisas em 1 chamada de API:
+    1. Busca o Produto pelo código de barras.
+    2. Busca a Venda 'em_andamento' ou CRIA uma nova.
+    3. Adiciona/Incrementa o VendaItem.
+    4. Retorna a Venda completa e atualizada.
+    """
+    
+    # 1. BUSCA O PRODUTO
+    produto = db.query(models.Produto).filter(models.Produto.codigo_barras == request.codigo_barras).first()
+    if not produto:
+        raise HTTPException(status_code=404, detail=f"Produto com código '{request.codigo_barras}' não encontrado.")
+
+    # 2. BUSCA OU CRIA A VENDA (Lógica "Lazy")
+    # Tenta encontrar a venda ativa primeiro
+    venda = db.query(models.Venda).filter(
+        models.Venda.pdv_id == request.pdv_id,
+        models.Venda.status == "em_andamento"
+    ).first()
+
+    if not venda:
+        # Se não houver, CRIA a venda (lógica da sua rota /iniciar)
+        pdv = db.query(models.Pdv).filter(models.Pdv.id == request.pdv_id).first()
+        if not pdv:
+             raise HTTPException(status_code=404, detail="PDV não encontrado") # Segurança
+        
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        codigo_venda_str = f"VENDA_{timestamp}_{pdv.nome.upper().replace(' ', '')}"
+        
+        venda = models.Venda(
+            pdv_id=request.pdv_id,
+            operador_id=request.operador_id,
+            status="em_andamento",
+            codigo_venda=codigo_venda_str
+        )
+        db.add(venda)
+        db.flush() # Força a 'venda.id' a ser gerada
+
+    # 3. ADICIONA/INCREMENTA O ITEM
+    # (Lógica da sua rota /adicionar-item)
+    item_existente = db.query(models.VendaItem).filter(
+        models.VendaItem.venda_id == venda.id,
+        models.VendaItem.produto_id == produto.id
+    ).first()
+
+    if item_existente:
+        item_existente.quantidade += request.quantidade
+    else:
+        venda_item = models.VendaItem(
+            venda_id=venda.id,
+            produto_id=produto.id,
+            quantidade=request.quantidade,
+            preco_unitario_na_venda=produto.preco_venda
+        )
+        db.add(venda_item)
+    
+    # 4. RECALCULA O TOTAL E FAZ O COMMIT
+    # (É mais seguro recalcular tudo)
+    db.flush() # Garante que todos os itens estão na sessão
+    
+    total_calc = db.query(
+        func.sum(models.VendaItem.quantidade * models.VendaItem.preco_unitario_na_venda)
+    ).filter(models.VendaItem.venda_id == venda.id).scalar() or 0.0
+
+    venda.valor_total = total_calc
+    db.add(venda)
+    db.commit()
+
+    # 5. RETORNA A VENDA COMPLETA
+    # (A parte crucial que seu 'adicionar-item' antigo não fazia direito)
+    venda_atualizada = db.query(models.Venda).options(
+        # Usamos 'selectinload' para carregar os 'itens'
+        # e depois 'joinedload' para carregar o 'produto' de cada 'item'
+        selectinload(models.Venda.itens).joinedload(models.VendaItem.produto)
+    ).filter(models.Venda.id == venda.id).first()
+    
+    return venda_atualizada
+
+def get_verified_admin(auth_request: schemas.AdminAuthRequest, db: Session = Depends(get_db)):
+    admin_user = db.query(models.Usuario).filter(
+        models.Usuario.email == auth_request.admin_email,
+        models.Usuario.funcao == "admin" # Garante que só admin pode autorizar
+    ).first()
+    
+    if not admin_user or not verify_password(auth_request.admin_senha, admin_user.senha_hash):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Credenciais de Administrador inválidas."
+        )
+    return admin_user # Retorna o objeto completo do admin
+
+@router.delete("/{venda_id}/cancelar", status_code=status.HTTP_204_NO_CONTENT)
+def cancelar_venda_em_andamento(
+    venda_id: int, 
+    auth: schemas.AdminAuthRequest, # Recebe o corpo com as credenciais
+    admin_user: models.Usuario = Depends(get_verified_admin), # Dependência para auditar
+    db: Session = Depends(get_db)
+):
+    venda = db.query(models.Venda).filter(
+        models.Venda.id == venda_id,
+        models.Venda.status == "em_andamento"
+    ).first()
+
+    if not venda:
+        raise HTTPException(status_code=404, detail="Venda 'em andamento' não encontrada.")
+    
+    # [OPCIONAL] Logar a ação de cancelamento na tabela de auditoria com admin_user.id
+    print(f"AUDITORIA: Venda #{venda_id} cancelada por Admin ID: {admin_user.id}")
+
+    db.delete(venda)
+    db.commit()
+    return None
+
+@router.post("/{venda_id}/itens/{item_venda_id}/remover", response_model=schemas.Venda)
+def remover_item_da_venda_auditada(
+    venda_id: int, 
+    item_venda_id: int, 
+    auth: schemas.AdminAuthRequest,
+    db: Session = Depends(get_db),
+    admin_user: models.Usuario = Depends(get_verified_admin),
+):
+    
+    item = db.query(models.VendaItem).filter(models.VendaItem.id == item_venda_id).first()
+    
+    if not item or item.venda_id != venda_id:
+        raise HTTPException(status_code=404, detail="Item não encontrado nesta venda.")
+
+    print(f"AUDITORIA: Item ID: {item_venda_id} removido/ajustado por Admin ID: {admin_user.id}")
+    
+    db.delete(item)
+    db.flush()
+    
+    raise HTTPException(status_code=501, detail="Lógica de remoção/ajuste de item não implementada.")

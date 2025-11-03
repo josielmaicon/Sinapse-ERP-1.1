@@ -28,7 +28,6 @@ class VendaBase(BaseModel):
     operador_id: int
     pdv_id: int
 
-
 class VendaCreate(VendaBase):
     """Usado quando a venda é criada diretamente (sem PDV)"""
     itens: List[VendaItemCreate]
@@ -62,3 +61,24 @@ class AdicionarItemRequest(BaseModel):
 class FinalizarVendaRequest(BaseModel):
     """Rota /vendas/{venda_id}/finalizar"""
     forma_pagamento: str
+
+class AdicionarItemSmartRequest(BaseModel):
+    """
+    Schema para a rota inteligente que faz tudo de uma vez:
+    busca produto, inicia venda (se necessário) e adiciona o item.
+    """
+    codigo_barras: str
+    pdv_id: int
+    operador_id: int
+    quantidade: float = 1.0
+
+class AdminAuthRequest(BaseModel):
+    """Schema para autenticar o Administrador que autoriza a ação."""
+    admin_email: str
+    admin_senha: str
+
+class AdminAuthRequest(BaseModel):
+    """Schema para autenticar o Administrador que autoriza a ação."""
+    admin_email: str
+    admin_senha: str
+
