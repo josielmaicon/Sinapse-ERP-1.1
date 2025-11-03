@@ -64,7 +64,7 @@ const CrediarioPayment = ({ onConfirm, onSelectClient, selectedClient }) => {
 };
 
 // --- Componente Principal do Modal ---
-export function PaymentModal({ open, onOpenChange, cartItems, pdvSession, onSaleSuccess }) {
+export function PaymentModal({ open, onOpenChange, cartItems, pdvSession, onSaleSuccess, activeSale }) {
   const [paymentType, setPaymentType] = React.useState("dinheiro");
   const [valorRecebidoStr, setValorRecebidoStr] = React.useState("");
   const [selectedClient, setSelectedClient] = React.useState(null); // Para crediário
@@ -90,67 +90,62 @@ export function PaymentModal({ open, onOpenChange, cartItems, pdvSession, onSale
   const valorRecebido = parseFloat(valorRecebidoStr) || 0;
   const troco = Math.max(0, valorRecebido - total);
 
-  // --- Função para processar o pagamento ---
-  const handleConfirmPayment = async (tipoPagamento) => {
+  // Dentro de modalVenda.jsx
+
+// --- Função para processar o pagamento ---
+const handleConfirmPayment = async (tipoPagamento) => {
     setIsLoading(true);
     setErrorMessage("");
 
-    let valorPago = total; // Padrão (Cartão, PIX, Crediário)
+    // 1. VERIFICAÇÃO DE DINHEIRO (não muda)
     if (tipoPagamento === 'dinheiro') {
         if (valorRecebido < total) {
             toast.error("Valor recebido é menor que o total da compra.");
             setIsLoading(false);
             return;
         }
-        valorPago = valorRecebido; // Envia o valor que o cliente deu
     }
     
-    // Monta o objeto PdvVendaRequest
+    // 2. MONTAGEM DO BODY (MUDOU)
+    // A nova rota /{id}/finalizar espera um 'FinalizarVendaRequest',
+    // que (pelo seu schema) só contém 'forma_pagamento'.
     const vendaRequest = {
-        pdv_db_id: pdvSession.id,
-        operador_db_id: pdvSession.operador_atual.id,
-        cliente_db_id: tipoPagamento === 'crediario' ? selectedClient?.id : null,
-        itens: cartItems.map(item => ({
-            db_id: item.db_id,
-            quantity: item.quantity,
-            unitPrice: item.unitPrice
-        })),
-        pagamentos: [{
-            tipo: tipoPagamento,
-            valor: total // O backend só precisa saber o valor da venda por tipo
-            // Se for pagamento misto, esta lógica seria mais complexa
-        }],
-        total_calculado: total
+        forma_pagamento: tipoPagamento 
+        // Se você adicionou 'cliente_db_id' na rota de finalizar,
+        // adicione aqui também.
+        // cliente_db_id: tipoPagamento === 'crediario' ? selectedClient?.id : null,
     };
-    
-    // (Ajuste para pagamento em dinheiro: envia o valor da venda, não o recebido)
-    if(tipoPagamento === 'dinheiro') {
-      vendaRequest.pagamentos[0].valor = total;
-    }
 
     try {
-        const response = await fetch(`${API_URL}/vendas/finalizar`, {
+        // 3. CHAMADA DA API (MUDOU)
+        // A URL agora é dinâmica e usa o ID da venda ativa
+        const response = await fetch(`${API_URL}/vendas/${activeSale.id}/finalizar`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(vendaRequest)
+            body: JSON.stringify(vendaRequest) // Envia o body simplificado
         });
         
         const result = await response.json();
+        
+        // 4. TRATAMENTO DE ERRO (Melhorado)
         if (!response.ok) {
-             throw new Error(result.detail || "Erro desconhecido ao finalizar venda.");
+             const errorMsg = result.detail[0]?.msg || result.detail || "Erro desconhecido";
+             throw new Error(errorMsg);
         }
         
-        // SUCESSO! Chama o callback da PontoVenda.jsx
-        onSaleSuccess(result.venda_id, result.troco);
+        // 5. SUCESSO (Callback)
+        // O 'result' agora é o objeto 'Venda' finalizado.
+        // O 'troco' é calculado localmente (como você já fazia).
+        onSaleSuccess(result.id, troco); 
         
     } catch (error) {
         console.error(error);
-        setErrorMessage(error.message); // Mostra o erro dentro do modal
+        setErrorMessage(error.message);
         toast.error("Falha ao finalizar venda", { description: error.message });
     } finally {
         setIsLoading(false);
     }
-  };
+};
 
   // Reseta o estado local quando o modal é fechado
   const handleOnOpenChange = (isOpen) => {

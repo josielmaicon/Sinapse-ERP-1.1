@@ -38,7 +38,7 @@ export default function PontoVenda() {
   const [operatorData, setOperatorData] = React.useState([]);
   const [isLoadingOperators, setIsLoadingOperators] = React.useState(false);
   const [isPaymentModalOpen, setIsPaymentModalOpen] = React.useState(false); 
-  console.log("📦 pdvSession antes de iniciar venda:", pdvSession);
+  console.log("📦 pdvSession antes de iniciar venda DIGITADO ERRADO:", pdvSession);
 
   const fetchPdvSession = async (isInitialLoad = false) => {
 
@@ -231,8 +231,6 @@ document.addEventListener('keydown', handleKeyPress);
           window.removeEventListener('offline', handleOffline);
       };
   }, []);
-
-  console.log("📦 pdvSession antes de iniciar venda:", pdvSession);
 
 // --- HANDLE BARCODE SUBMIT ---
 const handleBarcodeSubmit = async (codigo) => {

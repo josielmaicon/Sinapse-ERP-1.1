@@ -139,7 +139,7 @@ def get_all_vendas(db: Session = Depends(get_db)):
 
 @router.post("/iniciar", response_model=schemas.Venda)
 def iniciar_venda(request: schemas.IniciarVendaRequest, db: Session = Depends(get_db)):
-    pdv = db.query(models.PDV).filter(models.PDV.id == request.pdv_id).first()
+    pdv = db.query(models.Pdv).filter(models.Pdv.id == request.pdv_id).first()
     if not pdv:
         raise HTTPException(status_code=404, detail="PDV não encontrado")
 

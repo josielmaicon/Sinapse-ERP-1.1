@@ -1,7 +1,7 @@
 from pydantic import BaseModel
 from datetime import date, datetime
 from typing import List, Optional
-from .usuario import UsuarioBase
+from .usuario import UsuarioBase, Usuario
 
 class PdvVendaResponse(BaseModel):
     venda_id: int
@@ -47,7 +47,7 @@ class PdvStatusDetalhado(BaseModel):
     nome: str
     status: str
     
-    operador_atual: Optional[UsuarioBase] = None
+    operador_atual: Optional[Usuario] = None
     alerta_pendente: Optional[Solicitacao] = None 
     
     valor_em_caixa: float = 0.0

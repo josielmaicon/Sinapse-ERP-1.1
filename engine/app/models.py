@@ -167,6 +167,7 @@ class Pdv(Base):
 class Venda(Base):
     __tablename__ = "vendas"
     id = Column(Integer, primary_key=True, index=True)
+    codigo_venda = Column(String(100), unique=True, index=True, nullable=True)
     valor_total = Column(Float, nullable=False, default=0.0)
     data_hora = Column(DateTime, default=datetime.utcnow)
     status = Column(String(50), default="em_andamento", nullable=False) # em_andamento, concluida, cancelada
