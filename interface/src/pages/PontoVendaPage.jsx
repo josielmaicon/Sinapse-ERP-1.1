@@ -28,17 +28,17 @@ const PosLoadingSkeleton = () => (
 
 export default function PontoVenda() {
   const [pdvSession, setPdvSession] = React.useState(null); 
-  const [cartItems, setCartItems] = React.useState([]);
   const [saleStatus, setSaleStatus] = React.useState("loading"); 
   const [barcodeBuffer, setBarcodeBuffer] = React.useState(""); 
   const [isAddingItem, setIsAddingItem] = React.useState(false); 
-  const [currentSaleId, setCurrentSaleId] = React.useState(null);
+  const [activeSale, setActiveSale] = React.useState(null);
   const navigate = useNavigate();
   
   const [isModalOpen, setIsModalOpen] = React.useState(false);
   const [operatorData, setOperatorData] = React.useState([]);
   const [isLoadingOperators, setIsLoadingOperators] = React.useState(false);
   const [isPaymentModalOpen, setIsPaymentModalOpen] = React.useState(false); 
+  console.log("📦 pdvSession antes de iniciar venda:", pdvSession);
 
   const fetchPdvSession = async (isInitialLoad = false) => {
 
@@ -68,6 +68,7 @@ export default function PontoVenda() {
       setPdvSession({ ...data, isOnline: navigator.onLine }); 
       
       if (data.status === 'aberto') {
+          await loadExistingActiveSale(data);
           setSaleStatus("livre"); 
           if (isInitialLoad) toast.success(`Caixa ${data.nome} aberto. Operador: ${data.operador_atual.nome}.`);
       } else {
@@ -80,6 +81,57 @@ export default function PontoVenda() {
       navigate("/"); 
     }
   };
+
+
+  const cartItems = React.useMemo(() => {
+      if (!activeSale || !activeSale.itens) {
+          return [];
+      }
+      
+      // Transforma os dados do backend (VendaItem) para o formato do frontend
+      return activeSale.itens.map(item => ({
+          id: item.produto.codigo_barras, 
+          name: item.produto.nome,
+          quantity: item.quantidade,
+          unitPrice: item.preco_unitario_na_venda,
+          totalPrice: item.quantidade * item.preco_unitario_na_venda,
+          db_id: item.produto.id, 
+          item_db_id: item.id 
+      })).sort((a, b) => b.item_db_id - a.item_db_id); // Mais novo primeiro
+      
+  }, [activeSale]);
+
+  const loadExistingActiveSale = async (session) => {
+      if (session.status !== 'aberto') {
+          setActiveSale(null); 
+          return;
+      }
+      
+      console.log(`Verificando venda em aberto para PDV #${session.id}...`);
+      try {
+          // (Presume que você tem esta rota 'GET /vendas/pdvs/{id}/venda-ativa'
+          // que fizemos na conversa anterior)
+          const response = await fetch(`${API_URL}/vendas/pdvs/${session.id}/venda-ativa`);
+          
+          if (response.status === 404 || response.status === 204) {
+             console.log("Nenhuma venda em aberto encontrada. Caixa livre.");
+             setActiveSale(null);
+             return;
+          }
+
+          const saleData = await response.json();
+          if (!response.ok) throw new Error(saleData.detail || "Falha ao carregar venda");
+          
+          setActiveSale(saleData);
+          toast.info(`Venda #${saleData.id} recuperada.`, {
+              description: "Havia uma venda em andamento para este caixa."
+          });
+          
+      } catch (error) {
+         console.log("Nenhum erro, apenas sem venda ativa.");
+         setActiveSale(null);
+      }
+  }
 
   React.useEffect(() => {
     fetchPdvSession(true);
@@ -165,11 +217,10 @@ export default function PontoVenda() {
         if (e.key.length === 1 && e.key.match(/^[a-zA-Z0-9-]$/)) { e.preventDefault(); setBarcodeBuffer(prev => prev + e.key); }
     };
 
-    document.addEventListener('keydown', handleKeyPress);
+document.addEventListener('keydown', handleKeyPress);
     return () => document.removeEventListener('keydown', handleKeyPress);
   
-  }, [barcodeBuffer, isAddingItem, saleStatus, pdvSession, isModalOpen, isPaymentModalOpen, cartItems]); // Dependências completas
-
+  }, [barcodeBuffer, isAddingItem, saleStatus, pdvSession, isModalOpen, isPaymentModalOpen, cartItems]); // 'cartItems' aqui agora é o derivado
   React.useEffect(() => {
       const handleOnline = () => setPdvSession(prev => (prev ? { ...prev, isOnline: true } : null));
       const handleOffline = () => setPdvSession(prev => (prev ? { ...prev, isOnline: false } : null));
@@ -181,22 +232,25 @@ export default function PontoVenda() {
       };
   }, []);
 
+  console.log("📦 pdvSession antes de iniciar venda:", pdvSession);
+
 // --- HANDLE BARCODE SUBMIT ---
 const handleBarcodeSubmit = async (codigo) => {
   setIsAddingItem(true);
+  // 'currentSale' é 'activeSale' (pode ser null)
+  let currentSale = activeSale; 
+
   try {
-    // 1️⃣ Busca produto pelo código de barras
+    // 1️⃣ Busca produto (igual)
     const response = await fetch(`${API_URL}/produtos/barcode/${codigo}`);
     if (!response.ok) {
       const err = await response.json().catch(() => ({}));
       throw new Error(err.detail || `Produto '${codigo}' não encontrado.`);
     }
-
     const produto = await response.json();
 
-    // 2️⃣ Cria venda caso ainda não exista uma ativa
-    let vendaId = currentSaleId;
-    if (!vendaId) {
+    // 2️⃣ Cria venda (igual, mas usando 'currentSale')
+    if (!currentSale) {
       const iniciarRes = await fetch(`${API_URL}/vendas/iniciar`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -210,15 +264,14 @@ const handleBarcodeSubmit = async (codigo) => {
         const err = await iniciarRes.json().catch(() => ({}));
         throw new Error(err.detail || "Erro ao iniciar venda.");
       }
-
-      const novaVenda = await iniciarRes.json();
-      vendaId = novaVenda.id;
-      setCurrentSaleId(vendaId);
-      setSaleStatus("em_andamento"); // ✅ marca explicitamente que existe uma venda ativa
+      
+      currentSale = await iniciarRes.json(); // Pega a nova venda
+      // NÃO precisa 'setCurrentSaleId', 'currentSale' é uma var local
     }
 
-    // 3️⃣ Adiciona o item à venda
-    const addItemRes = await fetch(`${API_URL}/vendas/${vendaId}/adicionar-item`, {
+    // 3️⃣ Adiciona o item à venda (igual)
+    // (Presume que sua rota é /adicionar-item, como no seu código)
+    const addItemRes = await fetch(`${API_URL}/vendas/${currentSale.id}/adicionar-item`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -232,33 +285,14 @@ const handleBarcodeSubmit = async (codigo) => {
       throw new Error(err.detail || "Erro ao adicionar produto à venda.");
     }
 
-    // 4️⃣ Atualiza o carrinho local
-    setCartItems((prevItems) => {
-      const existingItem = prevItems.find((item) => item.id === produto.codigo_barras);
-      if (existingItem) {
-        return prevItems.map((item) =>
-          item.id === produto.codigo_barras
-            ? {
-                ...item,
-                quantity: item.quantity + 1,
-                totalPrice: (item.quantity + 1) * item.unitPrice,
-              }
-            : item
-        );
-      } else {
-        return [
-          {
-            id: produto.codigo_barras,
-            name: produto.nome,
-            quantity: 1,
-            unitPrice: produto.preco_venda,
-            totalPrice: produto.preco_venda,
-            db_id: produto.id,
-          },
-          ...prevItems,
-        ];
-      }
-    });
+    // 4️⃣ ATUALIZA O ESTADO COM A RESPOSTA DA API
+    // (Presume que a rota '/adicionar-item' retorna a Venda completa e atualizada)
+    const updatedSale = await addItemRes.json();
+    setActiveSale(updatedSale); // Esta é a FONTE DA VERDADE
+
+    // A lógica 'setCartItems((prevItems) => ...)' é REMOVIDA.
+    // O 'useMemo' vai cuidar de atualizar 'cartItems' sozinho.
+
   } catch (error) {
     console.error(error);
     toast.error(error.message);
@@ -272,14 +306,14 @@ React.useEffect(() => {
   if (isAddingItem) return setSaleStatus("loading");
   if (saleStatus === "pagamento") return; // mantém durante o pagamento
 
-  if (cartItems.length > 0 && currentSaleId) {
+  if (cartItems.length > 0 && activeSale) {
     setSaleStatus("em_andamento");
   } else if (pdvSession?.status === "aberto") {
     setSaleStatus("livre");
   } else {
     setSaleStatus(pdvSession?.status || "loading");
   }
-}, [cartItems, isAddingItem, pdvSession, currentSaleId, saleStatus]);
+}, [cartItems, activeSale, isAddingItem, pdvSession, saleStatus]);
 
 
 
@@ -289,46 +323,17 @@ React.useEffect(() => {
       return <PosLoadingSkeleton />;
   }
 
-const handleSaleSuccess = async (troco, formaPagamento) => {
-  try {
-    if (!currentSaleId) {
-      throw new Error("Nenhuma venda em andamento para finalizar.");
-    }
-
-    // 1️⃣ Finaliza a venda no backend
-    const finalizarRes = await fetch(`${API_URL}/vendas/${currentSaleId}/finalizar`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ forma_pagamento: formaPagamento }),
-    });
-
-    if (!finalizarRes.ok) {
-      const err = await finalizarRes.json().catch(() => ({}));
-      throw new Error(err.detail || "Erro ao finalizar venda.");
-    }
-
-    const vendaFinalizada = await finalizarRes.json();
-
-    // 2️⃣ Feedback visual
-    toast.success(`Venda #${vendaFinalizada.id} finalizada!`, {
-      description:
-        troco > 0
-          ? `Troco: ${troco.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}`
-          : "Pagamento concluído.",
-      duration: 10000,
-    });
-
-    // 3️⃣ Limpa o estado local
-    setCartItems([]);
-    setIsPaymentModalOpen(false);
-    setCurrentSaleId(null);
-    setSaleStatus("livre"); // ✅ volta ao estado pronto pra próxima venda
-
-  } catch (error) {
-    console.error(error);
-    toast.error(error.message || "Erro ao concluir venda.");
+const handleSaleSuccess = (vendaId, troco) => {
+      toast.success(`Venda #${vendaId} finalizada!`, {
+          description: troco > 0 ? `Troco: ${troco.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}` : "Pagamento concluído.",
+          duration: 10000, 
+      });
+      
+      // Limpa o estado local
+      setIsPaymentModalOpen(false); 
+      setActiveSale(null); // Limpa a venda, o 'useMemo' vai limpar 'cartItems'
+      // O 'useEffect' de status vai mudar para 'livre'
   }
-};
 
 
 
@@ -346,19 +351,22 @@ const handleSaleSuccess = async (troco, formaPagamento) => {
       setIsPaymentModalOpen(true); // Abre o modal
   };
 
-  return (
+  return (
     <>
-    	<ComprasPageLayout
+      <ComprasPageLayout
         Header1={<Logo variant="full" size="180px" />}
         Header2={<PosHeaderStatus session={pdvSession} />} 
         SidePanel={<PosSidePanel lastItem={lastItem} />}
-
-        MainContent={ 
-          <div className={cn("h-full flex flex-col", pdvSession.status !== 'aberto' && "opacity-50 pointer-events-none")}>
+        MainContent={
+          <div
+            className={cn(
+              "h-full flex flex-col",
+              pdvSession.status !== "aberto" && "opacity-50 pointer-events-none"
+            )}
+          >
             <SaleItemsList items={cartItems} />
           </div>
         }
-
         Resume={<SaleResume items={cartItems} />}
         Footer={<PosFooterStatus status={saleStatus} buffer={barcodeBuffer} />}
       />
@@ -366,11 +374,20 @@ const handleSaleSuccess = async (troco, formaPagamento) => {
       <OpenClosePdvModal
         open={isModalOpen}
         onOpenChange={setIsModalOpen}
-        actionType={pdvSession.status === 'aberto' ? 'close' : 'open'} 
+        actionType={pdvSession.status === "aberto" ? "close" : "open"}
         pdv={pdvSession}
-        refetchData={() => fetchPdvSession(false)} 
-        operators={operatorData} 
+        refetchData={() => fetchPdvSession(false)}
+        operators={operatorData}
+      />
+
+      <PaymentModal
+        open={isPaymentModalOpen}
+        onOpenChange={setIsPaymentModalOpen}
+        cartItems={cartItems}
+        activeSale={activeSale}
+        pdvSession={pdvSession}
+        onSaleSuccess={handleSaleSuccess}
       />
     </>
-  );
+  );
 }
