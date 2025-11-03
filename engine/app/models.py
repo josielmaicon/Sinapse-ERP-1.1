@@ -1,4 +1,4 @@
-from sqlalchemy import (Column, Integer, String, Date, Float, DateTime, ForeignKey, Boolean, Enum, Table) # ✅ Adicione 'Table'
+from sqlalchemy import (Column, Integer, String, Date, Float, DateTime, ForeignKey, Boolean, Enum, Table)
 from sqlalchemy.orm import relationship
 from .database import Base
 from datetime import datetime
