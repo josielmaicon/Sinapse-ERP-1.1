@@ -15,7 +15,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { OpenClosePdvModal } from "@/components/pdvs/modalAberturaFechamento";
 import { Power, Loader2 } from "lucide-react";
 import { PaymentModal } from "@/components/pontovenda/modalVenda"
-import { CancelItemModal } from "@/components/pontovenda/CancelItemModal"
+import { CancelItemModal } from "@/components/pontovenda/CancelamentoModal"
 
 const API_URL = "http://localhost:8000"; 
 
@@ -39,11 +39,8 @@ export default function PontoVenda() {
   const [operatorData, setOperatorData] = React.useState([]);
   const [isLoadingOperators, setIsLoadingOperators] = React.useState(false);
   const [isPaymentModalOpen, setIsPaymentModalOpen] = React.useState(false); 
+  const [isCancelItemModalOpen, setIsCancelItemModalOpen] = React.useState(false);
 
-  const [isAuthModalOpen, setIsAuthModalOpen] = React.useState(false);
-  const [isCancelItemModalOpen, setIsCancelItemModalOpen] = React.useState(false); 
-  const [authActionContext, setAuthActionContext] = React.useState(null);
-  
   const fetchPdvSession = async (isInitialLoad = false) => {
 
     const machineName = localStorage.getItem('ACTIVE_PDV_NAME'); 
@@ -86,13 +83,128 @@ export default function PontoVenda() {
     }
   };
 
+  const handleCancelSale = () => {
+      if (cartItems.length === 0) return; 
+      setIsCancelSaleModalOpen(true);
+  };
+  
+  const handleCancelItem = () => {
+      if (cartItems.length === 0) {
+          toast.info("Carrinho vazio. Nada para remover.", { description: "Use Enter para adicionar itens." });
+          return;
+      }
+      setIsCancelItemModalOpen(true);
+  };
+
+  const handleConfirmSaleCancel = async (adminCreds) => {
+    if (!activeSale) {
+      toast.error("Erro Interno", { description: "Nenhuma venda ativa para cancelar." });
+      return;
+    }
+    setIsAddingItem(true);
+    let errorToThrow = null;
+    try {
+      const response = await fetch(`${API_URL}/vendas/${activeSale.id}/cancelar`, { 
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(adminCreds)
+      });
+      
+      if (response.status === 204) {
+          setActiveSale(null);
+          setIsCancelItemModalOpen(false);
+          toast.info(`Venda #${activeSale.id} cancelada com sucesso.`);
+      
+      } else {
+          let errorData;
+          try {
+              errorData = await response.json();
+          } catch (parseError) {
+              throw new Error(`Erro ${response.status}: ${response.statusText}`);
+          }
+          
+          const detail = errorData.detail || "Falha ao cancelar a venda.";
+
+          if (response.status === 401) {
+              toast.warning("Autorização Falhou", { description: detail });
+          } else if (response.status === 404) {
+              toast.error("Venda não encontrada", { description: "Esta venda pode já ter sido finalizada." });
+          } else {
+              toast.error("Erro ao Cancelar Venda", { description: detail });
+          }
+          throw new Error(detail);
+      }
+      
+    } catch (error) {
+        console.error("Falha grave em handleConfirmSaleCancel:", error);
+        if (!toast.isActive(error.message)) {
+            toast.error("Erro de Comunicação", { id: error.message, description: "Não foi possível conectar ao servidor para cancelar a venda." });
+        }
+        errorToThrow = error;
+    } finally {
+        setIsAddingItem(false);
+        if (errorToThrow) {
+            throw errorToThrow;
+        }
+    }
+  };
+
+
+  const handleItemCancelApi = async ({ item_db_id, quantidade_a_remover }, adminCreds) => {
+      setIsAddingItem(true);
+      let errorToThrow = null;
+
+      try {
+          const requestBody = {
+              auth: adminCreds,
+              quantidade: quantidade_a_remover
+          };
+          console.log(`Tentando remover item: ${item_db_id}, Qtd: ${quantidade_a_remover}, Venda: ${activeSale.id}`);
+
+          const response = await fetch(`${API_URL}/vendas/${activeSale.id}/itens/${item_db_id}/remover`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(requestBody),
+          });
+          const responseData = await response.json();
+
+          if (!response.ok) {
+              const detail = responseData.detail || "Erro desconhecido ao remover item.";
+              
+              if (response.status === 401) {
+                  toast.warning("Autorização Falhou", { description: detail });
+              } else if (response.status === 404) {
+                  toast.error("Item não encontrado", { description: "O item pode já ter sido removido." });
+              } else if (response.status === 400) { // Ex: Quantidade inválida
+                  toast.warning("Requisição inválida", { description: detail });
+              } else {
+                  toast.error("Erro ao Remover Item", { description: detail });
+              }
+              
+              throw new Error(detail);
+          }
+          setActiveSale(responseData);
+          
+      } catch (error) {
+          console.error("Falha grave em handleItemCancelApi:", error);
+          errorToThrow = error;
+          if (!toast.isActive(error.message)) {
+              toast.error("Erro ao remover item", { id: error.message, description: error.message });
+          }
+      } finally {
+          setIsAddingItem(false);
+          if (errorToThrow) {
+              throw errorToThrow;
+          }
+      }
+  };
+
 
   const cartItems = React.useMemo(() => {
       if (!activeSale || !activeSale.itens) {
           return [];
       }
       
-      // Transforma os dados do backend (VendaItem) para o formato do frontend
       return activeSale.itens.map(item => ({
           id: item.produto.codigo_barras, 
           name: item.produto.nome,
@@ -113,8 +225,6 @@ export default function PontoVenda() {
       
       console.log(`Verificando venda em aberto para PDV #${session.id}...`);
       try {
-          // (Presume que você tem esta rota 'GET /vendas/pdvs/{id}/venda-ativa'
-          // que fizemos na conversa anterior)
           const response = await fetch(`${API_URL}/vendas/pdvs/${session.id}/venda-ativa`);
           
           if (response.status === 404 || response.status === 204) {
@@ -169,60 +279,31 @@ export default function PontoVenda() {
 
   React.useEffect(() => {
     const handleKeyPress = (e) => {
-        // Ignora se o modal estiver aberto ou buscando
-        if (isModalOpen || isPaymentModalOpen || isAddingItem) return;
-
-        // F1 (Contextual) - Abrir/Finalizar
-        if (e.key === 'F1') {
-           e.preventDefault();
-           // Lógica F1: Abrir Modal de Gestão da Sessão
-           handleOpenCloseModalToggle();
-           return;
-        }
-
-        if (e.key === 'F4') {
-          e.preventDefault();
-          handleCancelSale(); // Chama a função que abre a modal de autorização
-          return;
-        }
+        if (isModalOpen || isPaymentModalOpen || isAddingItem || isCancelItemModalOpen) return;
+        if (e.key === 'F1') {e.preventDefault(); handleOpenCloseModalToggle(); return;}
+        if (e.key === 'F3') { e.preventDefault(); handleCancelItem(); return; }
+        if (e.key === 'F4') { e.preventDefault(); handleCancelSale(); return; }
         
-        // ✅ NOVO GATILHO: F2 para FINALIZAR VENDA
         if (e.key === 'F2') {
            e.preventDefault();
-           // Verifica se o caixa está aberto e tem itens, senão informa o erro
            if (pdvSession?.status === 'aberto' && cartItems.length > 0) {
                console.log("F2 Pressionado - Iniciando Pagamento");
-               handlePaymentStart(); // Chama a função que muda o status e abre o PaymentModal
+               handlePaymentStart();
            } else if (pdvSession?.status !== 'aberto') {
                toast.warning("Caixa Fechado", { description: "Use F1 para abrir o caixa antes de finalizar." });
-           } else {
-               toast.info("Carrinho Vazio", { description: "Adicione itens para finalizar a venda." });
-           }
-           return;
-        }
-        
-        // --- A partir daqui, só funciona se o caixa estiver ABERTO ---
-        if (pdvSession?.status !== 'aberto') {
-            return; 
-        }
-
-        // Lógica de digitação (Enter, Escape, Backspace, caractere)
-        if (e.key === 'Enter') {
-            e.preventDefault();
-            if (barcodeBuffer.trim().length > 0) {
-                handleBarcodeSubmit(barcodeBuffer.trim());
-            }
-            return;
-        }
+           } else {toast.info("Carrinho Vazio", { description: "Adicione itens para finalizar a venda." });}return;}
+        if (pdvSession?.status !== 'aberto') {return; }
+        if (e.key === 'Enter') {e.preventDefault();if (barcodeBuffer.trim().length > 0) {handleBarcodeSubmit(barcodeBuffer.trim());}return; }
         if (e.key === 'Escape') { e.preventDefault(); setBarcodeBuffer(""); return; }
         if (e.key === 'Backspace') { e.preventDefault(); setBarcodeBuffer(prev => prev.slice(0, -1)); return; }
         if (e.key.length === 1 && e.key.match(/^[a-zA-Z0-9-]$/)) { e.preventDefault(); setBarcodeBuffer(prev => prev + e.key); }
     };
 
-document.addEventListener('keydown', handleKeyPress);
+    document.addEventListener('keydown', handleKeyPress);
     return () => document.removeEventListener('keydown', handleKeyPress);
   
-  }, [barcodeBuffer, isAddingItem, saleStatus, pdvSession, isModalOpen, isPaymentModalOpen, cartItems]); // 'cartItems' aqui agora é o derivado
+  }, [barcodeBuffer, isAddingItem, saleStatus, pdvSession, isModalOpen, isPaymentModalOpen, cartItems, handleCancelItem, handleCancelSale]);
+
   React.useEffect(() => {
       const handleOnline = () => setPdvSession(prev => (prev ? { ...prev, isOnline: true } : null));
       const handleOffline = () => setPdvSession(prev => (prev ? { ...prev, isOnline: false } : null));
@@ -316,70 +397,6 @@ React.useEffect(() => {
       setIsPaymentModalOpen(true); // Abre o modal
   };
 
-  const handleCancelSale = () => {
-    if (!activeSale) {
-        toast.info("Nenhuma venda em andamento para cancelar.");
-        return;
-    }
-    // Seta o contexto e abre o modal de AUTORIZAÇÃO
-    setAuthActionContext({ type: 'cancel_sale', saleId: activeSale.id });
-    setIsAuthModalOpen(true);
-};
-
-// --- AÇÃO 2: INICIAR O CANCELAMENTO DE ITEM (abre o modal de seleção) ---
-  const handleRemoveItem = () => {
-    if (!activeSale || cartItems.length === 0) {
-        toast.info("Nenhum item na venda para remover.");
-        return;
-    }
-    setIsCancelItemModalOpen(true); // Abre o modal específico de itens
-};
-
-// --- AÇÃO 3: FUNÇÃO CENTRALIZADORA DE AUDITORIA (chama a API) ---
-// Esta função é passada para o AdminAuthModal
-const executeAuditedAction = async (authCredentials) => {
-    if (!authActionContext) return;
-
-    let apiEndpoint = '';
-    let apiMethod = '';
-    let successMessage = '';
-
-    // 1. Ação de Cancelar Venda
-    if (authActionContext.type === 'cancel_sale') {
-        apiEndpoint = `${API_URL}/vendas/${authActionContext.saleId}/cancelar`;
-        apiMethod = 'DELETE'; // Ou POST, dependendo da sua rota (usamos DELETE para o backend)
-        successMessage = `Venda #${authActionContext.saleId} cancelada.`;
-    } 
-    // [Se você tivesse uma tela de cancelamento de item, a lógica estaria aqui]
-    // if (authActionContext.type === 'remove_item_final') { ... }
-
-    // O corpo da requisição será as credenciais do Admin
-    const requestBody = JSON.stringify(authCredentials);
-
-    try {
-        const response = await fetch(apiEndpoint, {
-            method: apiMethod,
-            headers: { 'Content-Type': 'application/json' },
-            body: requestBody
-        });
-
-        // O backend (no DELETE) vai retornar 204 se for sucesso.
-        if (response.status === 204 || response.ok) { 
-            toast.success(successMessage);
-            setActiveSale(null); // Limpa o carrinho
-            setAuthActionContext(null);
-            return true; // Sucesso na auditoria/ação
-        }
-
-        const result = await response.json().catch(() => ({}));
-        throw new Error(result.detail || 'Erro na autorização ou ação de auditoria.');
-
-    } catch (error) {
-        // Se a rota falhar, o AdminAuthModal irá capturar este erro.
-        throw error; 
-    }
-};
-
   return (
     <>
       <ComprasPageLayout
@@ -417,16 +434,12 @@ const executeAuditedAction = async (authCredentials) => {
         pdvSession={pdvSession}
         onSaleSuccess={handleSaleSuccess}
       />
-
-      <CancelItemModal
-       open={isCancelItemModalOpen}
-       onOpenChange={setIsCancelItemModalOpen}
-       activeSale={activeSale}
-       onStartAuth={(itemData) => {
-          setIsCancelItemModalOpen(false); // Fecha a modal de seleção
-          setAuthActionContext({ type: 'remove_item_selection', ...itemData }); // Contexto
-          setIsAuthModalOpen(true); // Abre a modal de autorização
-       }}
+      <CancelItemModal 
+        open={isCancelItemModalOpen} 
+        onOpenChange={setIsCancelItemModalOpen} 
+        cartItems={cartItems} 
+        onConfirmRemoval={handleItemCancelApi}
+        onTotalSaleCancel={handleConfirmSaleCancel}
     />
     </>
   );
