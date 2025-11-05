@@ -16,6 +16,7 @@ import { OpenClosePdvModal } from "@/components/pdvs/modalAberturaFechamento";
 import { Power, Loader2 } from "lucide-react";
 import { PaymentModal } from "@/components/pontovenda/modalVenda"
 import { CancelItemModal } from "@/components/pontovenda/CancelamentoModal"
+import { RecoveryModal } from "@/components/pontovenda/ModalRecuperacaoV"
 
 const API_URL = "http://localhost:8000"; 
 
@@ -40,6 +41,8 @@ export default function PontoVenda() {
   const [isLoadingOperators, setIsLoadingOperators] = React.useState(false);
   const [isPaymentModalOpen, setIsPaymentModalOpen] = React.useState(false); 
   const [isCancelItemModalOpen, setIsCancelItemModalOpen] = React.useState(false);
+  const [isRecoveryModalOpen, setIsRecoveryModalOpen] = React.useState(false);
+  const [saleToRecover, setSaleToRecover] = React.useState(null);
 
   const fetchPdvSession = async (isInitialLoad = false) => {
 
@@ -56,24 +59,26 @@ export default function PontoVenda() {
     }
 
     try {
-      if (isInitialLoad) console.log(`Carregando sessão para PDV com nome: ${machineName}`);
-      else console.log(`RE-carregando sessão para PDV: ${machineName}`);
+      if (isInitialLoad) console.log(`Carregando sessão...`);
+      else console.log(`RE-carregando sessão...`);
 
       const response = await fetch(`${API_URL}/pdvs/session-by-name/${machineName}`); 
       const data = await response.json();
-      
-      if (!response.ok) {
-         throw new Error(data.detail || "PDV não encontrado ou erro desconhecido.");
-      }
+      if (!response.ok) throw new Error(data.detail || "PDV não encontrado.");
       
       setPdvSession({ ...data, isOnline: navigator.onLine }); 
       
       if (data.status === 'aberto') {
-          await loadExistingActiveSale(data);
-          setSaleStatus("livre"); 
-          if (isInitialLoad) toast.success(`Caixa ${data.nome} aberto. Operador: ${data.operador_atual.nome}.`);
+          // Tenta carregar a venda. Se retornar 'false' (sem venda), libera o caixa.
+          const foundSale = await loadExistingActiveSale(data);
+          if (!foundSale) {
+              setSaleStatus("livre"); 
+              if (isInitialLoad) toast.success(`Caixa ${data.nome} aberto. Operador: ${data.operador_atual.nome}.`);
+          }
+          // Se 'foundSale' for 'true', o status fica 'awaiting_recovery'
+          // e o modal de recuperação será exibido.
       } else {
-          setSaleStatus(data.status);
+          setSaleStatus(data.status); // 'fechado'
           if (isInitialLoad) toast.info(`Caixa ${data.nome} está ${data.status}.`, { description: "Pressione F1 para abrir o caixa."});
       }
 
@@ -220,7 +225,7 @@ export default function PontoVenda() {
   const loadExistingActiveSale = async (session) => {
       if (session.status !== 'aberto') {
           setActiveSale(null); 
-          return;
+          return false;
       }
       
       console.log(`Verificando venda em aberto para PDV #${session.id}...`);
@@ -230,20 +235,21 @@ export default function PontoVenda() {
           if (response.status === 404 || response.status === 204) {
              console.log("Nenhuma venda em aberto encontrada. Caixa livre.");
              setActiveSale(null);
-             return;
+             return false;
           }
 
           const saleData = await response.json();
           if (!response.ok) throw new Error(saleData.detail || "Falha ao carregar venda");
           
-          setActiveSale(saleData);
-          toast.info(`Venda #${saleData.id} recuperada.`, {
-              description: "Havia uma venda em andamento para este caixa."
-          });
+          setSaleToRecover(saleData);
+          setIsRecoveryModalOpen(true);
+          setSaleStatus("awaiting_recovery");
+          return true;
           
       } catch (error) {
          console.log("Nenhum erro, apenas sem venda ativa.");
          setActiveSale(null);
+         return false;
       }
   }
 
@@ -354,19 +360,14 @@ const handleBarcodeSubmit = async (codigo) => {
   }
 };
 
-React.useEffect(() => {
-  if (isAddingItem) {
-    setSaleStatus("loading");
-  } else if (isPaymentModalOpen) {
-    setSaleStatus("pagamento");
-  } else if (activeSale && cartItems.length > 0) {
-    setSaleStatus("em_andamento");
-  } else if (pdvSession?.status === 'aberto') {
-    setSaleStatus("livre");
-  } else if (pdvSession?.status) {
-    setSaleStatus(pdvSession.status);
-  }
-}, [cartItems.length, activeSale, pdvSession, isAddingItem, isPaymentModalOpen]);
+  React.useEffect(() => {
+    if (isAddingItem) setSaleStatus("loading");
+    else if (isPaymentModalOpen) setSaleStatus("pagamento");
+    else if (saleStatus === "awaiting_recovery") { /* Mantém status de espera */ }
+    else if (activeSale && cartItems.length > 0) setSaleStatus("em_andamento");
+    else if (pdvSession?.status === 'aberto') setSaleStatus("livre");
+    else if (pdvSession?.status) setSaleStatus(pdvSession.status);
+  }, [cartItems.length, activeSale, pdvSession, isAddingItem, isPaymentModalOpen, saleStatus]);
 
   const lastItem = cartItems.length > 0 ? cartItems[0] : null;
 
@@ -393,8 +394,23 @@ React.useEffect(() => {
           return;
       }
       console.log("Iniciando pagamento...");
-      setSaleStatus("pagamento"); // Muda o status do rodapé (ex: 'Aguardando Pagamento')
-      setIsPaymentModalOpen(true); // Abre o modal
+      setSaleStatus("pagamento");
+      setIsPaymentModalOpen(true);
+  };
+
+  const handleRecoverSale = () => {
+      setActiveSale(saleToRecover); 
+      setSaleToRecover(null);
+      setIsRecoveryModalOpen(false);
+      setSaleStatus("em_andamento");
+      toast.success(`Venda #${saleToRecover.id} recuperada.`, { description: "Continue adicionando itens." });
+  };
+  
+  const handleDiscardSale = () => {
+      setActiveSale(null);
+      setSaleToRecover(null);
+      setIsRecoveryModalOpen(false);
+      setSaleStatus("livre");
   };
 
   return (
@@ -440,7 +456,15 @@ React.useEffect(() => {
         cartItems={cartItems} 
         onConfirmRemoval={handleItemCancelApi}
         onTotalSaleCancel={handleConfirmSaleCancel}
-    />
+      />
+      <RecoveryModal
+       open={isRecoveryModalOpen}
+       onOpenChange={setIsRecoveryModalOpen}
+       sale={saleToRecover}
+       pdvSession={pdvSession}
+       onRecover={handleRecoverSale}
+       onDiscard={handleDiscardSale}
+      />
     </>
   );
 }

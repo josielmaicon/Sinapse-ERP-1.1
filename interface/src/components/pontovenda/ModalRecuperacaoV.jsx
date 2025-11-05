@@ -27,14 +27,14 @@ export function RecoveryModal({ open, onOpenChange, sale, onRecover, onDiscard, 
         setIsLoading(true);
         
         try {
-            // Chamada de API para deletar a venda
-            const response = await fetch(`${API_URL}/vendas/${sale.id}/cancelar-venda`, {
+            // ✅ CORREÇÃO: Chamando a nova rota de DESCARTE (sem body)
+            const response = await fetch(`${API_URL}/vendas/${sale.id}/descartar-venda-ativa`, {
                 method: 'DELETE',
             });
 
-            if (response.status === 204) { // 204 No Content para sucesso de deleção
+            if (response.status === 204) { 
                 toast.success("Venda descartada.", { description: `Venda #${sale.id} excluída do sistema.` });
-                onDiscard(); // Limpa a venda no estado pai (que fará o refetch e fechará o modal)
+                onDiscard(); 
             } else {
                 const errorData = await response.json().catch(() => ({}));
                 throw new Error(errorData.detail || `Falha ao descartar venda (Status: ${response.status})`);

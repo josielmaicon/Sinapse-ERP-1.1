@@ -420,3 +420,38 @@ def get_venda_ativa_por_pdv(pdv_id: int, db: Session = Depends(get_db)):
         
     # 3. Se houver, retorna o objeto Venda completo
     return venda_ativa
+
+@router.delete("/{venda_id}/descartar-venda-ativa", status_code=status.HTTP_204_NO_CONTENT)
+def descartar_venda_ativa_startup(venda_id: int, db: Session = Depends(get_db)):
+    """
+    Desfaz o estorno do estoque e deleta uma venda 'em_andamento'.
+    Usado pelo modal de recuperação/descarte NA INICIALIZAÇÃO DO PDV.
+    Não requer autenticação de admin, pois a ação é local do PDV.
+    """
+    
+    venda = db.query(models.Venda).options(
+        selectinload(models.Venda.itens) 
+    ).filter(
+        models.Venda.id == venda_id,
+        models.Venda.status == "em_andamento"
+    ).first()
+
+    if not venda:
+        # Não levanta erro, apenas retorna sucesso (já foi descartada?)
+        print(f"Aviso: Venda {venda_id} não encontrada para descarte (talvez já processada).")
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
+        
+    # 1. Estorno de Estoque
+    print(f"DESCARTE: Estornando estoque para Venda #{venda_id}...")
+    for item in venda.itens:
+        db_produto = db.query(models.Produto).filter(models.Produto.id == item.produto_id).first()
+        if db_produto:
+            db_produto.quantidade_estoque += item.quantidade
+            db.add(db_produto)
+    
+    # 2. Deleta Venda e Itens
+    db.delete(venda)
+    db.commit()
+    
+    print(f"DESCARTE: Venda #{venda_id} descartada com sucesso.")
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

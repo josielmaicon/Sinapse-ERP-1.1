@@ -28,6 +28,7 @@ class VendaBase(BaseModel):
     operador_id: int
     pdv_id: int
 
+
 class VendaCreate(VendaBase):
     """Usado quando a venda é criada diretamente (sem PDV)"""
     itens: List[VendaItemCreate]
