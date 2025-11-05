@@ -17,6 +17,7 @@ import { Power, Loader2 } from "lucide-react";
 import { PaymentModal } from "@/components/pontovenda/modalVenda"
 import { CancelItemModal } from "@/components/pontovenda/CancelamentoModal"
 import { RecoveryModal } from "@/components/pontovenda/ModalRecuperacaoV"
+import { SetNextQuantityModal } from "@/components/pontovenda/AjusteQTD"
 
 const API_URL = "http://localhost:8000"; 
 
@@ -43,6 +44,8 @@ export default function PontoVenda() {
   const [isCancelItemModalOpen, setIsCancelItemModalOpen] = React.useState(false);
   const [isRecoveryModalOpen, setIsRecoveryModalOpen] = React.useState(false);
   const [saleToRecover, setSaleToRecover] = React.useState(null);
+  const [nextQuantity, setNextQuantity] = React.useState(1); 
+  const [isQtyModalOpen, setIsQtyModalOpen] = React.useState(false); // Controla o modal de Qtd
 
   const fetchPdvSession = async (isInitialLoad = false) => {
 
@@ -285,11 +288,15 @@ export default function PontoVenda() {
 
   React.useEffect(() => {
     const handleKeyPress = (e) => {
-        if (isModalOpen || isPaymentModalOpen || saleToRecover || isAddingItem || isCancelItemModalOpen) return;
+        if (isModalOpen || isPaymentModalOpen || isQtyModalOpen || saleToRecover || isAddingItem || isCancelItemModalOpen) return;
         if (e.key === 'F1') {e.preventDefault(); handleOpenCloseModalToggle(); return;}
         if (e.key === 'F3') { e.preventDefault(); handleCancelItem(); return; }
-        if (e.key === 'F4') { e.preventDefault(); handleCancelSale(); return; }
-        
+        if (e.key === 'F4') {e.preventDefault(); if (pdvSession?.status === 'aberto') {setIsQtyModalOpen(true);
+             } else {
+                toast.warning("Caixa Fechado", { description: "Abra o caixa (F1) para definir quantidades." });
+             }
+             return;
+        }        
         if (e.key === 'F2') {
            e.preventDefault();
            if (pdvSession?.status === 'aberto' && cartItems.length > 0) {
@@ -308,7 +315,7 @@ export default function PontoVenda() {
     document.addEventListener('keydown', handleKeyPress);
     return () => document.removeEventListener('keydown', handleKeyPress);
   
-  }, [barcodeBuffer, isAddingItem, saleToRecover, saleStatus, pdvSession, isModalOpen, isPaymentModalOpen, cartItems, handleCancelItem, handleCancelSale]);
+  }, [barcodeBuffer, isAddingItem, saleToRecover, isQtyModalOpen, saleStatus, pdvSession, isModalOpen, isPaymentModalOpen, cartItems, handleCancelItem, handleCancelSale]);
 
   React.useEffect(() => {
       const handleOnline = () => setPdvSession(prev => (prev ? { ...prev, isOnline: true } : null));
@@ -321,44 +328,59 @@ export default function PontoVenda() {
       };
   }, []);
   
+// ... (Dentro de export default function PontoVenda() { ... } )
+
 const handleBarcodeSubmit = async (codigo) => {
-  setIsAddingItem(true);
-  // Não precisamos de 'let currentSale' aqui
+    setIsAddingItem(true);
+    
+    // CAPTURA o valor do estado ANTES de qualquer coisa
+    const quantityToUse = nextQuantity;
 
-  try {
-    // 1. VALIDAÇÃO DE SESSÃO (Ainda necessária)
-    if (!pdvSession || !pdvSession.operador_atual || !pdvSession.operador_atual.id) {
-      toast.error("Sessão Inválida", { description: "Operador não identificado. Tente reabrir o caixa (F1)." });
-      throw new Error("Operador não encontrado na sessão.");
+    try {
+      // 1. VALIDAÇÃO DE SESSÃO (Mantenha este bloco)
+      if (!pdvSession || !pdvSession.operador_atual || !pdvSession.operador_atual.id) {
+        toast.error("Sessão Inválida", { description: "Operador não identificado. Tente reabrir o caixa (F1)." });
+        throw new Error("Operador não encontrado na sessão.");
+      }
+
+      // 2. FAZ A CHAMADA ÚNICA PARA A ROTA "INTELIGENTE"
+      const response = await fetch(`${API_URL}/vendas/adicionar-item-smart`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          codigo_barras: codigo,
+          pdv_id: pdvSession.id,
+          operador_id: pdvSession.operador_atual.id,
+          quantidade: quantityToUse, // ✅ Usa a quantidade CONSUMIDA
+        }),
+      });
+
+      const updatedSale = await response.json();
+
+      if (!response.ok) {
+        throw new Error(updatedSale.detail || "Erro ao adicionar item.");
+      }
+      
+      // 3. ATUALIZA ESTADO PRINCIPAL
+      setActiveSale(updatedSale);
+
+    } catch (error) {
+      console.error("Erro em handleBarcodeSubmit:", error);
+      toast.error(error.message);
+    } finally {
+      // ✅ CORREÇÃO CRÍTICA: ZERA O NEXT QUANTITY AQUI
+      // Este bloco é executado após o sucesso ou falha do try/catch.
+      // E é o último lugar antes da função terminar.
+      setIsAddingItem(false);
+      setBarcodeBuffer("");
+      
+      // ✅ AÇÃO DE RESET: Avisa o usuário e zera o estado.
+      if (quantityToUse !== 1) {
+          toast.info(`Quantidade ${quantityToUse} aplicada. Próxima Qtd. resetada para 1.`);
+      }
+      setNextQuantity(1); 
     }
-
-    // 2. FAZ A CHAMADA ÚNICA PARA A ROTA "INTELIGENTE"
-    const response = await fetch(`${API_URL}/vendas/adicionar-item-smart`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        codigo_barras: codigo,
-        pdv_id: pdvSession.id,
-        operador_id: pdvSession.operador_atual.id,
-        quantidade: 1 
-      }),
-    });
-
-    const updatedSale = await response.json();
-
-    if (!response.ok) {
-      throw new Error(updatedSale.detail || "Erro ao adicionar item.");
-    }
-    setActiveSale(updatedSale);
-
-  } catch (error) {
-    console.error("Erro em handleBarcodeSubmit:", error);
-    toast.error(error.message);
-  } finally {
-    setIsAddingItem(false);
-    setBarcodeBuffer("");
-  }
-};
+  };
 
   React.useEffect(() => {
     if (isAddingItem) setSaleStatus("loading");
@@ -465,6 +487,16 @@ const handleBarcodeSubmit = async (codigo) => {
        onRecover={handleRecoverSale}
        onDiscard={handleDiscardSale}
       />
+      <SetNextQuantityModal 
+        open={isQtyModalOpen}
+        onOpenChange={setIsQtyModalOpen}
+        currentNextQuantity={nextQuantity}
+        onQuantitySet={(qty) => {
+            setNextQuantity(qty);
+            setIsQtyModalOpen(false); // Fecha o modal
+            toast.info(`Próximo item será adicionado com Qtd: ${qty}`);
+        }}
+    />
     </>
   );
 }

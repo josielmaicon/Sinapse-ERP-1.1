@@ -284,10 +284,11 @@ export function CancelItemModal({ open, onOpenChange, cartItems, onConfirmRemova
                       onClick={() => setQuantityToRemove(prev => String(Math.max(1, (parseInt(prev, 10) || 1) - 1)))}
                       disabled={isProcessing || (parseInt(quantityToRemove, 10) || 1) <= 1}
                     >
-                      <Minus className="h-4 w-4" /><kbd className="ml-1.5">-</kbd>
+                      {/* ✅ CORRIGIDO: Agora tem SOMENTE o ÍCONE MINUS */}
+                      <Minus className="h-4 w-4" />
                     </Button>
                     <Input
-                      id="quantity-input" // ✅ ID para o Label e foco
+                      id="quantity-input" 
                       type="number"
                       min="1"
                       max={selectedItem.quantity}
@@ -301,16 +302,18 @@ export function CancelItemModal({ open, onOpenChange, cartItems, onConfirmRemova
                       onClick={() => setQuantityToRemove(prev => String(Math.min(selectedItem.quantity, (parseInt(prev, 10) || 1) + 1)))}
                       disabled={isProcessing || (parseInt(quantityToRemove, 10) || 1) >= selectedItem.quantity}
                     >
-                      <Plus className="h-4 w-4" /><kbd className="ml-1.5">+</kbd>
+                      {/* ✅ CORRIGIDO: Agora tem SOMENTE o ÍCONE PLUS */}
+                      <Plus className="h-4 w-4" />
                     </Button>
                     
+                    {/* O botão de Cancelar Venda Total está correto */}
                     <Button 
-                      variant="destructive" 
-                      className="ml-4"
-                      onClick={handleTriggerTotalCancel}
-                      disabled={isProcessing}
+                        variant="destructive" 
+                        className="ml-4"
+                        onClick={handleTriggerTotalCancel}
+                        disabled={isProcessing}
                     >
-                      <Trash2 className="mr-2 h-4 w-4" /> Cancelar Venda Total <kbd>F4</kbd>
+                        <Trash2 className="mr-2 h-4 w-4" /> Cancelar Venda Total <kbd>F4</kbd>
                     </Button>
                 </div>
               </div>
