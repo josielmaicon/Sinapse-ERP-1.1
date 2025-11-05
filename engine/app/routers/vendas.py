@@ -393,3 +393,30 @@ def cancelar_venda_em_andamento(
     db.delete(venda)
     db.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+# ... (suas rotas existentes) ...
+
+# ✅ NOVA ROTA: Buscar Venda Ativa por PDV
+@router.get("/pdvs/{pdv_id}/venda-ativa", response_model=schemas.Venda)
+def get_venda_ativa_por_pdv(pdv_id: int, db: Session = Depends(get_db)):
+    """
+    Busca a venda com status 'em_andamento' para o PDV especificado.
+    Retorna 404 se não houver venda ativa.
+    """
+    
+    # 1. Busca a venda com o status correto
+    venda_ativa = db.query(models.Venda).options(
+        # Pré-carrega os itens da venda e os dados do produto (VendaItem.produto)
+        selectinload(models.Venda.itens).joinedload(models.VendaItem.produto)
+    ).filter(
+        models.Venda.pdv_id == pdv_id,
+        models.Venda.status == "em_andamento"
+    ).first()
+    
+    # 2. Se não houver, retorna 404
+    if not venda_ativa:
+        # Se for 404 ou 204, o frontend entende que não tem venda.
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Nenhuma venda ativa encontrada para este PDV.")
+        
+    # 3. Se houver, retorna o objeto Venda completo
+    return venda_ativa
