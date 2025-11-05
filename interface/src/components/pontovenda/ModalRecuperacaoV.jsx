@@ -12,6 +12,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { toast } from "sonner"
+import { Kbd } from "@/components/ui/kbd" // 1. Importa o Kbd
 
 const API_URL = "http://localhost:8000"; 
 
@@ -47,6 +48,42 @@ export function RecoveryModal({ open, onOpenChange, sale, onRecover, onDiscard, 
         }
     };
 
+    React.useEffect(() => {
+        // Só adiciona o listener se o modal estiver ABERTO
+        if (open) {
+            const handleKeyDown = (e) => {
+                // Impede que o evento "vaze" para outros listeners (como o do PDV)
+                e.stopPropagation(); 
+
+                if (isLoading) return; // Não faz nada se já estiver carregando
+
+                // Tecla "N" ou "n" para Descartar (Negar)
+                if (e.key.toLowerCase() === 'n') {
+                    e.preventDefault();
+                    console.log("RecoveryModal: Hotkey 'N' -> Descartando Venda");
+                    handleDiscard();
+                }
+                
+                // Tecla "Enter" para Recuperar (Confirmar)
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    console.log("RecoveryModal: Hotkey 'Enter' -> Recuperando Venda");
+                    // onRecover é uma função síncrona (só fecha o modal e define o estado)
+                    onRecover(); 
+                }
+            };
+
+            // Adiciona o listener
+            document.addEventListener('keydown', handleKeyDown);
+
+            // Função de limpeza: remove o listener quando o modal fecha
+            return () => {
+                document.removeEventListener('keydown', handleKeyDown);
+            };
+        }
+    // Depende de 'open' para ligar/desligar, e das funções que chama
+    }, [open, isLoading, onRecover, handleDiscard]);
+
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="sm:max-w-md">
@@ -75,16 +112,20 @@ export function RecoveryModal({ open, onOpenChange, sale, onRecover, onDiscard, 
                 <DialogFooter className="flex-col sm:flex-row pt-2">
                     <Button 
                         variant="outline" 
-                        onClick={handleDiscard} // Chama o handler de exclusão
+                        onClick={handleDiscard}
                         disabled={isLoading}
                     >
-                        {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : 'Descartar e Iniciar Nova'}
+                        {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : 'Descartar'}
+                        <Kbd className="ml-2">N</Kbd>
                     </Button>
+                    
+                    {/* ✅ 3. BOTÃO DE RECUPERAR COM KBD */}
                     <Button 
-                        onClick={onRecover} // Chama o callback para recuperar (não é assíncrono)
+                        onClick={onRecover} 
                         disabled={isLoading}
                     >
                         Continuar Venda
+                        <Kbd className="ml-2">Enter</Kbd>
                     </Button>
                 </DialogFooter>
             </DialogContent>

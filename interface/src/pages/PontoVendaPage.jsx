@@ -285,7 +285,7 @@ export default function PontoVenda() {
 
   React.useEffect(() => {
     const handleKeyPress = (e) => {
-        if (isModalOpen || isPaymentModalOpen || isAddingItem || isCancelItemModalOpen) return;
+        if (isModalOpen || isPaymentModalOpen || saleToRecover || isAddingItem || isCancelItemModalOpen) return;
         if (e.key === 'F1') {e.preventDefault(); handleOpenCloseModalToggle(); return;}
         if (e.key === 'F3') { e.preventDefault(); handleCancelItem(); return; }
         if (e.key === 'F4') { e.preventDefault(); handleCancelSale(); return; }
@@ -308,7 +308,7 @@ export default function PontoVenda() {
     document.addEventListener('keydown', handleKeyPress);
     return () => document.removeEventListener('keydown', handleKeyPress);
   
-  }, [barcodeBuffer, isAddingItem, saleStatus, pdvSession, isModalOpen, isPaymentModalOpen, cartItems, handleCancelItem, handleCancelSale]);
+  }, [barcodeBuffer, isAddingItem, saleToRecover, saleStatus, pdvSession, isModalOpen, isPaymentModalOpen, cartItems, handleCancelItem, handleCancelSale]);
 
   React.useEffect(() => {
       const handleOnline = () => setPdvSession(prev => (prev ? { ...prev, isOnline: true } : null));
