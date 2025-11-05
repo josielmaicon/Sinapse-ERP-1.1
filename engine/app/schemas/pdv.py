@@ -121,3 +121,12 @@ class ActionResponse(BaseModel):
     
 class StatusUpdateRequest(BaseModel):
     novo_status: str 
+
+class ManualItemRequest(BaseModel):
+    """Dados necessários para lançar um item de serviço ou diverso."""
+    descricao: str
+    preco_unitario: float
+    quantidade: int
+    
+    pdv_id: int
+    operador_id: int 

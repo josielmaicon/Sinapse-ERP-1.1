@@ -455,3 +455,56 @@ def descartar_venda_ativa_startup(venda_id: int, db: Session = Depends(get_db)):
     
     print(f"DESCARTE: Venda #{venda_id} descartada com sucesso.")
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+@router.post("/adicionar-item-manual", response_model=schemas.Venda)
+def adicionar_item_manual(request: schemas.ManualItemRequest, db: Session = Depends(get_db)):
+
+    venda = db.query(models.Venda).filter(
+        models.Venda.pdv_id == request.pdv_id,
+        models.Venda.status == "em_andamento"
+    ).first()
+
+    if not venda:
+        pdv = db.query(models.Pdv).filter(models.Pdv.id == request.pdv_id).first()
+        if not pdv: raise HTTPException(status_code=404, detail="PDV não encontrado")
+        
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        codigo_venda_str = f"VENDA_MANUAL_{timestamp}_{pdv.nome.upper().replace(' ', '')}"
+        
+        venda = models.Venda(
+            pdv_id=request.pdv_id,
+            operador_id=request.operador_id,
+            status="em_andamento",
+            codigo_venda=codigo_venda_str,
+            valor_total=0.0 # Inicia com 0
+        )
+        db.add(venda)
+        db.flush() # Para obter o ID da nova venda
+
+    produto_diverso_id = 999999 # ID fictício para 'Diversos'
+
+    venda_item = models.VendaItem(
+        venda_id=venda.id,
+        produto_id=produto_diverso_id, # Usando o ID Fictício
+        quantidade=request.quantidade,
+        preco_unitario_na_venda=request.preco_unitario
+    )
+    db.add(venda_item)
+    
+    print(f"Lançamento Manual Registrado: {request.descricao} x {request.quantidade} @ R$ {request.preco_unitario}")
+
+    db.flush()
+    total_calc = db.query(
+        func.sum(models.VendaItem.quantidade * models.VendaItem.preco_unitario_na_venda)
+    ).filter(models.VendaItem.venda_id == venda.id).scalar() or 0.0
+
+    venda.valor_total = total_calc
+    db.add(venda)
+    db.commit()
+
+    # 6. RETORNA A VENDA COMPLETA (com 'itens' e 'produto' de cada item)
+    venda_atualizada = db.query(models.Venda).options(
+        selectinload(models.Venda.itens).joinedload(models.VendaItem.produto)
+    ).filter(models.Venda.id == venda.id).first()
+    
+    return venda_atualizada
