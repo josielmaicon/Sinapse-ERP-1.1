@@ -82,3 +82,6 @@ class LabelPrintData(BaseModel):
     nome: str
     preco_venda: float
 
+class ProdutoComPromocao(Produto):
+    preco_final: float
+    promocao_ativa: Optional[str] = None # Nome da promoção aplicada (se houver)

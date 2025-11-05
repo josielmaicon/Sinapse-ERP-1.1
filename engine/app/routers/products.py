@@ -1,8 +1,8 @@
 # app/routers/products.py
 from typing import List
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
-from datetime import date, timedelta
+from sqlalchemy.orm import Session, joinedload
+from datetime import date, timedelta, datetime
 from .. import models, schemas
 from sqlalchemy import and_
 from ..database import get_db, engine
@@ -16,7 +16,6 @@ router = APIRouter(
 
 @router.post("/", response_model=schemas.Produto)
 def create_product(produto: schemas.ProdutoCreate, db: Session = Depends(get_db)):
-    # Usamos os nomes em português que definimos no models.py
     db_produto = models.Produto(**produto.dict())
     db.add(db_produto)
     db.commit()
@@ -35,7 +34,6 @@ def delete_produto(produto_id: int, db: Session = Depends(get_db)):
     if db_produto is None:
         raise HTTPException(status_code=404, detail="Produto não encontrado")
 
-    # Verifica se o produto já está em alguma venda
     item_vinculado = db.query(models.VendaItem).filter(models.VendaItem.produto_id == produto_id).first()
     if item_vinculado:
         raise HTTPException(
@@ -47,24 +45,51 @@ def delete_produto(produto_id: int, db: Session = Depends(get_db)):
     db.commit()
     return {"ok": True, "message": "Produto excluído com sucesso"} 
 
-@router.get("/barcode/{barcode}", response_model=schemas.Produto)
-def get_product_by_barcode(barcode: str, db: Session = Depends(get_db)):
+@router.get("/barcode/{codigo_barras}", response_model=schemas.ProdutoComPromocao)
+def get_produto_por_codigo_barras(codigo_barras: str, db: Session = Depends(get_db)):
     """
-    Busca um único produto pelo seu código de barras.
+    Busca um produto, verifica promoções ativas e calcula o preço final.
     """
-    # 1. A Busca no Banco de Dados
-    # Ele procura na tabela 'Produto' por uma linha onde a coluna 'codigo_barras'
-    # seja igual ao 'barcode' recebido da URL, e pega o primeiro resultado.
-    db_product = db.query(models.Produto).filter(models.Produto.codigo_barras == barcode).first()
+    now = datetime.utcnow()
 
-    # 2. O Tratamento de Erro Profissional (404)
-    # Se a busca não retornar nada (db_product for None), nós levantamos uma exceção HTTP.
-    if db_product is None:
-        raise HTTPException(status_code=404, detail="Produto não encontrado")
+    db_produto = db.query(models.Produto).options(
+        joinedload(models.Produto.promocoes).contains_eager(models.Promocao)
+    ).filter(
+        models.Produto.codigo_barras == codigo_barras
+    ).first()
+    
+    if not db_produto:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Produto com código de barras '{codigo_barras}' não encontrado no estoque."
+        )
 
-    # 3. O Retorno de Sucesso
-    # Se o produto foi encontrado, nós o retornamos.
-    return db_product
+    promocoes_validas = [
+        p for p in db_produto.promocoes
+        if p.data_inicio <= now and (p.data_fim is None or p.data_fim >= now)
+    ]
+    
+    preco_final = db_produto.preco_venda
+    melhor_promocao = None
+    
+    for promo in promocoes_validas:
+        preco_promocional = db_produto.preco_venda
+        
+        if promo.tipo == 'percentual':
+            preco_promocional = db_produto.preco_venda * (1 - promo.valor / 100.0)
+        
+        elif promo.tipo == 'preco_fixo':
+            preco_promocional = promo.valor
+            
+        if preco_promocional < preco_final:
+            preco_final = preco_promocional
+            melhor_promocao = promo
+            
+    return schemas.ProdutoComPromocao(
+        **db_produto.__dict__,
+        preco_final=preco_final,
+        promocao_ativa=melhor_promocao.nome if melhor_promocao else None
+    )
 
 @router.put("/{produto_id}", response_model=schemas.Produto)
 def update_produto(produto_id: int, produto_update: schemas.ProdutoUpdate, db: Session = Depends(get_db)):
