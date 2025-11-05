@@ -18,7 +18,7 @@ class VendaItem(VendaItemBase):
     """Representação completa de um item já salvo"""
     id: int
     preco_unitario_na_venda: float
-    produto: Produto
+    produto: Optional[Produto]
 
     class Config:
         from_attributes = True

@@ -18,6 +18,7 @@ import { PaymentModal } from "@/components/pontovenda/modalVenda"
 import { CancelItemModal } from "@/components/pontovenda/CancelamentoModal"
 import { RecoveryModal } from "@/components/pontovenda/ModalRecuperacaoV"
 import { SetNextQuantityModal } from "@/components/pontovenda/AjusteQTD"
+import { ManualItemModal } from "@/components/pontovenda/ModalDiverso"
 
 const API_URL = "http://localhost:8000"; 
 
@@ -45,7 +46,8 @@ export default function PontoVenda() {
   const [isRecoveryModalOpen, setIsRecoveryModalOpen] = React.useState(false);
   const [saleToRecover, setSaleToRecover] = React.useState(null);
   const [nextQuantity, setNextQuantity] = React.useState(1); 
-  const [isQtyModalOpen, setIsQtyModalOpen] = React.useState(false); // Controla o modal de Qtd
+  const [isQtyModalOpen, setIsQtyModalOpen] = React.useState(false);
+  const [isManualItemModalOpen, setIsManualItemModalOpen] = React.useState(false);
 
   const fetchPdvSession = async (isInitialLoad = false) => {
 
@@ -72,14 +74,11 @@ export default function PontoVenda() {
       setPdvSession({ ...data, isOnline: navigator.onLine }); 
       
       if (data.status === 'aberto') {
-          // Tenta carregar a venda. Se retornar 'false' (sem venda), libera o caixa.
           const foundSale = await loadExistingActiveSale(data);
           if (!foundSale) {
               setSaleStatus("livre"); 
               if (isInitialLoad) toast.success(`Caixa ${data.nome} aberto. Operador: ${data.operador_atual.nome}.`);
           }
-          // Se 'foundSale' for 'true', o status fica 'awaiting_recovery'
-          // e o modal de recuperação será exibido.
       } else {
           setSaleStatus(data.status); // 'fechado'
           if (isInitialLoad) toast.info(`Caixa ${data.nome} está ${data.status}.`, { description: "Pressione F1 para abrir o caixa."});
@@ -183,7 +182,7 @@ export default function PontoVenda() {
                   toast.warning("Autorização Falhou", { description: detail });
               } else if (response.status === 404) {
                   toast.error("Item não encontrado", { description: "O item pode já ter sido removido." });
-              } else if (response.status === 400) { // Ex: Quantidade inválida
+              } else if (response.status === 400) {
                   toast.warning("Requisição inválida", { description: detail });
               } else {
                   toast.error("Erro ao Remover Item", { description: detail });
@@ -208,22 +207,25 @@ export default function PontoVenda() {
   };
 
 
-  const cartItems = React.useMemo(() => {
-      if (!activeSale || !activeSale.itens) {
-          return [];
-      }
-      
-      return activeSale.itens.map(item => ({
-          id: item.produto.codigo_barras, 
-          name: item.produto.nome,
-          quantity: item.quantidade,
-          unitPrice: item.preco_unitario_na_venda,
-          totalPrice: item.quantidade * item.preco_unitario_na_venda,
-          db_id: item.produto.id, 
-          item_db_id: item.id 
-      })).sort((a, b) => b.item_db_id - a.item_db_id); // Mais novo primeiro
-      
-  }, [activeSale]);
+const cartItems = React.useMemo(() => {
+    if (!activeSale || !activeSale.itens) {return [];}
+    return activeSale.itens.map(item => {
+        const isDiverse = !item.produto;
+        return ({
+            id: item.id,
+            name: isDiverse 
+                ? `PRODUTO DIVERSO` 
+                : item.produto.nome,
+            barcode: item.produto?.codigo_barras || 'DIVERSOS', 
+            quantity: item.quantidade,
+            unitPrice: item.preco_unitario_na_venda,
+            totalPrice: item.quantidade * item.preco_unitario_na_venda,
+            db_id: item.produto_id,
+            item_db_id: item.id
+        });
+    }).sort((a, b) => b.item_db_id - a.item_db_id);
+    
+}, [activeSale]);
 
   const loadExistingActiveSale = async (session) => {
       if (session.status !== 'aberto') {
@@ -288,7 +290,7 @@ export default function PontoVenda() {
 
   React.useEffect(() => {
     const handleKeyPress = (e) => {
-        if (isModalOpen || isPaymentModalOpen || isQtyModalOpen || saleToRecover || isAddingItem || isCancelItemModalOpen) return;
+        if (isModalOpen || isPaymentModalOpen || isQtyModalOpen || saleToRecover || isAddingItem || isManualItemModalOpen || isCancelItemModalOpen) return;
         if (e.key === 'F1') {e.preventDefault(); handleOpenCloseModalToggle(); return;}
         if (e.key === 'F3') { e.preventDefault(); handleCancelItem(); return; }
         if (e.key === 'F4') {e.preventDefault(); if (pdvSession?.status === 'aberto') {setIsQtyModalOpen(true);
@@ -296,12 +298,10 @@ export default function PontoVenda() {
                 toast.warning("Caixa Fechado", { description: "Abra o caixa (F1) para definir quantidades." });
              }
              return;
-        }        
-        if (e.key === 'F2') {
-           e.preventDefault();
-           if (pdvSession?.status === 'aberto' && cartItems.length > 0) {
-               console.log("F2 Pressionado - Iniciando Pagamento");
-               handlePaymentStart();
+        }   
+        if (e.key === 'F5') { e.preventDefault(); handleManualItemLaunch(); return;}     
+        if (e.key === 'F2') { e.preventDefault(); if (pdvSession?.status === 'aberto' && cartItems.length > 0) {
+               console.log("F2 Pressionado - Iniciando Pagamento"); handlePaymentStart();
            } else if (pdvSession?.status !== 'aberto') {
                toast.warning("Caixa Fechado", { description: "Use F1 para abrir o caixa antes de finalizar." });
            } else {toast.info("Carrinho Vazio", { description: "Adicione itens para finalizar a venda." });}return;}
@@ -315,7 +315,7 @@ export default function PontoVenda() {
     document.addEventListener('keydown', handleKeyPress);
     return () => document.removeEventListener('keydown', handleKeyPress);
   
-  }, [barcodeBuffer, isAddingItem, saleToRecover, isQtyModalOpen, saleStatus, pdvSession, isModalOpen, isPaymentModalOpen, cartItems, handleCancelItem, handleCancelSale]);
+  }, [barcodeBuffer, isAddingItem, saleToRecover, isQtyModalOpen, saleStatus, isManualItemModalOpen, pdvSession, isModalOpen, isPaymentModalOpen, cartItems, handleCancelItem, handleCancelSale]);
 
   React.useEffect(() => {
       const handleOnline = () => setPdvSession(prev => (prev ? { ...prev, isOnline: true } : null));
@@ -328,22 +328,17 @@ export default function PontoVenda() {
       };
   }, []);
   
-// ... (Dentro de export default function PontoVenda() { ... } )
-
 const handleBarcodeSubmit = async (codigo) => {
     setIsAddingItem(true);
     
-    // CAPTURA o valor do estado ANTES de qualquer coisa
     const quantityToUse = nextQuantity;
 
     try {
-      // 1. VALIDAÇÃO DE SESSÃO (Mantenha este bloco)
       if (!pdvSession || !pdvSession.operador_atual || !pdvSession.operador_atual.id) {
         toast.error("Sessão Inválida", { description: "Operador não identificado. Tente reabrir o caixa (F1)." });
         throw new Error("Operador não encontrado na sessão.");
       }
 
-      // 2. FAZ A CHAMADA ÚNICA PARA A ROTA "INTELIGENTE"
       const response = await fetch(`${API_URL}/vendas/adicionar-item-smart`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -351,7 +346,7 @@ const handleBarcodeSubmit = async (codigo) => {
           codigo_barras: codigo,
           pdv_id: pdvSession.id,
           operador_id: pdvSession.operador_atual.id,
-          quantidade: quantityToUse, // ✅ Usa a quantidade CONSUMIDA
+          quantidade: quantityToUse,
         }),
       });
 
@@ -361,20 +356,15 @@ const handleBarcodeSubmit = async (codigo) => {
         throw new Error(updatedSale.detail || "Erro ao adicionar item.");
       }
       
-      // 3. ATUALIZA ESTADO PRINCIPAL
       setActiveSale(updatedSale);
 
     } catch (error) {
       console.error("Erro em handleBarcodeSubmit:", error);
       toast.error(error.message);
     } finally {
-      // ✅ CORREÇÃO CRÍTICA: ZERA O NEXT QUANTITY AQUI
-      // Este bloco é executado após o sucesso ou falha do try/catch.
-      // E é o último lugar antes da função terminar.
       setIsAddingItem(false);
       setBarcodeBuffer("");
       
-      // ✅ AÇÃO DE RESET: Avisa o usuário e zera o estado.
       if (quantityToUse !== 1) {
           toast.info(`Quantidade ${quantityToUse} aplicada. Próxima Qtd. resetada para 1.`);
       }
@@ -435,6 +425,19 @@ const handleBarcodeSubmit = async (codigo) => {
       setSaleStatus("livre");
   };
 
+  const handleManualItemLaunch = () => {
+      if (pdvSession?.status !== 'aberto') {
+           toast.warning("Caixa Fechado", { description: "Abra o caixa (F1) para lançar itens." });
+           return;
+      }
+      setIsManualItemModalOpen(true);
+  };
+  
+  const onManualItemAdded = (updatedSale) => {
+      setActiveSale(updatedSale);
+      setIsManualItemModalOpen(false);
+  };
+
   return (
     <>
       <ComprasPageLayout
@@ -493,9 +496,15 @@ const handleBarcodeSubmit = async (codigo) => {
         currentNextQuantity={nextQuantity}
         onQuantitySet={(qty) => {
             setNextQuantity(qty);
-            setIsQtyModalOpen(false); // Fecha o modal
+            setIsQtyModalOpen(false);
             toast.info(`Próximo item será adicionado com Qtd: ${qty}`);
         }}
+        />
+    <ManualItemModal
+        open={isManualItemModalOpen}
+        onOpenChange={setIsManualItemModalOpen}
+        pdvSession={pdvSession}
+        onManualItemAdded={onManualItemAdded}
     />
     </>
   );
