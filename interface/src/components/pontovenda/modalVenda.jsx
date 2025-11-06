@@ -17,6 +17,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { toast } from "sonner"
 import { Loader2, User } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { CurrencyInput } from "../ui/input-monetario"
 
 const API_URL = "http://localhost:8000"; // Sua URL base
 
@@ -66,7 +67,7 @@ const CrediarioPayment = ({ onConfirm, onSelectClient, selectedClient }) => {
 // --- Componente Principal do Modal ---
 export function PaymentModal({ open, onOpenChange, cartItems, pdvSession, onSaleSuccess, activeSale }) {
   const [paymentType, setPaymentType] = React.useState("dinheiro");
-  const [valorRecebidoStr, setValorRecebidoStr] = React.useState("");
+  const [valorRecebidoStr, setValorRecebidoStr] = React.useState(0);
   const [selectedClient, setSelectedClient] = React.useState(null); // Para crediário
   const [isLoading, setIsLoading] = React.useState(false);
   const [errorMessage, setErrorMessage] = React.useState("");
@@ -88,7 +89,7 @@ export function PaymentModal({ open, onOpenChange, cartItems, pdvSession, onSale
   const total = subtotal; 
   
   const valorRecebido = parseFloat(valorRecebidoStr) || 0;
-  const troco = Math.max(0, valorRecebido - total);
+  const troco = Math.max(0, valorRecebidoStr - total);
 
   // Dentro de modalVenda.jsx
 
@@ -187,18 +188,16 @@ const handleConfirmPayment = async (tipoPagamento) => {
                     <div className="space-y-4 py-4">
                         <div className="space-y-2">
                             <Label htmlFor="valor-recebido" className="text-lg">Valor Recebido (R$)</Label>
-                            <Input 
-                                ref={inputRef}
+                              <CurrencyInput
                                 id="valor-recebido"
-                                type="number"
-                                step="0.01"
+                                ref={inputRef}
                                 className="text-4xl h-16 p-4 text-right font-mono"
                                 value={valorRecebidoStr}
-                                onChange={(e) => setValorRecebidoStr(e.target.value)}
-                                // Submete com Enter
+                                onChange={(val) => setValorRecebidoStr(val)} // val é numérico
                                 onKeyDown={(e) => e.key === 'Enter' && handleConfirmPayment('dinheiro')}
-                                placeholder="0,00"
-                            />
+                                placeholder="R$ 0,00"
+                              />
+
                         </div>
                          {/* Mostra o troco dinamicamente */}
                         {valorRecebido >= total && (
