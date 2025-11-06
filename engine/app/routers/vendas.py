@@ -183,21 +183,41 @@ def finalizar_venda_existente(venda_id: int, pagamento: schemas.FinalizarVendaRe
 
 @router.post("/adicionar-item-smart", response_model=schemas.Venda)
 def adicionar_item_smart(request: schemas.AdicionarItemSmartRequest, db: Session = Depends(get_db)):
-    """
-    Rota otimizada para o PDV:
-    1. Busca o Produto.
-    2. Busca a Venda 'em_andamento' ou CRIA uma nova.
-    3. Adiciona/Incrementa o VendaItem.
-    4. Recalcula o total.
-    5. Retorna a Venda completa e atualizada.
-    """
     
-    # 1. BUSCA O PRODUTO
-    produto = db.query(models.Produto).filter(models.Produto.codigo_barras == request.codigo_barras).first()
+    now = datetime.utcnow()
+    produto = db.query(models.Produto).options(
+        joinedload(models.Produto.promocoes) 
+    ).filter(
+        models.Produto.codigo_barras == request.codigo_barras
+    ).first()
+    
     if not produto:
         raise HTTPException(status_code=404, detail=f"Produto com código '{request.codigo_barras}' não encontrado.")
 
-    # 2. BUSCA OU CRIA A VENDA
+    preco_final = produto.preco_venda
+    melhor_promocao_nome = None
+    
+    promocoes_validas = [
+        p for p in produto.promocoes
+        if p.data_inicio <= now and (p.data_fim is None or p.data_fim >= now)
+    ]
+    
+    for promo in promocoes_validas:
+        preco_promocional = produto.preco_venda
+        
+        if promo.tipo == 'percentual':
+            preco_promocional = produto.preco_venda * (1 - promo.valor / 100.0)
+        elif promo.tipo == 'preco_fixo':
+            preco_promocional = promo.valor
+            
+        if preco_promocional < preco_final:
+            preco_final = preco_promocional
+            melhor_promocao_nome = promo.nome
+
+    preco_final = round(preco_final, 2)
+    if melhor_promocao_nome:
+         print(f"AUDITORIA: Aplicando promoção '{melhor_promocao_nome}'. Preço final para {produto.nome}: R$ {preco_final}")
+
     venda = db.query(models.Venda).filter(
         models.Venda.pdv_id == request.pdv_id,
         models.Venda.status == "em_andamento"
@@ -206,7 +226,7 @@ def adicionar_item_smart(request: schemas.AdicionarItemSmartRequest, db: Session
     if not venda:
         pdv = db.query(models.Pdv).filter(models.Pdv.id == request.pdv_id).first()
         if not pdv:
-             raise HTTPException(status_code=404, detail="PDV não encontrado")
+            raise HTTPException(status_code=404, detail="PDV não encontrado")
         
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         codigo_venda_str = f"VENDA_{timestamp}_{pdv.nome.upper().replace(' ', '')}"
@@ -216,12 +236,11 @@ def adicionar_item_smart(request: schemas.AdicionarItemSmartRequest, db: Session
             operador_id=request.operador_id,
             status="em_andamento",
             codigo_venda=codigo_venda_str,
-            valor_total=0.0 # Inicia com 0
+            valor_total=0.0 
         )
         db.add(venda)
-        db.flush() 
+        db.flush()
 
-    # 3. ADICIONA/INCREMENTA O ITEM
     item_existente = db.query(models.VendaItem).filter(
         models.VendaItem.venda_id == venda.id,
         models.VendaItem.produto_id == produto.id
@@ -229,16 +248,17 @@ def adicionar_item_smart(request: schemas.AdicionarItemSmartRequest, db: Session
 
     if item_existente:
         item_existente.quantidade += request.quantidade
+        print(f"Item {produto.nome} incrementado para Qtd: {item_existente.quantidade}")
     else:
         venda_item = models.VendaItem(
             venda_id=venda.id,
             produto_id=produto.id,
             quantidade=request.quantidade,
-            preco_unitario_na_venda=produto.preco_venda
+            preco_unitario_na_venda=preco_final
         )
         db.add(venda_item)
+        print(f"Item {produto.nome} (Qtd: {request.quantidade}) adicionado ao preço R$ {preco_final}")
     
-    # 4. RECALCULA O TOTAL E FAZ O COMMIT
     db.flush() 
     
     total_calc = db.query(
@@ -249,14 +269,11 @@ def adicionar_item_smart(request: schemas.AdicionarItemSmartRequest, db: Session
     db.add(venda)
     db.commit()
 
-    # 5. RETORNA A VENDA COMPLETA (com 'itens' e 'produto' de cada item)
     venda_atualizada = db.query(models.Venda).options(
         selectinload(models.Venda.itens).joinedload(models.VendaItem.produto)
     ).filter(models.Venda.id == venda.id).first()
     
     return venda_atualizada
-
-# --- DEPENDÊNCIAS DE AUTENTICAÇÃO DE ADMIN ---
 
 def get_admin_by_password_only(
     auth_request: schemas.AdminAuthRequest, 
@@ -297,13 +314,12 @@ def get_admin_from_remover_request(
     """
     return get_admin_by_password_only(payload.auth, db)
 
-# --- ROTAS DE CANCELAMENTO (COM AUTENTICAÇÃO) ---
 
 @router.post("/{venda_id}/itens/{item_venda_id}/remover", response_model=schemas.Venda)
 def remover_item_da_venda_auditada(
     venda_id: int, 
     item_venda_id: int, 
-    payload: schemas.RemoverItemRequest, # Body: { auth: { admin_senha: "..." }, quantidade: X }
+    payload: schemas.RemoverItemRequest,
     db: Session = Depends(get_db),
     admin_user: models.Usuario = Depends(get_admin_from_remover_request),
 ):
@@ -330,8 +346,6 @@ def remover_item_da_venda_auditada(
 
     print(f"AUDITORIA: Admin ID: {admin_user.id} removeu {quantidade_a_remover} de {item.quantidade} do Item ID: {item_venda_id}")
 
-    # (Lógica de estorno de estoque viria aqui)
-
     if quantidade_a_remover == item.quantidade:
         db.delete(item)
     else:
@@ -339,10 +353,8 @@ def remover_item_da_venda_auditada(
     
     db.flush() 
 
-    # ✅ CORREÇÃO: Recalcula o valor total da VENDA
     venda_atualizada = db.query(models.Venda).filter(models.Venda.id == venda_id).first()
     
-    # ✅ CORREÇÃO (Linha 347): Usar 'venda_id' ao invés de 'venda.id'
     total_calc = db.query(
         func.sum(models.VendaItem.quantidade * models.VendaItem.preco_unitario_na_venda)
     ).filter(models.VendaItem.venda_id == venda_id).scalar() or 0.0
@@ -352,8 +364,7 @@ def remover_item_da_venda_auditada(
     db.add(venda_atualizada)
     db.commit()
     db.refresh(venda_atualizada) # Garante que os dados mais recentes sejam enviados
-    
-    # Recarrega a venda com os itens para o frontend
+
     venda_com_itens = db.query(models.Venda).options(
         selectinload(models.Venda.itens).joinedload(models.VendaItem.produto)
     ).filter(models.Venda.id == venda_id).first()
@@ -372,7 +383,6 @@ def cancelar_venda_em_andamento(
     Requer autenticação de admin (código de barras).
     Esta é a única definição desta rota.
     """
-    # ✅ CORREÇÃO: Lógica de busca de venda preenchida
     venda = db.query(models.Venda).options(
         selectinload(models.Venda.itens) # Carrega os itens para o estorno
     ).filter(
@@ -383,10 +393,8 @@ def cancelar_venda_em_andamento(
     if not venda:
         raise HTTPException(status_code=404, detail="Venda 'em andamento' não encontrada.")
     
-    # (Lógica de estorno de estoque viria aqui, iterando sobre 'venda.itens')
     print(f"AUDITORIA: Venda #{venda_id} cancelada por Admin ID: {admin_user.id} ({admin_user.nome})")
 
-    # Deleta os itens da venda (se houver cascade, isso pode ser automático)
     for item in venda.itens:
         db.delete(item)
         
@@ -394,9 +402,6 @@ def cancelar_venda_em_andamento(
     db.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
-# ... (suas rotas existentes) ...
-
-# ✅ NOVA ROTA: Buscar Venda Ativa por PDV
 @router.get("/pdvs/{pdv_id}/venda-ativa", response_model=schemas.Venda)
 def get_venda_ativa_por_pdv(pdv_id: int, db: Session = Depends(get_db)):
     """
@@ -404,21 +409,16 @@ def get_venda_ativa_por_pdv(pdv_id: int, db: Session = Depends(get_db)):
     Retorna 404 se não houver venda ativa.
     """
     
-    # 1. Busca a venda com o status correto
     venda_ativa = db.query(models.Venda).options(
-        # Pré-carrega os itens da venda e os dados do produto (VendaItem.produto)
         selectinload(models.Venda.itens).joinedload(models.VendaItem.produto)
     ).filter(
         models.Venda.pdv_id == pdv_id,
         models.Venda.status == "em_andamento"
     ).first()
     
-    # 2. Se não houver, retorna 404
     if not venda_ativa:
-        # Se for 404 ou 204, o frontend entende que não tem venda.
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Nenhuma venda ativa encontrada para este PDV.")
         
-    # 3. Se houver, retorna o objeto Venda completo
     return venda_ativa
 
 @router.delete("/{venda_id}/descartar-venda-ativa", status_code=status.HTTP_204_NO_CONTENT)
@@ -437,11 +437,9 @@ def descartar_venda_ativa_startup(venda_id: int, db: Session = Depends(get_db)):
     ).first()
 
     if not venda:
-        # Não levanta erro, apenas retorna sucesso (já foi descartada?)
         print(f"Aviso: Venda {venda_id} não encontrada para descarte (talvez já processada).")
         return Response(status_code=status.HTTP_204_NO_CONTENT)
         
-    # 1. Estorno de Estoque
     print(f"DESCARTE: Estornando estoque para Venda #{venda_id}...")
     for item in venda.itens:
         db_produto = db.query(models.Produto).filter(models.Produto.id == item.produto_id).first()

@@ -330,12 +330,16 @@ const cartItems = React.useMemo(() => {
   
 const handleBarcodeSubmit = async (codigo) => {
     setIsAddingItem(true);
-    const quantityToUse = nextQuantity;
+    
+    // Pega a quantidade do estado (Ex: 1, ou 15 do F4)
+    const quantityToUse = nextQuantity; 
+
     try {
       if (!pdvSession || !pdvSession.operador_atual || !pdvSession.operador_atual.id) {
         toast.error("Sessão Inválida", { description: "Operador não identificado. Tente reabrir o caixa (F1)." });
         throw new Error("Operador não encontrado na sessão.");
       }
+
       const response = await fetch(`${API_URL}/vendas/adicionar-item-smart`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -346,17 +350,21 @@ const handleBarcodeSubmit = async (codigo) => {
           quantidade: quantityToUse,
         }),
       });
+
       const updatedSale = await response.json();
+
       if (!response.ok) {
         throw new Error(updatedSale.detail || "Erro ao adicionar item.");
       }
       setActiveSale(updatedSale);
+
     } catch (error) {
       console.error("Erro em handleBarcodeSubmit:", error);
       toast.error(error.message);
     } finally {
       setIsAddingItem(false);
       setBarcodeBuffer("");
+      
       if (quantityToUse !== 1) {
           toast.info(`Quantidade ${quantityToUse} aplicada. Próxima Qtd. resetada para 1.`);
       }

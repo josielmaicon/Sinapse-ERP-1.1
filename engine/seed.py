@@ -26,36 +26,29 @@ db = SessionLocal()
 try:
     print("Populando o banco de dados com dados de teste...")
 
-    # --- 2. CRIANDO ENTIDADES INDEPENDENTES ---
-
-    # Usuários
     senha_hash_string = get_password_hash("1234")
     print("Hash gerado:", senha_hash_string)
     print("Verificação:", verify_password("1234", senha_hash_string))
 
     user_admin = Usuario(
         nome="Josiel Maicon", email="admin@empresa.com", funcao="admin", 
-        senha_hash=senha_hash_string, status='ativo' # Adiciona status ativo
+        senha_hash=senha_hash_string, status='ativo'
     )
     user_operador = Usuario(
         nome="Ana Paula", email="ana@empresa.com", funcao="operador", 
-        senha_hash=senha_hash_string, status='ativo' # Adiciona status ativo
+        senha_hash=senha_hash_string, status='ativo'
     )
     db.add_all([user_admin, user_operador])
-    # Commit USUÁRIOS primeiro para garantir que IDs existam para FKs
     db.commit() 
     print("-> Usuários criados.")
 
-    # Fornecedores
     fornecedor_laticinios = Fornecedor(nome="Distribuidora Friobom", cnpj="11.222.333/0001-44")
     fornecedor_hortifruti = Fornecedor(nome="Fazenda Frescor", cnpj="44.555.666/0001-77")
     fornecedor_bebidas = Fornecedor(nome="Global Bebidas", cnpj="77.888.999/0001-00")
     db.add_all([fornecedor_laticinios, fornecedor_hortifruti, fornecedor_bebidas])
-    # Commit FORNECEDORES
     db.commit()
     print("-> Fornecedores criados.")
 
-    # Clientes de Crediário
     cliente1 = Cliente(
         nome="José da Silva", cpf="123.456.789-00", limite_credito=500.0, 
         saldo_devedor=350.50, status_conta="ativo", 
@@ -70,17 +63,12 @@ try:
     db.commit()
     print("-> Clientes criados.")
 
-    # PDVs (Caixas) - Garante que operador_atual_id use o ID real
     pdv1 = Pdv(nome="Caixa 01", status="aberto", operador_atual_id=user_operador.id) 
     pdv2 = Pdv(nome="Caixa 02", status="fechado")
     db.add_all([pdv1, pdv2])
-    # Commit PDVs
     db.commit()
     print("-> PDVs criados.")
 
-    # --- 3. CRIANDO ENTIDADES DEPENDENTES ---
-
-    # Produtos - Datas de vencimento agora são dinâmicas (relativas a HOJE)
     produtos = [
         Produto(nome="Leite Integral 1L", codigo_barras="789001", quantidade_estoque=150, preco_custo=3.50, preco_venda=5.99, categoria="Laticínios", fornecedor_id=fornecedor_laticinios.id, criado_por_id=user_admin.id, atualizado_por_id=user_admin.id, vencimento=HOJE + timedelta(days=30)),
         Produto(nome="Queijo Minas 500g", codigo_barras="789002", quantidade_estoque=40, preco_custo=18.50, preco_venda=25.99, categoria="Laticínios", fornecedor_id=fornecedor_laticinios.id, criado_por_id=user_admin.id, atualizado_por_id=user_admin.id, vencimento=HOJE + timedelta(days=15)),
@@ -88,29 +76,24 @@ try:
         Produto(nome="Coca-Cola 2L", codigo_barras="789004", quantidade_estoque=200, preco_custo=7.00, preco_venda=9.50, categoria="Bebidas", fornecedor_id=fornecedor_bebidas.id, criado_por_id=user_admin.id, atualizado_por_id=user_admin.id),
     ]
     db.add_all(produtos)
-    # Commit PRODUTOS
     db.commit() 
     print("-> Produtos criados (com vencimentos dinâmicos).")
 
     print(f"-> Criando vendas para {HOJE - timedelta(days=2)}, {HOJE - timedelta(days=1)} e {HOJE}...")
 
-    # (dia [objeto date], pdv, cliente, [(produto_idx, qtd, preco)], forma_pagamento)
     vendas_info = [
-        # --- DOIS DIAS ATRÁS ---
         (HOJE - timedelta(days=2), pdv1, cliente2, [(0, 1, 5.99), (3, 1, 9.50)], 'cartao_debito'),
         (HOJE - timedelta(days=2), pdv2, cliente1, [(1, 2, 25.99)], 'dinheiro'),
         (HOJE - timedelta(days=2), pdv1, cliente2, [(2, 3, 7.99)], 'pix'),
         (HOJE - timedelta(days=2), pdv2, cliente1, [(0, 1, 5.99), (2, 2, 7.99)], 'dinheiro'),
         (HOJE - timedelta(days=2), pdv1, cliente2, [(3, 1, 9.50)], 'cartao_credito'),
 
-        # --- ONTEM ---
         (HOJE - timedelta(days=1), pdv2, cliente1, [(0, 1, 5.99)], 'dinheiro'),
         (HOJE - timedelta(days=1), pdv1, cliente2, [(1, 1, 25.99), (3, 2, 9.50)], 'pix'),
         (HOJE - timedelta(days=1), pdv2, cliente1, [(2, 2, 7.99)], 'dinheiro'),
         (HOJE - timedelta(days=1), pdv1, cliente2, [(0, 1, 5.99), (1, 1, 25.99)], 'cartao_debito'),
         (HOJE - timedelta(days=1), pdv2, cliente1, [(3, 1, 9.50)], 'dinheiro'),
 
-        # --- HOJE ---
         (HOJE, pdv1, cliente2, [(2, 1, 7.99), (3, 1, 9.50)], 'pix'),
         (HOJE, pdv2, cliente1, [(0, 2, 5.99)], 'dinheiro'),
         (HOJE, pdv1, cliente2, [(1, 1, 25.99)], 'cartao_credito'),
