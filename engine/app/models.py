@@ -49,7 +49,6 @@ promocao_produtos_association = Table(
     Column('produto_id', Integer, ForeignKey('produtos.id'), primary_key=True)
 )
 
-# ✅ 2. CRIE O MODELO DA PROMOÇÃO
 class Promocao(Base):
     __tablename__ = "promocoes"
     
@@ -60,12 +59,10 @@ class Promocao(Base):
     valor = Column(Float, nullable=False)
     
     data_inicio = Column(DateTime, default=datetime.utcnow)
-    data_fim = Column(DateTime, nullable=True) # Nulo = promoção sem data para acabar
+    data_fim = Column(DateTime, nullable=True)
     
     criado_em = Column(DateTime, default=datetime.utcnow)
     
-    # A "mágica" da relação Many-to-Many:
-    # "Esta promoção tem muitos produtos, ligados pela tabela 'promocao_produtos_association'"
     produtos = relationship(
         "Produto",
         secondary=promocao_produtos_association,
