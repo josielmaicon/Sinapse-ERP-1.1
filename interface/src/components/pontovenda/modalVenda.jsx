@@ -2,7 +2,6 @@
 
 import * as React from "react"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import {
   Dialog,
@@ -11,245 +10,318 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogClose,
 } from "@/components/ui/dialog"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { toast } from "sonner"
-import { Loader2, User } from "lucide-react"
+import { Loader2, User, CreditCard, Smartphone, Banknote, X } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { CurrencyInput } from "../ui/input-monetario"
+import { CurrencyInput } from "../ui/input-monetario" // Usando seu input "modo bruto"
+import { Kbd } from "@/components/ui/kbd" // Importando Kbd
 
-const API_URL = "http://localhost:8000"; // Sua URL base
+const API_URL = "http://localhost:8000"; 
 
-// Componente simples para a aba de Cartão/PIX
-const PlaceholderPayment = ({ method, onConfirm }) => (
-  <div className="py-10 text-center space-y-4">
-    <p className="text-muted-foreground">Confirme o valor na máquina de {method}.</p>
-    <Button 
-      type="button" 
-      size="lg" 
-      className="text-lg p-6"
-      onClick={() => onConfirm(method)} // Confirma o pagamento com este método
-    >
-      Confirmar Pagamento em {method}
-    </Button>
-  </div>
-);
-
-// Componente para a aba de Crediário (Fiado)
-const CrediarioPayment = ({ onConfirm, onSelectClient, selectedClient }) => {
-  // (Aqui você buscaria a lista de clientes, por enquanto é só um ID)
-  
-  return (
-    <div className="py-10 text-center space-y-4">
-      <Button 
-        type="button" 
-        variant="outline" 
-        className="w-full" 
-        onClick={onSelectClient} // Abre o modal de seleção de cliente
-      >
-        <User className="mr-2 h-4 w-4" />
-        {selectedClient ? `Cliente: ${selectedClient.nome} (ID: ${selectedClient.id})` : "Selecionar Cliente (F3)"}
-      </Button>
-      <Button 
-        type="button" 
-        size="lg" 
-        className="text-lg p-6"
-        disabled={!selectedClient} // Só pode finalizar se o cliente for selecionado
-        onClick={() => onConfirm('crediario')}
-      >
-        Lançar na Conta
-      </Button>
-    </div>
-  );
-};
-
-// --- Componente Principal do Modal ---
 export function PaymentModal({ open, onOpenChange, cartItems, pdvSession, onSaleSuccess, activeSale }) {
   const [paymentType, setPaymentType] = React.useState("dinheiro");
-  const [valorRecebidoStr, setValorRecebidoStr] = React.useState(0);
-  const [selectedClient, setSelectedClient] = React.useState(null); // Para crediário
   const [isLoading, setIsLoading] = React.useState(false);
   const [errorMessage, setErrorMessage] = React.useState("");
+  
+  const [currentInputValue, setCurrentInputValue] = React.useState(0); 
+  const [paymentsList, setPaymentsList] = React.useState([]); 
+  const [selectedClient, setSelectedClient] = React.useState(null); 
 
-  // Foco no input de valor recebido quando o modal abre
   const inputRef = React.useRef(null);
-  React.useEffect(() => {
-    if (open && paymentType === 'dinheiro') {
-      setTimeout(() => inputRef.current?.focus(), 100);
-    }
-  }, [open, paymentType]);
 
-  // Cálculos de Total
-  const subtotal = React.useMemo(() => 
+  const totalVenda = React.useMemo(() => 
     cartItems.reduce((acc, item) => acc + item.totalPrice, 0)
   , [cartItems]);
   
-  // (Aqui entraria lógica de desconto)
-  const total = subtotal; 
+  const totalPago = React.useMemo(() =>
+    paymentsList.reduce((acc, p) => acc + p.valor, 0)
+  , [paymentsList]);
   
-  const valorRecebido = parseFloat(valorRecebidoStr) || 0;
-  const troco = Math.max(0, valorRecebidoStr - total);
+  const valorRestante = totalVenda - totalPago;
 
-  // Dentro de modalVenda.jsx
-
-// --- Função para processar o pagamento ---
-const handleConfirmPayment = async (tipoPagamento) => {
-    setIsLoading(true);
-    setErrorMessage("");
-
-    // 1. VERIFICAÇÃO DE DINHEIRO (não muda)
-    if (tipoPagamento === 'dinheiro') {
-        if (valorRecebido < total) {
-            toast.error("Valor recebido é menor que o total da compra.");
-            setIsLoading(false);
-            return;
-        }
+  React.useEffect(() => {
+    if (open) {
+      const restanteFormatado = parseFloat(valorRestante.toFixed(2));
+      setCurrentInputValue(restanteFormatado > 0 ? restanteFormatado : 0);
+      
+      setTimeout(() => {
+        inputRef.current?.focus();
+      }, 30);
+      setTimeout(() => {
+        inputRef.current?.select();
+      }, 100);
     }
-    
-    // 2. MONTAGEM DO BODY (MUDOU)
-    // A nova rota /{id}/finalizar espera um 'FinalizarVendaRequest',
-    // que (pelo seu schema) só contém 'forma_pagamento'.
-    const vendaRequest = {
-        forma_pagamento: tipoPagamento 
-        // Se você adicionou 'cliente_db_id' na rota de finalizar,
-        // adicione aqui também.
-        // cliente_db_id: tipoPagamento === 'crediario' ? selectedClient?.id : null,
+  }, [open, paymentType, totalPago]);
+
+  React.useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (!open || isLoading) return; 
+
+      // Atalhos das Abas
+      if (e.key === 'F5') { e.preventDefault(); setPaymentType('dinheiro'); }
+      if (e.key === 'F6') { e.preventDefault(); setPaymentType('cartao'); }
+      if (e.key === 'F7') { e.preventDefault(); setPaymentType('pix'); }
+      if (e.key === 'F8') { e.preventDefault(); setPaymentType('crediario'); }
+
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        handleOnOpenChange(false); // Chama o fechamento
+      }
+      
+      if (e.key === 'Enter' || e.key === 'F1') {
+         e.preventDefault();
+         handlePrimaryAction();
+      }
     };
 
-    try {
-        // 3. CHAMADA DA API (MUDOU)
-        // A URL agora é dinâmica e usa o ID da venda ativa
-        const response = await fetch(`${API_URL}/vendas/${activeSale.id}/finalizar`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(vendaRequest) // Envia o body simplificado
-        });
-        
-        const result = await response.json();
-        
-        // 4. TRATAMENTO DE ERRO (Melhorado)
-        if (!response.ok) {
-             const errorMsg = result.detail[0]?.msg || result.detail || "Erro desconhecido";
-             throw new Error(errorMsg);
-        }
-        
-        // 5. SUCESSO (Callback)
-        // O 'result' agora é o objeto 'Venda' finalizado.
-        // O 'troco' é calculado localmente (como você já fazia).
-        onSaleSuccess(result.id, troco); 
-        
-    } catch (error) {
-        console.error(error);
-        setErrorMessage(error.message);
-        toast.error("Falha ao finalizar venda", { description: error.message });
-    } finally {
-        setIsLoading(false);
-    }
-};
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [open, isLoading, paymentType, currentInputValue, valorRestante, paymentsList]); // Dependências completas
 
-  // Reseta o estado local quando o modal é fechado
-  const handleOnOpenChange = (isOpen) => {
-      if (!isOpen) {
-          // Resetar estados
-          setValorRecebidoStr("");
-          setSelectedClient(null);
-          setErrorMessage("");
-          setPaymentType('dinheiro');
-      }
-      onOpenChange(isOpen); // Informa o pai
+  const handleAddPayment = () => {
+    const valor = parseFloat(currentInputValue);
+    
+    if (valor <= 0) {
+        toast.warning("Valor inválido", { description: "Insira um valor maior que zero para adicionar." });
+        return;
+    }
+    if (valor > valorRestante) {
+        toast.warning("Valor muito alto", { description: `O valor máximo a adicionar é ${valorRestante.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`});
+        setCurrentInputValue(valorRestante);
+        return;
+    }
+    if (paymentType === 'crediario' && !selectedClient) {
+        toast.error("Cliente não selecionado", { description: "Selecione um cliente (F3) para lançar em crediário." });
+        return;
+    }
+
+    const newPayment = {
+        tipo: paymentType,
+        valor: valor,
+        cliente_id: paymentType === 'crediario' ? selectedClient.id : null,
+        cliente_nome: paymentType === 'crediario' ? selectedClient.nome : null,
+    };
+    
+    setPaymentsList(prev => [...prev, newPayment]);
+  };
+
+const handleConfirmSale = async () => {
+  const valorInput = parseFloat(currentInputValue);
+
+  let finalPaymentsList = [...paymentsList];
+
+  if (valorInput > 0) {
+    finalPaymentsList = [
+      ...paymentsList,
+      {
+        tipo: paymentType,
+        valor: valorInput,
+        cliente_id: paymentType === "crediario" ? selectedClient?.id : null,
+        cliente_nome: paymentType === "crediario" ? selectedClient?.nome : null,
+      },
+    ];
   }
+
+  const finalTotalPago = totalPago + valorInput;
+  const troco = Math.max(0, finalTotalPago - totalVenda);
+
+  if (finalTotalPago < totalVenda) {
+    toast.error("Pagamento Incompleto", {
+      description: `Ainda falta ${(totalVenda - finalTotalPago).toLocaleString(
+        "pt-BR",
+        { style: "currency", currency: "BRL" }
+      )}`,
+    });
+    return;
+  }
+
+  setIsLoading(true);
+  setErrorMessage("");
+
+  const vendaRequest = {
+      pdv_db_id: pdvSession.id,
+      operador_db_id: pdvSession.operador_atual.id,
+      cliente_db_id: selectedClient?.id || null,
+      itens: cartItems.map((item) => ({
+        db_id: item.db_id,
+        quantity: item.quantity,
+        unitPrice: item.unitPrice,
+      })),
+      pagamentos: finalPaymentsList.map((p) => ({
+        tipo: p.tipo,
+        valor: p.valor,
+      })),
+      total_calculado: totalVenda,
+  };
+
+  try {
+      const response = await fetch(`${API_URL}/vendas/finalizar`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(vendaRequest),
+      });
+
+      const result = await response.json();
+      
+      if (!response.ok) {
+          const errorMsg = result.detail[0]?.msg || result.detail || "Erro desconhecido";
+          throw new Error(errorMsg);
+      }
+      onSaleSuccess(result.venda_id, result.troco);
+
+      } catch (error) {
+          console.error(error);
+          setErrorMessage(error.message);
+          toast.error("Falha ao finalizar venda", { description: error.message });
+      } finally {
+          setIsLoading(false);
+      }
+    };
+
+  
+  const handlePrimaryAction = () => {
+      const valorInput = parseFloat(currentInputValue);
+      
+      if (valorInput < valorRestante) {
+          console.log("Ação: Adicionar Pagamento");
+          handleAddPayment();
+      } 
+      else {
+          console.log("Ação: Finalizar Venda");
+          handleConfirmSale();
+      }
+  };
+
+  const handleOnOpenChange = (isOpen) => {
+    if (!isOpen) {
+      setCurrentInputValue(0);
+      setSelectedClient(null);
+      setErrorMessage("");
+      setPaymentType("dinheiro");
+      setPaymentsList([]);
+    }
+
+    if (isLoading && isOpen) return;
+
+    onOpenChange(isOpen);
+  };
+
 
   return (
     <Dialog open={open} onOpenChange={handleOnOpenChange}>
-      <DialogContent className="sm:max-w-md p-0">
+      <DialogContent className="sm:max-w-lg p-0" onOpenAutoFocus={(e) => e.preventDefault()}>
         <DialogHeader className="p-6 pb-2">
           <DialogTitle className="text-2xl">Finalizar Venda</DialogTitle>
-          <div className="flex justify-between items-baseline">
-             <DialogDescription>Total a Pagar:</DialogDescription>
-             <p className="text-4xl font-bold text-primary">
-                 {total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+          <div className="flex justify-between items-baseline pt-2">
+             <DialogDescription className="text-lg">Total da Venda:</DialogDescription>
+             <p className="text-2xl font-bold text-muted-foreground">
+                 {totalVenda.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+             </p>
+          </div>
+          <div className={cn(
+             "flex justify-between items-baseline",
+             valorRestante <= 0 && "text-green-600" 
+          )}>
+             <DialogDescription className="text-lg font-semibold">
+                {valorRestante <= 0 ? "Troco:" : "Restante:"}
+             </DialogDescription>
+             <p className="text-4xl font-bold">
+                 {Math.abs(valorRestante).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
              </p>
           </div>
         </DialogHeader>
 
-        {/* Corpo com Abas de Pagamento */}
+        {paymentsList.length > 0 && (
+            <div className="px-6 space-y-2">
+                <Label>Pagamentos Registrados:</Label>
+                <div className="space-y-1 max-h-24 overflow-y-auto p-2 bg-muted rounded-md">
+                    {paymentsList.map((p, index) => (
+                        <div key={index} className="flex justify-between items-center text-sm">
+                            <div className="flex items-center gap-2">
+                                {p.tipo === 'dinheiro' && <Banknote className="h-4 w-4" />}
+                                {p.tipo === 'cartao' && <CreditCard className="h-4 w-4" />}
+                                {p.tipo === 'pix' && <Smartphone className="h-4 w-4" />}
+                                {p.tipo === 'crediario' && <User className="h-4 w-4" />}
+                                <span className="capitalize">{p.tipo}</span>
+                                {p.cliente_nome && <span className="text-xs text-muted-foreground">({p.cliente_nome})</span>}
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <span className="font-medium">{p.valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
+                                <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleRemovePayment(index)}>
+                                    <X className="h-4 w-4 text-destructive" />
+                                </Button>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            </div>
+        )}
+
         <div className="px-6">
             <Tabs value={paymentType} onValueChange={setPaymentType} className="w-full">
                 <TabsList className="grid w-full grid-cols-4">
-                    <TabsTrigger value="dinheiro">Dinheiro</TabsTrigger>
-                    <TabsTrigger value="cartao">Cartão</TabsTrigger>
-                    <TabsTrigger value="pix">PIX</TabsTrigger>
-                    <TabsTrigger value="crediario">Crediário</TabsTrigger>
+                    <TabsTrigger value="dinheiro">Dinheiro<Kbd className="ml-2">F5</Kbd></TabsTrigger>
+                    <TabsTrigger value="cartao">Cartão<Kbd className="ml-2">F6</Kbd></TabsTrigger>
+                    <TabsTrigger value="pix">PIX<Kbd className="ml-2">F7</Kbd></TabsTrigger>
+                    <TabsTrigger value="crediario">Crediário<Kbd className="ml-2">F8</Kbd></TabsTrigger>
                 </TabsList>
                 
-                {/* --- Aba Dinheiro --- */}
-                <TabsContent value="dinheiro">
-                    <div className="space-y-4 py-4">
-                        <div className="space-y-2">
-                            <Label htmlFor="valor-recebido" className="text-lg">Valor Recebido (R$)</Label>
-                              <CurrencyInput
-                                id="valor-recebido"
-                                ref={inputRef}
-                                className="text-4xl h-16 p-4 text-right font-mono"
-                                value={valorRecebidoStr}
-                                onChange={(val) => setValorRecebidoStr(val)} // val é numérico
-                                onKeyDown={(e) => e.key === 'Enter' && handleConfirmPayment('dinheiro')}
-                                placeholder="R$ 0,00"
-                              />
-
-                        </div>
-                         {/* Mostra o troco dinamicamente */}
-                        {valorRecebido >= total && (
-                            <div className="text-right space-y-1">
-                                <Label className="text-lg">Troco</Label>
-                                <p className="text-3xl font-bold text-yellow-500">
-                                    {troco.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                                </p>
-                            </div>
-                        )}
-                    </div>
-                </TabsContent>
+                <div className="space-y-2 py-4">
+                    <Label htmlFor="valor-pagamento" className="text-lg">
+                        {paymentType === 'crediario' ? 'Valor a Lançar' : `Valor (${paymentType})`}
+                    </Label>
+                    <CurrencyInput 
+                        ref={inputRef}
+                        id="valor-pagamento"
+                        className="text-4xl h-16 p-4 text-right font-mono"
+                        value={currentInputValue}
+                        onChange={setCurrentInputValue} 
+                        placeholder="R$ 0,00"
+                        disabled={isLoading || valorRestante <= 0}
+                    />
+                </div>
                 
-                {/* --- Outras Abas --- */}
-                <TabsContent value="cartao">
-                   <PlaceholderPayment method="Cartão" onConfirm={() => handleConfirmPayment('cartao')} />
-                </TabsContent>
-                <TabsContent value="pix">
-                   <PlaceholderPayment method="PIX" onConfirm={() => handleConfirmPayment('pix')} />
-                </TabsContent>
+                <TabsContent value="dinheiro" />
+                <TabsContent value="cartao" />
+                <TabsContent value="pix" />
                 <TabsContent value="crediario">
-                   <CrediarioPayment 
-                       onConfirm={() => handleConfirmPayment('crediario')}
-                       onSelectClient={() => alert("(WIP) Abrir modal de seleção de cliente (F3)")}
-                       selectedClient={selectedClient}
-                   />
+                   <div className="space-y-4">
+                       <Button 
+                         type="button" 
+                         variant="outline" 
+                         className="w-full" 
+                         onClick={() => alert("(WIP) Abrir modal de seleção de cliente (F3)")}
+                       >
+                         <User className="mr-2 h-4 w-4" />
+                         {selectedClient ? `Cliente: ${selectedClient.nome}` : "Selecionar Cliente (F3)"}
+                       </Button>
+                   </div>
                 </TabsContent>
             </Tabs>
         </div>
 
         {errorMessage && (
-            <div className="px-6 pb-2">
+             <div className="px-6 pb-2">
                  <p className="text-sm text-destructive text-center">{errorMessage}</p>
-            </div>
-        )}
+             </div>
+         )}
         
         <DialogFooter className="p-6 pt-2 bg-muted/50 rounded-b-lg">
-          <DialogClose asChild>
-            <Button variant="outline" size="lg" disabled={isLoading}>Cancelar Venda (ESC)</Button>
-          </DialogClose>
-          {/* Mostra o botão de Finalizar apenas na aba Dinheiro (outras têm o seu) */}
-          {paymentType === 'dinheiro' && (
-             <Button 
-                type="button" 
-                size="lg" 
-                onClick={() => handleConfirmPayment('dinheiro')} 
-                disabled={isLoading || valorRecebido < total}
-             >
-                {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Finalizar (F1)
-            </Button>
-          )}
+          <Button variant="outline" size="lg" disabled={isLoading} onClick={() => handleOnOpenChange(false)}>
+            Cancelar <Kbd className="ml-2">ESC</Kbd>
+          </Button>
+          <Button 
+             type="button" 
+             size="lg" 
+             onClick={handlePrimaryAction} 
+             disabled={isLoading || (currentInputValue <= 0 && valorRestante > 0) || (paymentType === 'crediario' && !selectedClient)} 
+          >
+             {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+             {valorRestante > 0 && currentInputValue < valorRestante ? 'Adicionar Pagamento' : 'Finalizar Venda'}
+             <Kbd className="ml-2">F1</Kbd>
+         </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

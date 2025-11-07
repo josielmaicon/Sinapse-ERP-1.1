@@ -144,7 +144,6 @@ def iniciar_venda(request: schemas.IniciarVendaRequest, db: Session = Depends(ge
     db.refresh(venda)
     return venda
 
-
 @router.post("/{venda_id}/adicionar-item", response_model=schemas.Venda)
 def adicionar_item_venda(venda_id: int, item: schemas.VendaItemCreate, db: Session = Depends(get_db)):
     # (Esta rota é usada por 'adicionar_item_smart' agora, mas pode ser mantida)
@@ -169,17 +168,102 @@ def adicionar_item_venda(venda_id: int, item: schemas.VendaItemCreate, db: Sessi
     db.refresh(venda)
     return venda
 
-@router.post("/{venda_id}/finalizar", response_model=schemas.Venda)
-def finalizar_venda_existente(venda_id: int, pagamento: schemas.FinalizarVendaRequest, db: Session = Depends(get_db)):
-    venda = db.query(models.Venda).filter(models.Venda.id == venda_id).first()
-    if not venda or venda.status != "em_andamento":
-        raise HTTPException(status_code=400, detail="Venda não encontrada ou já concluída.")
+@router.post("/finalizar", response_model=schemas.PdvVendaResponse)
+def finalizar_venda_pdv(
+    request: schemas.PdvVendaRequest,
+    db: Session = Depends(get_db)
+):
+    valor_total_pago = sum(p.valor for p in request.pagamentos)
+    
+    if round(valor_total_pago, 2) < round(request.total_calculado, 2):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Pagamento insuficiente. Total: {request.total_calculado}, Pago: {valor_total_pago}"
+        )
+        
+    valor_troco = max(0, valor_total_pago - request.total_calculado)
 
-    venda.status = "concluida"
-    venda.forma_pagamento = pagamento.forma_pagamento
-    db.commit()
-    db.refresh(venda)
-    return venda
+    try:
+        with db.begin():
+            venda = db.query(models.Venda).filter(
+                models.Venda.pdv_id == request.pdv_db_id,
+                models.Venda.operador_id == request.operador_db_id,
+                models.Venda.status == "em_andamento"
+            ).with_for_update().first()
+
+            if not venda:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Nenhuma venda 'em andamento' encontrada para este operador/PDV.")
+
+            venda.status = "concluida"
+            venda.cliente_id = request.cliente_db_id
+            if round(venda.valor_total, 2) != round(request.total_calculado, 2):
+                print(f"Alerta: Total do DB ({venda.valor_total}) diverge do Front ({request.total_calculado}). Usando o do DB.")
+
+            db.add(venda)
+            
+            for pagamento in request.pagamentos:
+                if pagamento.tipo == 'crediario':
+                    if not request.cliente_db_id:
+                        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cliente não identificado para venda em crediário.")
+                    
+                    db_cliente = db.query(models.Cliente).filter(
+                        models.Cliente.id == request.cliente_db_id
+                    ).with_for_update().first()
+                    
+                    if not db_cliente:
+                        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cliente do crediário não encontrado.")
+                        
+                    limite_disponivel = (db_cliente.limite_credito - db_cliente.saldo_devedor)
+                    if not db_cliente.trust_mode and pagamento.valor > limite_disponivel:
+                         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Limite de crédito (R$ {limite_disponivel:.2f}) insuficiente para {db_cliente.nome}.")
+                    
+                    db_cliente.saldo_devedor += pagamento.valor
+                    db.add(db_cliente)
+                    
+                    db_transacao = models.TransacaoCrediário(
+                        cliente_id=request.cliente_db_id,
+                        tipo='compra',
+                        valor=pagamento.valor,
+                        descricao=f"Referente à Venda #{venda.id}",
+                        venda_id=venda.id
+                    )
+                    db.add(db_transacao)
+                
+                if pagamento.tipo == 'dinheiro':
+                    db_mov = models.MovimentacaoCaixa(
+                        tipo='suprimento',
+                        valor=pagamento.valor,
+                        pdv_id=request.pdv_db_id,
+                        operador_id=request.operador_db_id
+                    )
+                    db.add(db_mov)
+
+            if valor_troco > 0:
+                db_troco_mov = models.MovimentacaoCaixa(
+                    tipo='sangria',
+                    valor=valor_troco,
+                    pdv_id=request.pdv_db_id,
+                    operador_id=request.operador_db_id
+                )
+                db.add(db_troco_mov)
+
+            venda.forma_pagamento = "misto" if len(request.pagamentos) > 1 else request.pagamentos[0].tipo
+            db.add(venda)
+
+            return schemas.PdvVendaResponse(
+                venda_id=venda.id,
+                mensagem=f"Venda #{venda.id} finalizada com sucesso!",
+                troco=valor_troco
+            )
+            
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        print(f"ERRO DE TRANSAÇÃO: {e}") 
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erro interno ao processar a venda: {e}"
+        )
 
 @router.post("/adicionar-item-smart", response_model=schemas.Venda)
 def adicionar_item_smart(request: schemas.AdicionarItemSmartRequest, db: Session = Depends(get_db)):
