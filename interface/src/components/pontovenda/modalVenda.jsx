@@ -13,10 +13,11 @@ import {
 } from "@/components/ui/dialog"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { toast } from "sonner"
-import { Loader2, User, CreditCard, Smartphone, Banknote, X } from "lucide-react"
+import { Loader2, User, CreditCard, Smartphone, Banknote, X, Search } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { CurrencyInput } from "../ui/input-monetario" // Usando seu input "modo bruto"
-import { Kbd } from "@/components/ui/kbd" // Importando Kbd
+import { CurrencyInput } from "../ui/input-monetario"
+import { Kbd } from "@/components/ui/kbd"
+import { ClientSelectionModal } from "@/components/pontovenda/ModalSelecaoCliente"
 
 const API_URL = "http://localhost:8000"; 
 
@@ -24,7 +25,7 @@ export function PaymentModal({ open, onOpenChange, cartItems, pdvSession, onSale
   const [paymentType, setPaymentType] = React.useState("dinheiro");
   const [isLoading, setIsLoading] = React.useState(false);
   const [errorMessage, setErrorMessage] = React.useState("");
-  
+  const [isClientModalOpen, setIsClientModalOpen] = React.useState(false);
   const [currentInputValue, setCurrentInputValue] = React.useState(0); 
   const [paymentsList, setPaymentsList] = React.useState([]); 
   const [selectedClient, setSelectedClient] = React.useState(null); 
@@ -208,6 +209,98 @@ const handleConfirmSale = async () => {
     onOpenChange(isOpen);
   };
 
+  const CrediarioStatus = ({ selectedClient, onRemoveClient }) => {
+  if (!selectedClient) {
+      return (
+          <div className="py-10 text-center text-muted-foreground flex flex-col items-center gap-2 opacity-50">
+              <User className="h-16 w-16" />
+              <p className="text-lg">Nenhum cliente selecionado</p>
+          </div>
+      );
+  }
+
+  return (
+    <div className="py-6 flex flex-col items-center gap-4">
+        <div className="flex items-center gap-4 p-4 bg-primary/10 rounded-lg border border-primary/20">
+            <User className="h-8 w-8 text-primary" />
+            <div className="text-left">
+                <p className="font-bold text-lg">{selectedClient.nome}</p>
+                <p className="text-sm text-muted-foreground">CPF: {selectedClient.cpf || '---'}</p>
+            </div>
+            <Button variant="ghost" size="icon" onClick={onRemoveClient}>
+                <X className="h-5 w-5" />
+            </Button>
+        </div>
+        <p className="text-sm text-muted-foreground">
+            Limite Disponível: R$ {selectedClient.limite_disponivel === Infinity ? 'Ilimitado' : (selectedClient.limite_disponivel || 0).toLocaleString('pt-BR', {minimumFractionDigits: 2})}
+        </p>
+      </div>
+    );
+  };
+
+const mainButtonConfig = React.useMemo(() => {
+      // ESTADO 1: Crediário sem cliente -> "Selecionar Cliente"
+      if (paymentType === 'crediario' && !selectedClient) {
+          return {
+              text: "Selecionar Cliente",
+              icon: <Search className="mr-2 h-5 w-5" />,
+              hotkey: "F3", // Atalho específico
+              action: () => setIsClientModalOpen(true), // Abre modal de seleção
+              disabled: isLoading
+          };
+      }
+
+      const valorInput = parseFloat(currentInputValue) || 0;
+      
+      // ESTADO 2: Valor menor que o restante -> "Adicionar Pagamento"
+      // (Usamos 0.01 como margem de segurança para comparações de float)
+      if (valorRestante > 0.01 && valorInput < (valorRestante - 0.01)) {
+          return {
+              text: "Adicionar Pagamento",
+              icon: null, // Ou um ícone de Plus
+              hotkey: "Enter", // Enter é mais natural para adicionar
+              action: handleAddPayment,
+              disabled: isLoading || valorInput <= 0
+          };
+      }
+
+      // ESTADO 3: Valor quita a dívida -> "Finalizar Venda"
+      return {
+          text: "Finalizar Venda",
+          icon: null, // Ou um ícone de Check
+          hotkey: "F1",
+          action: handleConfirmSale,
+          // Desabilitado se o valor for 0 e ainda tiver dívida, OU se estiver carregando
+          disabled: isLoading || (valorInput <= 0 && valorRestante > 0.01)
+      };
+  }, [paymentType, selectedClient, currentInputValue, valorRestante, isLoading]);
+
+  // ✅ 4. LÓGICA DE HOTKEYS ATUALIZADA
+  React.useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (!open || isLoading) return; 
+
+      // Abas (F5-F8)
+      if (e.key === 'F5') { e.preventDefault(); setPaymentType('dinheiro'); }
+      if (e.key === 'F6') { e.preventDefault(); setPaymentType('cartao'); }
+      if (e.key === 'F7') { e.preventDefault(); setPaymentType('pix'); }
+      if (e.key === 'F8') { e.preventDefault(); setPaymentType('crediario'); }
+      
+      // Atalho dinâmico do botão principal (F1, F3 ou Enter)
+      // Se a tecla pressionada bater com a hotkey configurada no momento...
+      if (e.key === mainButtonConfig.hotkey || (mainButtonConfig.hotkey === 'F1' && e.key === 'Enter')) {
+           e.preventDefault();
+           if (!mainButtonConfig.disabled) {
+               mainButtonConfig.action();
+           }
+           return;
+      }
+
+      if (e.key === 'Escape') { e.preventDefault(); handleOnOpenChange(false); }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [open, isLoading, mainButtonConfig]); // Depende da config do botão!
 
   return (
     <Dialog open={open} onOpenChange={handleOnOpenChange}>
@@ -287,17 +380,10 @@ const handleConfirmSale = async () => {
                 <TabsContent value="cartao" />
                 <TabsContent value="pix" />
                 <TabsContent value="crediario">
-                   <div className="space-y-4">
-                       <Button 
-                         type="button" 
-                         variant="outline" 
-                         className="w-full" 
-                         onClick={() => alert("(WIP) Abrir modal de seleção de cliente (F3)")}
-                       >
-                         <User className="mr-2 h-4 w-4" />
-                         {selectedClient ? `Cliente: ${selectedClient.nome}` : "Selecionar Cliente (F3)"}
-                       </Button>
-                   </div>
+                   <CrediarioStatus 
+                       selectedClient={selectedClient} 
+                       onRemoveClient={() => setSelectedClient(null)}
+                   />
                 </TabsContent>
             </Tabs>
         </div>
@@ -315,15 +401,26 @@ const handleConfirmSale = async () => {
           <Button 
              type="button" 
              size="lg" 
-             onClick={handlePrimaryAction} 
-             disabled={isLoading || (currentInputValue <= 0 && valorRestante > 0) || (paymentType === 'crediario' && !selectedClient)} 
+             onClick={mainButtonConfig.action} 
+             disabled={mainButtonConfig.disabled} 
+             className="min-w-[200px]" // Garante um tamanho mínimo para não pular muito
           >
-             {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-             {valorRestante > 0 && currentInputValue < valorRestante ? 'Adicionar Pagamento' : 'Finalizar Venda'}
-             <Kbd className="ml-2">F1</Kbd>
+             {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : mainButtonConfig.icon}
+             {mainButtonConfig.text}
+             <Kbd className="ml-2">{mainButtonConfig.hotkey}</Kbd>
          </Button>
         </DialogFooter>
       </DialogContent>
+      <ClientSelectionModal 
+        open={isClientModalOpen}
+        onOpenChange={setIsClientModalOpen}
+        onClientSelect={(client) => {
+            setSelectedClient(client);
+            // Opcional: Focar no input de valor após selecionar
+            setTimeout(() => inputRef.current?.focus(), 100);
+        }}
+    />
     </Dialog>
+    
   )
 }

@@ -69,3 +69,10 @@ class TransacaoCrediario(BaseModel):
 class ExtratoResponse(BaseModel):
     saldo_atual: float 
     transacoes: List[TransacaoCrediario] = []
+
+class ClienteCreateRapido(BaseModel):
+    nome: str
+    cpf: Optional[str] = None
+    telefone: Optional[str] = None
+    
+    limite_credito_inicial: float = 0.0
