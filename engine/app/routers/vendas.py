@@ -228,6 +228,12 @@ def finalizar_venda_pdv(
                         venda_id=venda.id
                     )
                     db.add(db_transacao)
+
+                    if db_cliente.status_conta != 'ativo':
+                            raise HTTPException(
+                                status_code=status.HTTP_403_FORBIDDEN, # 403 Proibido
+                                detail=f"Compra negada: A conta de {db_cliente.nome} não está ativa (Status: {db_cliente.status_conta.capitalize()})."
+                            )
                 
                 if pagamento.tipo == 'dinheiro':
                     db_mov = models.MovimentacaoCaixa(
