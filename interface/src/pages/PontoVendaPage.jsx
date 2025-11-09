@@ -19,6 +19,7 @@ import { CancelItemModal } from "@/components/pontovenda/CancelamentoModal"
 import { RecoveryModal } from "@/components/pontovenda/ModalRecuperacaoV"
 import { SetNextQuantityModal } from "@/components/pontovenda/AjusteQTD"
 import { ManualItemModal } from "@/components/pontovenda/ModalDiverso"
+import { RecebimentoModal } from "@/components/pontovenda/ModalRecebimento"
 
 const API_URL = "http://localhost:8000"; 
 
@@ -48,6 +49,7 @@ export default function PontoVenda() {
   const [nextQuantity, setNextQuantity] = React.useState(1); 
   const [isQtyModalOpen, setIsQtyModalOpen] = React.useState(false);
   const [isManualItemModalOpen, setIsManualItemModalOpen] = React.useState(false);
+  const [isRecebimentoModalOpen, setIsRecebimentoModalOpen] = React.useState(false);
 
   const fetchPdvSession = async (isInitialLoad = false) => {
 
@@ -290,7 +292,7 @@ const cartItems = React.useMemo(() => {
 
   React.useEffect(() => {
     const handleKeyPress = (e) => {
-        if (isModalOpen || isPaymentModalOpen || isQtyModalOpen || saleToRecover || isAddingItem || isManualItemModalOpen || isCancelItemModalOpen) return;
+        if (isModalOpen || isPaymentModalOpen || isQtyModalOpen || saleToRecover || isAddingItem || isManualItemModalOpen || isCancelItemModalOpen || isRecebimentoModalOpen ) return;
         if (e.key === 'F1') {e.preventDefault(); handleOpenCloseModalToggle(); return;}
         if (e.key === 'F3') { e.preventDefault(); handleCancelItem(); return; }
         if (e.key === 'F4') {e.preventDefault(); if (pdvSession?.status === 'aberto') {setIsQtyModalOpen(true);
@@ -310,12 +312,16 @@ const cartItems = React.useMemo(() => {
         if (e.key === 'Escape') { e.preventDefault(); setBarcodeBuffer(""); return; }
         if (e.key === 'Backspace') { e.preventDefault(); setBarcodeBuffer(prev => prev.slice(0, -1)); return; }
         if (e.key.length === 1 && e.key.match(/^[a-zA-Z0-9-]$/)) { e.preventDefault(); setBarcodeBuffer(prev => prev + e.key); }
+        if (e.key === 'F9') { e.preventDefault(); if (pdvSession?.status === 'aberto') {setIsRecebimentoModalOpen(true);
+            } else { toast.warning("Caixa Fechado", { description: "Abra o caixa para realizar recebimentos." }); }
+            return;
+        }
     };
 
     document.addEventListener('keydown', handleKeyPress);
     return () => document.removeEventListener('keydown', handleKeyPress);
   
-  }, [barcodeBuffer, isAddingItem, saleToRecover, isQtyModalOpen, saleStatus, isManualItemModalOpen, pdvSession, isModalOpen, isPaymentModalOpen, cartItems, handleCancelItem, handleCancelSale]);
+  }, [barcodeBuffer, isAddingItem, saleToRecover, isQtyModalOpen, saleStatus, isManualItemModalOpen, pdvSession, isRecebimentoModalOpen, isModalOpen, isPaymentModalOpen, cartItems, handleCancelItem, handleCancelSale]);
 
   React.useEffect(() => {
       const handleOnline = () => setPdvSession(prev => (prev ? { ...prev, isOnline: true } : null));
@@ -505,6 +511,11 @@ const handleBarcodeSubmit = async (codigo) => {
         onOpenChange={setIsManualItemModalOpen}
         pdvSession={pdvSession}
         onManualItemAdded={onManualItemAdded}
+    />
+    <RecebimentoModal
+        open={isRecebimentoModalOpen}
+        onOpenChange={setIsRecebimentoModalOpen}
+        pdvSession={pdvSession}
     />
     </>
   );

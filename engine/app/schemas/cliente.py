@@ -81,3 +81,10 @@ class ClienteCreateRapido(BaseModel):
 
 class ClientePinRequest(BaseModel):
     pin: str
+
+class RecebimentoCrediarioRequest(BaseModel):
+    valor_pago: float = Field(gt=0, description="O valor positivo que o cliente está pagando.")
+    forma_pagamento: str
+    
+    pdv_id: int
+    operador_id: int

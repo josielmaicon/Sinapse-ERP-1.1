@@ -249,3 +249,77 @@ def verificar_senha_cliente(
     
     # 4. Sucesso! Retorna os dados completos do cliente
     return _build_cliente_response(db_cliente)
+
+@router.post("/{cliente_id}/receber-pagamento", response_model=schemas.Cliente)
+def receber_pagamento_crediario(
+    cliente_id: int, 
+    request: schemas.RecebimentoCrediarioRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Registra um pagamento avulso na conta crediário de um cliente.
+    Isso DIMINUI o saldo_devedor.
+    """
+    
+    # Usamos uma transação para garantir que o saldo do cliente
+    # e a movimentação de caixa aconteçam juntos (ou nenhum).
+    try:
+        with db.begin():
+            # 1. Busca o Cliente (e trava a linha para a transação)
+            db_cliente = db.query(models.Cliente).filter(
+                models.Cliente.id == cliente_id
+            ).with_for_update().first()
+
+            if not db_cliente:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cliente não encontrado.")
+                
+            if db_cliente.status_conta == 'inativo':
+                 raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cliente inativo, não pode receber pagamentos.")
+
+            # 2. Abate o Saldo Devedor
+            # (Garante que não pague mais do que deve, ou permite crédito)
+            novo_saldo = db_cliente.saldo_devedor - request.valor_pago
+            db_cliente.saldo_devedor = novo_saldo
+            
+            # 3. (Sua Lógica de Mestre) - Se o pagamento quitou a dívida, reativa o cliente!
+            if novo_saldo <= 0 and db_cliente.status_conta == 'atrasado':
+                db_cliente.status_conta = 'ativo'
+                print(f"AUDITORIA: Cliente {db_cliente.nome} quitou a dívida. Status alterado para ATIVO.")
+
+            db.add(db_cliente)
+
+            # 4. Registra a Transação no Extrato do Cliente
+            db_transacao = models.TransacaoCrediario(
+                cliente_id=cliente_id,
+                tipo='pagamento', # <-- O OPOSTO da venda
+                valor=request.valor_pago,
+                descricao=f"Pagamento recebido via {request.forma_pagamento}",
+                venda_id=None # Não está atrelado a uma venda específica
+            )
+            db.add(db_transacao)
+
+            # 5. Registra a Movimentação de Caixa (se for dinheiro)
+            if request.forma_pagamento == 'dinheiro':
+                db_mov = models.MovimentacaoCaixa(
+                    tipo='suprimento', # Um pagamento é uma entrada de dinheiro
+                    valor=request.valor_pago,
+                    pdv_id=request.pdv_id,
+                    operador_id=request.operador_id,
+                )
+                db.add(db_mov)
+                
+            # O 'with db.begin()' faz o COMMIT aqui
+
+        # Recarrega o cliente para retornar os dados atualizados
+        db.refresh(db_cliente)
+        return _build_cliente_response(db_cliente) # Usa sua função auxiliar
+
+    except HTTPException as e:
+        raise e # Repassa erros de validação
+    except Exception as e:
+        # db.begin() faz o ROLLBACK
+        print(f"ERRO DE TRANSAÇÃO (RECEBIMENTO): {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erro interno ao processar o recebimento: {e}"
+        )
