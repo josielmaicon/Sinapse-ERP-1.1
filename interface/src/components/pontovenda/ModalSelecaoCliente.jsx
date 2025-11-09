@@ -124,7 +124,7 @@ const handleConfirmSelection = () => {
               const nextIndex = Math.max(currentIndex - 1, 0);
               setSelectedClientId(clientList[nextIndex].id);
           }
-          if (e.key === 'Enter') {
+          if (e.key === 'F1') {
               e.preventDefault();
               handleConfirmSelection();
           }
@@ -149,7 +149,7 @@ const handleConfirmSelection = () => {
         <DialogHeader>
           <DialogTitle className="text-xl">Selecionar Cliente (Crediário)</DialogTitle>
           <DialogDescription>
-            Busque pelo nome ou CPF. Use <Kbd>&uarr;</Kbd> <Kbd>&darr;</Kbd> para navegar, <Kbd>Enter</Kbd> para confirmar.
+            Busque pelo nome ou CPF. Use <Kbd>&uarr;</Kbd> <Kbd>&darr;</Kbd> para navegar, <Kbd>F1</Kbd> para confirmar.
           </DialogDescription>
         </DialogHeader>
         
@@ -227,7 +227,7 @@ const handleConfirmSelection = () => {
             Cancelar <Kbd className="ml-2">Esc</Kbd>
           </Button>
           <Button onClick={handleConfirmSelection} disabled={!selectedClientId}>
-            Confirmar Seleção <Kbd className="ml-2">Enter</Kbd>
+            Confirmar Seleção <Kbd className="ml-2">F1</Kbd>
           </Button>
         </DialogFooter>
       </DialogContent>
