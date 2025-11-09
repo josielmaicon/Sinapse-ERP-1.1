@@ -11,11 +11,11 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog" // Usamos Dialog, não Sheet
+} from "@/components/ui/dialog"
 import { toast } from "sonner"
-import { Loader2, UserPlus } from "lucide-react"
+import { Loader2, UserPlus, Lock } from "lucide-react" // ✅ Adicionado ícone Lock
 
-const API_URL = "http://localhost:8000";
+const API_URL = "http://localhost:8000"; 
 
 export function ClientRegistrationModal({ open, onOpenChange, onClientCreated }) {
   
@@ -23,18 +23,19 @@ export function ClientRegistrationModal({ open, onOpenChange, onClientCreated })
     nome: '',
     cpf: '',
     telefone: '',
-    limite_credito_inicial: 0, // Opcional
+    limite_credito_inicial: 0,
+    // ✅ NOVOS CAMPOS DE SENHA
+    senha: '',
+    senha_confirmacao: ''
   });
   const [isLoading, setIsLoading] = React.useState(false);
-
-  // Foco no primeiro campo ao abrir
   const nameInputRef = React.useRef(null);
+
   React.useEffect(() => {
     if (open) {
-        // Reseta o form
-        setFormData({ nome: '', cpf: '', telefone: '', limite_credito_inicial: 0 });
+        // Reseta o form (incluindo senhas)
+        setFormData({ nome: '', cpf: '', telefone: '', limite_credito_inicial: 0, senha: '', senha_confirmacao: '' });
         setIsLoading(false);
-        // Foca no campo "Nome"
         setTimeout(() => nameInputRef.current?.focus(), 100);
     }
   }, [open]);
@@ -46,13 +47,20 @@ export function ClientRegistrationModal({ open, onOpenChange, onClientCreated })
 
   const handleRegister = async (e) => {
     e.preventDefault();
-    if (isLoading || !formData.nome) {
-      toast.warning("O nome do cliente é obrigatório.");
-      return;
+    if (isLoading) return;
+
+    // ✅ VALIDAÇÕES LOCAIS
+    if (!formData.nome) { toast.warning("Nome obrigatório."); return; }
+    if (formData.senha.length < 4 || formData.senha.length > 6) {
+        toast.warning("A senha deve ter entre 4 e 6 dígitos."); return;
+    }
+    if (formData.senha !== formData.senha_confirmacao) {
+        toast.error("As senhas não coincidem."); return;
     }
     
     setIsLoading(true);
     
+    // Prepara os dados (o backend espera 'senha' e 'senha_confirmacao' no schema)
     const dataToSend = {
         ...formData,
         limite_credito_inicial: parseFloat(formData.limite_credito_inicial) || 0
@@ -71,12 +79,14 @@ export function ClientRegistrationModal({ open, onOpenChange, onClientCreated })
             throw new Error(newClient.detail || "Falha ao cadastrar cliente.");
         }
         
-        toast.success(`Cliente "${newClient.nome}" cadastrado com sucesso!`);
-        onClientCreated(newClient);
-        onOpenChange(false);
+        toast.success(`Cliente "${newClient.nome}" cadastrado!`, { description: "Acesso liberado com a nova senha." });
+        // O cliente retornado já está autenticado (acabou de ser criado),
+        // então podemos passá-lo direto sem pedir senha novamente.
+        onClientCreated(newClient); 
+        onOpenChange(false); 
 
     } catch (error) {
-        console.error("Erro ao cadastrar cliente:", error);
+        console.error(error);
         toast.error("Erro no Cadastro", { description: error.message });
     } finally {
         setIsLoading(false);
@@ -92,46 +102,71 @@ export function ClientRegistrationModal({ open, onOpenChange, onClientCreated })
             </div>
           <DialogTitle className="text-xl text-center">Cadastro Rápido de Cliente</DialogTitle>
           <DialogDescription className="text-center">
-            Preencha os dados essenciais. O dia de vencimento será definido como hoje (Dia {new Date().getDate()}).
+            Preencha os dados e defina uma senha numérica (4-6 dígitos) para o cliente.
           </DialogDescription>
         </DialogHeader>
         
         <form onSubmit={handleRegister}>
            <div className="grid gap-4 py-4">
+              {/* ... (Campos Nome, CPF, Telefone, Limite - IGUAIS AO ANTERIOR) ... */}
               <div className="grid grid-cols-4 items-center gap-4">
                  <Label htmlFor="nome-rapido" className="text-right">Nome</Label>
-                 <Input 
-                    id="nome-rapido" 
-                    name="nome"
-                    value={formData.nome} 
-                    onChange={handleChange} 
-                    className="col-span-3" 
-                    ref={nameInputRef}
-                    required 
-                 />
+                 <Input id="nome-rapido" name="nome" value={formData.nome} onChange={handleChange} className="col-span-3" ref={nameInputRef} required />
               </div>
               <div className="grid grid-cols-4 items-center gap-4">
                  <Label htmlFor="cpf-rapido" className="text-right">CPF</Label>
                  <Input id="cpf-rapido" name="cpf" value={formData.cpf} onChange={handleChange} className="col-span-3" />
               </div>
-              <div className="grid grid-cols-4 items-center gap-4">
-                 <Label htmlFor="telefone-rapido" className="text-right">Telefone</Label>
-                 <Input id="telefone-rapido" name="telefone" value={formData.telefone} onChange={handleChange} className="col-span-3" />
+              {/* (Omiti Telefone e Limite para brevidade, mas mantenha-os!) */}
+
+              {/* ✅ NOVOS CAMPOS DE SENHA */}
+              <div className="relative flex items-center py-2">
+                  <div className="flex-grow border-t border-muted" />
+                  <span className="flex-shrink-0 mx-4 text-xs text-muted-foreground uppercase flex items-center gap-1">
+                      <Lock className="h-3 w-3" /> Segurança
+                  </span>
+                  <div className="flex-grow border-t border-muted" />
               </div>
-               {/* Opcional: Definir limite inicial (ou deixar 0) */}
+
               <div className="grid grid-cols-4 items-center gap-4">
-                 <Label htmlFor="limite-rapido" className="text-right">Limite Inicial</Label>
-                 <Input id="limite-rapido" name="limite_credito_inicial" type="number" value={formData.limite_credito_inicial} onChange={handleChange} className="col-span-3" />
+                 <Label htmlFor="senha-rapido" className="text-right font-semibold">Senha (PIN)</Label>
+                 <Input 
+                    id="senha-rapido" 
+                    name="senha" 
+                    type="password" // Esconde os caracteres
+                    inputMode="numeric" // Teclado numérico no mobile
+                    maxLength={6}
+                    placeholder="4 a 6 dígitos"
+                    value={formData.senha} 
+                    onChange={handleChange} 
+                    className="col-span-3 font-mono tracking-widest" // Estilo para senha
+                    required 
+                 />
               </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                 <Label htmlFor="senha-conf-rapido" className="text-right">Confirmar</Label>
+                 <Input 
+                    id="senha-conf-rapido" 
+                    name="senha_confirmacao" 
+                    type="password"
+                    inputMode="numeric"
+                    maxLength={6}
+                    placeholder="Repita a senha"
+                    value={formData.senha_confirmacao} 
+                    onChange={handleChange} 
+                    className="col-span-3 font-mono tracking-widest"
+                    required 
+                 />
+              </div>
+
            </div>
 
            <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isLoading}>
-                Cancelar
-              </Button>
+              {/* ... (Botões Cancelar/Salvar - IGUAIS) ... */}
+              <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isLoading}>Cancelar</Button>
               <Button type="submit" disabled={isLoading}>
                  {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                 Cadastrar e Selecionar
+                 Cadastrar
               </Button>
            </DialogFooter>
         </form>

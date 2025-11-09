@@ -17,6 +17,7 @@ import { ClientRegistrationModal } from "./ModalCadastroCliente"
 import { Kbd } from "../ui/kbd"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { cn } from "@/lib/utils"
+import { ClientPinModal } from "./ModalSenhaCliente"
 
 const API_URL = "http://localhost:8000"; // (Ou sua URL base)
 
@@ -28,7 +29,9 @@ export function ClientSelectionModal({ open, onOpenChange, onClientSelect }) {
   const [selectedClientId, setSelectedClientId] = React.useState(null);
   const [isLoading, setIsLoading] = React.useState(false);
   const [errorMessage, setErrorMessage] = React.useState("");
-  
+  const [isPinModalOpen, setIsPinModalOpen] = React.useState(false);
+  const [clientToVerify, setClientToVerify] = React.useState(null); // Guarda quem está sendo verificado
+
   // Estado para o modal de cadastro Rápido
   const [isRegisterOpen, setIsRegisterOpen] = React.useState(false);
 
@@ -84,28 +87,30 @@ export function ClientSelectionModal({ open, onOpenChange, onClientSelect }) {
       }
   };
 
-  // Confirma a seleção
-  const handleConfirmSelection = () => {
+const handleConfirmSelection = () => {
       const selectedClient = clientList.find(c => c.id === selectedClientId);
       if (selectedClient) {
-          onClientSelect(selectedClient); // Devolve o cliente para o PaymentModal
-          onOpenChange(false); // Fecha este modal
+          setClientToVerify(selectedClient); 
+          setIsPinModalOpen(true);
       } else {
           toast.warning("Nenhum cliente selecionado.");
       }
   };
 
-  // Callback de quando o cadastro rápido é concluído
+  const handlePinVerified = (verifiedClient) => {
+      onClientSelect(verifiedClient);
+      onOpenChange(false);
+  };
+
   const handleClientCreated = (newClient) => {
-      // Quando o cadastro é sucesso, ele é automaticamente selecionado
       onClientSelect(newClient);
-      onOpenChange(false); // Fecha o modal de seleção
+      onOpenChange(false);
   };
   
   // --- Atalhos de Teclado (Específicos deste Modal) ---
   React.useEffect(() => {
       const handleKeyDown = (e) => {
-          if (!open || isRegisterOpen) return; // Só funciona se este modal estiver ativo
+          if (!open || isRegisterOpen || isPinModalOpen) return; // Só funciona se este modal estiver ativo
 
           if (e.key === 'ArrowDown') {
               e.preventDefault();
@@ -134,7 +139,7 @@ export function ClientSelectionModal({ open, onOpenChange, onClientSelect }) {
       };
       document.addEventListener('keydown', handleKeyDown);
       return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [open, isRegisterOpen, clientList, selectedClientId, handleConfirmSelection]);
+  }, [open, isRegisterOpen, clientList, isPinModalOpen, selectedClientId, handleConfirmSelection]);
 
 
   return (
@@ -228,11 +233,17 @@ export function ClientSelectionModal({ open, onOpenChange, onClientSelect }) {
       </DialogContent>
     </Dialog>
     
-    {/* O Modal de Cadastro Rápido (aninhado) */}
     <ClientRegistrationModal 
         open={isRegisterOpen}
         onOpenChange={setIsRegisterOpen}
         onClientCreated={handleClientCreated}
+    />
+
+    <ClientPinModal
+        open={isPinModalOpen}
+        onOpenChange={setIsPinModalOpen}
+        clientToVerify={clientToVerify}
+        onVerified={handlePinVerified}
     />
     </>
   )

@@ -3,7 +3,8 @@ from sqlalchemy.orm import Session, joinedload
 from typing import List
 from .. import models, schemas
 from ..database import get_db
-from datetime import date
+from datetime import date, datetime
+from ..utils.security import get_password_hash, verify_password
 
 router = APIRouter(
     prefix="/clientes", # Mantendo seu prefixo
@@ -15,15 +16,9 @@ def _build_cliente_response(db_cliente: models.Cliente) -> schemas.Cliente:
     """
     Calcula campos derivados (sem 'inf') e constrói o schema de resposta Cliente.
     """
-    
-    # ✅ CORREÇÃO: O backend agora só calcula o limite disponível REAL.
-    #    Ele não se importa mais com 'trust_mode' ou 'float('inf')'.
-    #    O frontend (que recebe 'trust_mode') decidirá se usa
-    #    este valor ou se mostra "Ilimitado".
-    limite_disp = (db_cliente.limite_credito or 0.0) - (db_cliente.saldo_devedor or 0.0)
-    # (Isso resultará em um número, ex: 500.0, -150.0, etc. Perfeito para JSON)
 
-    # Constrói o schema manualmente
+    limite_disp = (db_cliente.limite_credito or 0.0) - (db_cliente.saldo_devedor or 0.0)
+
     return schemas.Cliente(
         id=db_cliente.id,
         nome=db_cliente.nome,
@@ -38,8 +33,6 @@ def _build_cliente_response(db_cliente: models.Cliente) -> schemas.Cliente:
         limite_disponivel=limite_disp # <-- Agora é sempre um número JSON-compatível
     )
 
-# --- Rota GET para Listar Clientes ---
-# (Assumindo que /clientes retorna List[schemas.Cliente], não ClienteCrediario)
 @router.get("/", response_model=List[schemas.Cliente])
 def get_all_clientes(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
     clientes = db.query(models.Cliente).offset(skip).limit(limit).all()
@@ -161,4 +154,98 @@ def update_cliente_status(
     db.refresh(db_cliente)
     
     # Usa a função auxiliar para construir a resposta
+    return _build_cliente_response(db_cliente)
+
+@router.post("/", response_model=schemas.Cliente)
+def create_cliente_rapido(
+    request: schemas.ClienteCreateRapido, 
+    db: Session = Depends(get_db)
+):
+    """
+    Cria um novo cliente a partir do modal de cadastro rápido do PDV.
+    Valida e hasheia a senha.
+    """
+    
+    # 1. Verifica duplicidade (CPF)
+    if request.cpf:
+        # ... (sua lógica de verificação de CPF)
+        pass
+            
+    # 2. ✅ Validação de Senha (Sua lógica)
+    if request.senha != request.senha_confirmacao:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, 
+            detail="As senhas não coincidem."
+        )
+    
+    if not request.senha.isdigit() or not (4 <= len(request.senha) <= 6):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, 
+            detail="A senha deve ser numérica e ter entre 4 e 6 dígitos."
+        )
+        
+    # 3. ✅ Hashing da Senha
+    senha_hash_string = get_password_hash(request.senha)
+
+    # 4. Regra de Negócio (Dia do Vencimento)
+    hoje = datetime.utcnow()
+    dia_do_cadastro = hoje.day 
+
+    # 5. Cria o novo cliente no banco
+    db_cliente = models.Cliente(
+        nome=request.nome,
+        cpf=request.cpf,
+        telefone=request.telefone,
+        limite_credito=request.limite_credito_inicial,
+        status_conta='ativo',
+        dia_vencimento_fatura=dia_do_cadastro,
+        saldo_devedor=0.0,
+        trust_mode=False,
+        senha_hash=senha_hash_string # <-- Salva o HASH
+    )
+    
+    try:
+        db.add(db_cliente)
+        db.commit()
+        db.refresh(db_cliente)
+        
+        # Retorna o cliente formatado (sem a senha, claro)
+        return _build_cliente_response(db_cliente)
+
+    except Exception as e:
+        db.rollback()
+        print(f"ERRO AO CRIAR CLIENTE: {e}")
+        raise HTTPException(status_code=500, detail="Erro interno ao salvar novo cliente.")
+
+# --- ✅ NOVA ROTA: O Porteiro (Verificação de PIN) ---
+@router.post("/{cliente_id}/verificar-senha", response_model=schemas.Cliente)
+def verificar_senha_cliente(
+    cliente_id: int, 
+    request: schemas.ClientePinRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Verifica o PIN de 4-6 dígitos de um cliente.
+    Usado pelo PDV para autorizar a seleção no crediário.
+    """
+    
+    # 1. Busca o cliente
+    db_cliente = db.query(models.Cliente).filter(models.Cliente.id == cliente_id).first()
+    if not db_cliente:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cliente não encontrado.")
+    
+    # 2. Verifica se ele TEM uma senha
+    if not db_cliente.senha_hash:
+        # Se clientes antigos não têm senha, podemos permitir ou negar.
+        # Vamos negar por segurança.
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Este cliente não possui uma senha de crediário cadastrada.")
+    
+    # 3. Verifica a senha
+    if not verify_password(request.pin, db_cliente.senha_hash):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, # 401 Não Autorizado
+            detail="Senha incorreta."
+        )
+    
+    # 4. Sucesso! Retorna os dados completos do cliente
     return _build_cliente_response(db_cliente)

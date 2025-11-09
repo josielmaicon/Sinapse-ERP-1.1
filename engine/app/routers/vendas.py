@@ -220,7 +220,7 @@ def finalizar_venda_pdv(
                     db_cliente.saldo_devedor += pagamento.valor
                     db.add(db_cliente)
                     
-                    db_transacao = models.TransacaoCrediário(
+                    db_transacao = models.TransacaoCrediario(
                         cliente_id=request.cliente_db_id,
                         tipo='compra',
                         valor=pagamento.valor,

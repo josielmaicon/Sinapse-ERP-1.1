@@ -1,5 +1,5 @@
 from typing import List, Optional
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from datetime import datetime
 
 class ClienteBase(BaseModel):
@@ -74,5 +74,10 @@ class ClienteCreateRapido(BaseModel):
     nome: str
     cpf: Optional[str] = None
     telefone: Optional[str] = None
-    
     limite_credito_inicial: float = 0.0
+    
+    senha: str = Field(min_length=4, max_length=6) # Exige 4-6 dígitos
+    senha_confirmacao: str
+
+class ClientePinRequest(BaseModel):
+    pin: str

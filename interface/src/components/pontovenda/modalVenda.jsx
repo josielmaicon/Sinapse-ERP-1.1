@@ -57,29 +57,16 @@ export function PaymentModal({ open, onOpenChange, cartItems, pdvSession, onSale
   }, [open, paymentType, totalPago]);
 
   React.useEffect(() => {
-    const handleKeyDown = (e) => {
-      if (!open || isLoading) return; 
-
-      // Atalhos das Abas
-      if (e.key === 'F5') { e.preventDefault(); setPaymentType('dinheiro'); }
-      if (e.key === 'F6') { e.preventDefault(); setPaymentType('cartao'); }
-      if (e.key === 'F7') { e.preventDefault(); setPaymentType('pix'); }
-      if (e.key === 'F8') { e.preventDefault(); setPaymentType('crediario'); }
-
-      if (e.key === 'Escape') {
-        e.preventDefault();
-        handleOnOpenChange(false); // Chama o fechamento
-      }
+    if (open && !isClientModalOpen) { 
+      const restanteFormatado = parseFloat(valorRestante.toFixed(2));
+      setCurrentInputValue(restanteFormatado > 0 ? restanteFormatado : 0);
       
-      if (e.key === 'Enter' || e.key === 'F1') {
-         e.preventDefault();
-         handlePrimaryAction();
-      }
-    };
-
-    document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [open, isLoading, paymentType, currentInputValue, valorRestante, paymentsList]); // Dependências completas
+      setTimeout(() => {
+        inputRef.current?.focus();
+        inputRef.current?.select();
+      }, 100);
+    }
+  }, [open, isClientModalOpen, paymentType, totalPago]);
 
   const handleAddPayment = () => {
     const valor = parseFloat(currentInputValue);
@@ -275,32 +262,44 @@ const mainButtonConfig = React.useMemo(() => {
       };
   }, [paymentType, selectedClient, currentInputValue, valorRestante, isLoading]);
 
-  // ✅ 4. LÓGICA DE HOTKEYS ATUALIZADA
-  React.useEffect(() => {
+React.useEffect(() => {
     const handleKeyDown = (e) => {
-      if (!open || isLoading) return; 
+      if (!open || isLoading || isClientModalOpen) return; 
 
-      // Abas (F5-F8)
       if (e.key === 'F5') { e.preventDefault(); setPaymentType('dinheiro'); }
       if (e.key === 'F6') { e.preventDefault(); setPaymentType('cartao'); }
       if (e.key === 'F7') { e.preventDefault(); setPaymentType('pix'); }
       if (e.key === 'F8') { e.preventDefault(); setPaymentType('crediario'); }
-      
-      // Atalho dinâmico do botão principal (F1, F3 ou Enter)
-      // Se a tecla pressionada bater com a hotkey configurada no momento...
-      if (e.key === mainButtonConfig.hotkey || (mainButtonConfig.hotkey === 'F1' && e.key === 'Enter')) {
-           e.preventDefault();
-           if (!mainButtonConfig.disabled) {
-               mainButtonConfig.action();
-           }
-           return;
+
+      if (e.key === 'Escape') { 
+        e.preventDefault(); 
+        handleOnOpenChange(false);
       }
 
-      if (e.key === 'Escape') { e.preventDefault(); handleOnOpenChange(false); }
+      if (e.key.toLowerCase() === mainButtonConfig.hotkey.toLowerCase() || 
+         (e.key === 'Enter' && mainButtonConfig.hotkey === 'F1') ||
+         (e.key === 'Enter' && mainButtonConfig.hotkey === 'Enter')
+      ) {
+         e.preventDefault();
+         if (!mainButtonConfig.disabled) {
+             mainButtonConfig.action();
+         }
+      }
     };
+
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [open, isLoading, mainButtonConfig]); // Depende da config do botão!
+    
+  }, [open, isLoading, mainButtonConfig, isClientModalOpen, handleOnOpenChange]);
+
+  React.useEffect(() => {
+  if (open) {
+    setSelectedClient(null);
+    setPaymentsList([]);
+    setPaymentType("dinheiro");
+    setErrorMessage("");
+  }
+}, [open]);
 
   return (
     <Dialog open={open} onOpenChange={handleOnOpenChange}>
@@ -365,14 +364,21 @@ const mainButtonConfig = React.useMemo(() => {
                     <Label htmlFor="valor-pagamento" className="text-lg">
                         {paymentType === 'crediario' ? 'Valor a Lançar' : `Valor (${paymentType})`}
                     </Label>
-                    <CurrencyInput 
+                      <CurrencyInput 
                         ref={inputRef}
                         id="valor-pagamento"
                         className="text-4xl h-16 p-4 text-right font-mono"
                         value={currentInputValue}
                         onChange={setCurrentInputValue} 
+                        onKeyDown={(e) => {
+                           if (e.key === 'Enter') {
+                               e.preventDefault();
+                               e.stopPropagation();
+                               handlePrimaryAction();
+                           }
+                       }}
                         placeholder="R$ 0,00"
-                        disabled={isLoading || valorRestante <= 0}
+                        disabled={isLoading || (valorRestante <= 0 && paymentType === 'dinheiro')}
                     />
                 </div>
                 

@@ -115,17 +115,17 @@ class Cliente(Base):
     __tablename__ = "clientes"
     id = Column(Integer, primary_key=True)
     nome = Column(String(100), nullable=False, index=True)
-    cpf = Column(String(14), unique=True, index=True, nullable=True) # Permitir CPF nulo?
-    telefone = Column(String(20), nullable=True) # Campo útil para edição
-    email = Column(String(100), nullable=True) # Campo útil para edição
+    cpf = Column(String(14), unique=True, index=True, nullable=True)
+    telefone = Column(String(20), nullable=True)
+    email = Column(String(100), nullable=True)
     limite_credito = Column(Float, default=0.0)
-    saldo_devedor = Column(Float, default=0.0) # Saldo atual
-    
+    saldo_devedor = Column(Float, default=0.0)
     trust_mode = Column(Boolean, default=False, nullable=False) 
-    vendas = relationship("Venda", back_populates="cliente")
     status_conta = Column(Enum('ativo', 'inativo', 'bloqueado', 'atrasado', name='status_conta_enum'), default='ativo', nullable=False) 
-    
     dia_vencimento_fatura = Column(Integer, nullable=True)
+    senha_hash = Column(String, nullable=True) 
+
+    vendas = relationship("Venda", back_populates="cliente")
     transacoes_crediario = relationship("TransacaoCrediario", back_populates="cliente", cascade="all, delete-orphan")
 
 class TransacaoCrediario(Base):

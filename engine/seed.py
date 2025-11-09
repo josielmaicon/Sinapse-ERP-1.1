@@ -52,16 +52,18 @@ try:
     cliente1 = Cliente(
         nome="José da Silva", cpf="123.456.789-00", limite_credito=500.0, 
         saldo_devedor=350.50, status_conta="ativo", 
-        dia_vencimento_fatura=10 # Vence todo dia 10
+        dia_vencimento_fatura=10,
+        senha_hash=senha_hash_string
     )
     cliente2 = Cliente(
         nome="Maria Oliveira", cpf="987.654.321-00", limite_credito=1000.0, 
         saldo_devedor=120.00, status_conta="ativo", 
-        dia_vencimento_fatura=20 # Vence todo dia 20
+        dia_vencimento_fatura=20,
+        senha_hash=senha_hash_string 
     )
     db.add_all([cliente1, cliente2])
     db.commit()
-    print("-> Clientes criados.")
+    print("-> Clientes criados (com senha padrão '1234').")
 
     pdv1 = Pdv(nome="Caixa 01", status="aberto", operador_atual_id=user_operador.id) 
     pdv2 = Pdv(nome="Caixa 02", status="fechado")
