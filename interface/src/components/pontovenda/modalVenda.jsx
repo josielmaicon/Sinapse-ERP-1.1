@@ -18,6 +18,7 @@ import { cn } from "@/lib/utils"
 import { CurrencyInput } from "../ui/input-monetario"
 import { Kbd } from "@/components/ui/kbd"
 import { ClientSelectionModal } from "@/components/pontovenda/ModalSelecaoCliente"
+import { LimitOverrideModal } from "./QuebraLimiteModal"
 
 const API_URL = "http://localhost:8000"; 
 
@@ -29,6 +30,8 @@ export function PaymentModal({ open, onOpenChange, cartItems, pdvSession, onSale
   const [currentInputValue, setCurrentInputValue] = React.useState(0); 
   const [paymentsList, setPaymentsList] = React.useState([]); 
   const [selectedClient, setSelectedClient] = React.useState(null); 
+  const [isOverrideModalOpen, setIsOverrideModalOpen] = React.useState(false);
+  const [overrideMessage, setOverrideMessage] = React.useState("");
 
   const inputRef = React.useRef(null);
 
@@ -95,7 +98,8 @@ export function PaymentModal({ open, onOpenChange, cartItems, pdvSession, onSale
     setPaymentsList(prev => [...prev, newPayment]);
   };
 
-const handleConfirmSale = async () => {
+const handleConfirmSale = async (adminPassword = null) => {
+  // ✅ Agora aceita 'adminPassword' opcionalmente
   const valorInput = parseFloat(currentInputValue);
 
   let finalPaymentsList = [...paymentsList];
@@ -112,10 +116,11 @@ const handleConfirmSale = async () => {
     ];
   }
 
-  const finalTotalPago = totalPago + valorInput;
+  const finalTotalPago = finalPaymentsList.reduce((acc, p) => acc + p.valor, 0);
   const troco = Math.max(0, finalTotalPago - totalVenda);
 
-  if (finalTotalPago < totalVenda) {
+  // Pequena margem de erro (0.01) para comparações de ponto flutuante
+  if (finalTotalPago < totalVenda - 0.001) {
     toast.error("Pagamento Incompleto", {
       description: `Ainda falta ${(totalVenda - finalTotalPago).toLocaleString(
         "pt-BR",
@@ -131,7 +136,7 @@ const handleConfirmSale = async () => {
   const vendaRequest = {
       pdv_db_id: pdvSession.id,
       operador_db_id: pdvSession.operador_atual.id,
-      cliente_db_id: selectedClient?.id || null,
+      cliente_db_id: finalPaymentsList.find(p => p.tipo === 'crediario')?.cliente_id || null,
       itens: cartItems.map((item) => ({
         db_id: item.db_id,
         quantity: item.quantity,
@@ -142,6 +147,8 @@ const handleConfirmSale = async () => {
         valor: p.valor,
       })),
       total_calculado: totalVenda,
+      // ✅ Usa o argumento recebido
+      override_auth: adminPassword ? { admin_senha: adminPassword } : null
   };
 
   try {
@@ -154,10 +161,19 @@ const handleConfirmSale = async () => {
       const result = await response.json();
       
       if (!response.ok) {
-          const errorMsg = result.detail[0]?.msg || result.detail || "Erro desconhecido";
-          throw new Error(errorMsg);
+          // ✅ Se for 402, dispara o fluxo de override
+          if (response.status === 402) {
+            setOverrideMessage(result.detail); 
+            setIsOverrideModalOpen(true); 
+            return; // Para aqui e espera o modal de senha chamar handleOverrideConfirm
+          }
+        const errorMsg = result.detail[0]?.msg || result.detail || "Erro desconhecido";
+        throw new Error(errorMsg);
       }
-      onSaleSuccess(result.venda_id, result.troco);
+      
+      // Sucesso! Fecha o override se estiver aberto
+      setIsOverrideModalOpen(false);
+      onSaleSuccess(result.venda_id, troco);
 
       } catch (error) {
           console.error(error);
@@ -166,8 +182,12 @@ const handleConfirmSale = async () => {
       } finally {
           setIsLoading(false);
       }
-    };
+};
 
+  const handleOverrideConfirm = async (password) => {
+      // Re-tenta finalizar, agora COM a senha
+      await handleConfirmSale(password);
+  };
   
   const handlePrimaryAction = () => {
       const valorInput = parseFloat(currentInputValue);
@@ -264,17 +284,13 @@ const mainButtonConfig = React.useMemo(() => {
 
 React.useEffect(() => {
     const handleKeyDown = (e) => {
-      if (!open || isLoading || isClientModalOpen) return; 
+      if (!open || isLoading || isClientModalOpen || isOverrideModalOpen) return; 
 
       if (e.key === 'F5') { e.preventDefault(); setPaymentType('dinheiro'); }
       if (e.key === 'F6') { e.preventDefault(); setPaymentType('cartao'); }
       if (e.key === 'F7') { e.preventDefault(); setPaymentType('pix'); }
       if (e.key === 'F8') { e.preventDefault(); setPaymentType('crediario'); }
-
-      if (e.key === 'Escape') { 
-        e.preventDefault(); 
-        handleOnOpenChange(false);
-      }
+      if (e.key === 'Escape') { e.preventDefault(); handleOnOpenChange(false);}
 
       if (e.key.toLowerCase() === mainButtonConfig.hotkey.toLowerCase() || 
          (e.key === 'Enter' && mainButtonConfig.hotkey === 'F1') ||
@@ -290,7 +306,7 @@ React.useEffect(() => {
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
     
-  }, [open, isLoading, mainButtonConfig, isClientModalOpen, handleOnOpenChange]);
+  }, [open, isLoading, mainButtonConfig, isClientModalOpen, isOverrideModalOpen, handleOnOpenChange]);
 
   React.useEffect(() => {
   if (open) {
@@ -302,6 +318,7 @@ React.useEffect(() => {
 }, [open]);
 
   return (
+    <>
     <Dialog open={open} onOpenChange={handleOnOpenChange}>
       <DialogContent className="sm:max-w-lg p-0" onOpenAutoFocus={(e) => e.preventDefault()}>
         <DialogHeader className="p-6 pb-2">
@@ -417,16 +434,21 @@ React.useEffect(() => {
          </Button>
         </DialogFooter>
       </DialogContent>
+    </Dialog>
       <ClientSelectionModal 
         open={isClientModalOpen}
         onOpenChange={setIsClientModalOpen}
         onClientSelect={(client) => {
             setSelectedClient(client);
-            // Opcional: Focar no input de valor após selecionar
             setTimeout(() => inputRef.current?.focus(), 100);
         }}
     />
-    </Dialog>
-    
+    <LimitOverrideModal
+        open={isOverrideModalOpen}
+        onOpenChange={setIsOverrideModalOpen}
+        message={overrideMessage}
+        onConfirmOverride={handleOverrideConfirm}
+    />
+    </>
   )
 }

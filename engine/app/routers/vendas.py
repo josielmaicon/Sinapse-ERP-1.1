@@ -146,7 +146,6 @@ def iniciar_venda(request: schemas.IniciarVendaRequest, db: Session = Depends(ge
 
 @router.post("/{venda_id}/adicionar-item", response_model=schemas.Venda)
 def adicionar_item_venda(venda_id: int, item: schemas.VendaItemCreate, db: Session = Depends(get_db)):
-    # (Esta rota é usada por 'adicionar_item_smart' agora, mas pode ser mantida)
     venda = db.query(models.Venda).filter(models.Venda.id == venda_id).first()
     if not venda or venda.status != "em_andamento":
         raise HTTPException(status_code=400, detail="Venda não encontrada ou já finalizada.")
@@ -228,12 +227,32 @@ def finalizar_venda_pdv(
                         venda_id=venda.id
                     )
                     db.add(db_transacao)
-
+                
                     if db_cliente.status_conta != 'ativo':
-                            raise HTTPException(
-                                status_code=status.HTTP_403_FORBIDDEN, # 403 Proibido
-                                detail=f"Compra negada: A conta de {db_cliente.nome} não está ativa (Status: {db_cliente.status_conta.capitalize()})."
-                            )
+                        raise HTTPException(
+                            status_code=status.HTTP_403_FORBIDDEN, # 403 Proibido
+                            detail=f"Compra negada: A conta de {db_cliente.nome} não está ativa (Status: {db_cliente.status_conta.capitalize()})."
+                        )
+                    
+                    limite_disponivel = (db_cliente.limite_credito - db_cliente.saldo_devedor)
+                    if not db_cliente.trust_mode and pagamento.valor > limite_disponivel:
+                         
+                         # 1. Tenta usar o "Crachá" se ele foi enviado
+                         autorizado_por_override = False
+                         if request.override_auth and request.override_auth.admin_senha:
+                             # Verifica se a senha pertence a um admin
+                             admin_autorizador = get_admin_by_password_only(request.override_auth, db) # Reutiliza sua função de dependência
+                             if admin_autorizador:
+                                 autorizado_por_override = True
+                                 print(f"AUDITORIA: Limite excedido para cliente {db_cliente.id} AUTORIZADO por admin {admin_autorizador.id}")
+                                 # Opcional: Salvar quem autorizou na transação
+                         
+                         # 2. Se NÃO foi autorizado (ou nem tentou), bloqueia
+                         if not autorizado_por_override:
+                             raise HTTPException(
+                                 status_code=status.HTTP_402_PAYMENT_REQUIRED, # 402 = Sinal claro para o frontend pedir auth
+                                 detail=f"Limite insuficiente. Disponível: R$ {limite_disponivel:.2f}. Necessário: R$ {pagamento.valor:.2f}"
+                             )
                 
                 if pagamento.tipo == 'dinheiro':
                     db_mov = models.MovimentacaoCaixa(

@@ -76,7 +76,7 @@ export default function PdvStatusTable() {
                     {/* Agora pegamos o nome do operador do objeto aninhado */}
                     <TableCell>{item.operador_atual?.nome ?? "N/D"}</TableCell>
                     {/* O 'inregister' virá de outra chamada no futuro, por enquanto deixamos 0 */}
-                    <TableCell>R$ 0,00</TableCell>
+                    <TableCell>{item.valor_em_caixa ?? "R$ 0,00"}</TableCell>
                     <TableCell className="text-right">
                       <Tooltip>
                         <TooltipTrigger asChild>

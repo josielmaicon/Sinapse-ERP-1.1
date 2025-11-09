@@ -17,6 +17,9 @@ class PdvPagamento(BaseModel):
     tipo: str 
     valor: float
 
+class AdminAuthRequest(BaseModel):
+    admin_senha: str
+
 class PdvVendaRequest(BaseModel):
     pdv_db_id: int
     operador_db_id: int
@@ -24,6 +27,7 @@ class PdvVendaRequest(BaseModel):
     itens: List[PdvVendaItem]
     pagamentos: List[PdvPagamento]
     total_calculado: float 
+    override_auth: Optional[AdminAuthRequest] = None
 
 class SolicitacaoBase(BaseModel):
     tipo: str
