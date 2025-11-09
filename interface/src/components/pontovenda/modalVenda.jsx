@@ -13,11 +13,12 @@ import {
 } from "@/components/ui/dialog"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { toast } from "sonner"
-import { Loader2, User, CreditCard, Smartphone, Banknote, X, Search } from "lucide-react"
+import { Loader2, User, CreditCard, Smartphone, Banknote, X, Search, ShieldAlert } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { CurrencyInput } from "../ui/input-monetario"
 import { Kbd } from "@/components/ui/kbd"
 import { ClientSelectionModal } from "@/components/pontovenda/ModalSelecaoCliente"
+import { LimitOverrideModal } from "./QuebraLimiteModal"
 
 const API_URL = "http://localhost:8000"; 
 
@@ -29,9 +30,11 @@ export function PaymentModal({ open, onOpenChange, cartItems, pdvSession, onSale
   const [currentInputValue, setCurrentInputValue] = React.useState(0); 
   const [paymentsList, setPaymentsList] = React.useState([]); 
   const [selectedClient, setSelectedClient] = React.useState(null); 
+  const [isOverrideModalOpen, setIsOverrideModalOpen] = React.useState(false);
+  const [overrideMessage, setOverrideMessage] = React.useState("");
 
   const inputRef = React.useRef(null);
-
+  const [isAwaitingOverride, setIsAwaitingOverride] = React.useState(false);
   const totalVenda = React.useMemo(() => 
     cartItems.reduce((acc, item) => acc + item.totalPrice, 0)
   , [cartItems]);
@@ -68,6 +71,10 @@ export function PaymentModal({ open, onOpenChange, cartItems, pdvSession, onSale
     }
   }, [open, isClientModalOpen, paymentType, totalPago]);
 
+  const handleOverrideConfirm = async (password) => {
+      await handleConfirmSale(password);
+  };
+
   const handleAddPayment = () => {
     const valor = parseFloat(currentInputValue);
     
@@ -95,80 +102,93 @@ export function PaymentModal({ open, onOpenChange, cartItems, pdvSession, onSale
     setPaymentsList(prev => [...prev, newPayment]);
   };
 
-const handleConfirmSale = async () => {
-  const valorInput = parseFloat(currentInputValue);
+// ...
+  const handleConfirmSale = React.useCallback(async (adminPassword = null) => {
+    const valorInput = parseFloat(currentInputValue);
+    let finalPaymentsList = [...paymentsList];
+    
+    // Adiciona o pagamento atual se ele completar o valor (com margem de erro float)
+    if (valorInput > 0 && Math.abs(valorInput - valorRestante) < 0.01) {
+        finalPaymentsList.push({
+            tipo: paymentType,
+            valor: valorInput,
+            // Garante que cliente_id seja null se não for crediário
+            cliente_id: paymentType === 'crediario' ? selectedClient?.id : null,
+            cliente_nome: paymentType === 'crediario' ? selectedClient?.nome : null,
+        });
+    }
+    
+    const finalTotalPago = finalPaymentsList.reduce((acc, p) => acc + p.valor, 0);
+    const troco = Math.max(0, finalTotalPago - totalVenda);
 
-  let finalPaymentsList = [...paymentsList];
+    if (finalTotalPago < totalVenda - 0.01) {
+       toast.error("Pagamento Incompleto"); return;
+    }
 
-  if (valorInput > 0) {
-    finalPaymentsList = [
-      ...paymentsList,
-      {
-        tipo: paymentType,
-        valor: valorInput,
-        cliente_id: paymentType === "crediario" ? selectedClient?.id : null,
-        cliente_nome: paymentType === "crediario" ? selectedClient?.nome : null,
-      },
-    ];
-  }
+    setIsLoading(true);
+    setErrorMessage("");
 
-  const finalTotalPago = totalPago + valorInput;
-  const troco = Math.max(0, finalTotalPago - totalVenda);
-
-  if (finalTotalPago < totalVenda) {
-    toast.error("Pagamento Incompleto", {
-      description: `Ainda falta ${(totalVenda - finalTotalPago).toLocaleString(
-        "pt-BR",
-        { style: "currency", currency: "BRL" }
-      )}`,
-    });
-    return;
-  }
-
-  setIsLoading(true);
-  setErrorMessage("");
-
-  const vendaRequest = {
-      pdv_db_id: pdvSession.id,
-      operador_db_id: pdvSession.operador_atual.id,
-      cliente_db_id: selectedClient?.id || null,
-      itens: cartItems.map((item) => ({
-        db_id: item.db_id,
-        quantity: item.quantity,
-        unitPrice: item.unitPrice,
-      })),
-      pagamentos: finalPaymentsList.map((p) => ({
-        tipo: p.tipo,
-        valor: p.valor,
-      })),
-      total_calculado: totalVenda,
-  };
-
-  try {
-      const response = await fetch(`${API_URL}/vendas/finalizar`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(vendaRequest),
-      });
-
-      const result = await response.json();
-      
-      if (!response.ok) {
-          const errorMsg = result.detail[0]?.msg || result.detail || "Erro desconhecido";
-          throw new Error(errorMsg);
-      }
-      onSaleSuccess(result.venda_id, result.troco);
-
-      } catch (error) {
-          console.error(error);
-          setErrorMessage(error.message);
-          toast.error("Falha ao finalizar venda", { description: error.message });
-      } finally {
-          setIsLoading(false);
-      }
+    // ✅ 1. MONTAGEM ROBUSTA DO REQUEST
+    const vendaRequest = {
+        pdv_db_id: pdvSession.id,
+        operador_db_id: pdvSession.operador_atual.id,
+        // Busca o cliente da primeira transação de crediário encontrada (se houver)
+        cliente_db_id: finalPaymentsList.find(p => p.tipo === 'crediario')?.cliente_id || null,
+        itens: cartItems.map(item => ({
+            db_id: item.db_id,
+            quantity: item.quantity,
+            unitPrice: item.unitPrice
+        })),
+        // Limpa os dados extras antes de enviar para a API (para bater com o schema PdvPagamento)
+        pagamentos: finalPaymentsList.map(p => ({ 
+            tipo: p.tipo, 
+            valor: p.valor 
+        })),
+        total_calculado: totalVenda,
+        // Garante que override_auth seja enviado (mesmo que null)
+        override_auth: adminPassword ? { admin_senha: adminPassword } : null
     };
+    
+    console.log("Enviando vendaRequest:", JSON.stringify(vendaRequest, null, 2)); // LOG CRUCIAL
 
-  
+    try {
+        const response = await fetch(`${API_URL}/vendas/finalizar`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(vendaRequest)
+        });
+        
+        const result = await response.json();
+        console.log("Status da resposta da venda:", response.status);
+        
+          if (!response.ok) {
+            if (response.status === 402 || response.status === 403) { 
+                const tipoBloqueio = response.status === 402 ? "Limite Excedido" : "Conta Bloqueada";
+                toast.warning(tipoBloqueio, { 
+                    description: `${result.detail} Pressione F8 para autorização de gerente.`,
+                    duration: 8000 // Um pouco mais de tempo para ler
+                });
+                setOverrideMessage(result.detail);
+                setIsAwaitingOverride(true); // Arma o F8
+                return; 
+            }
+
+            throw new Error(result.detail || "Erro ao finalizar venda.");
+        }
+        
+        setIsOverrideModalOpen(false);
+        onSaleSuccess(result.venda_id, troco); 
+        
+    } catch (error) {
+        console.error("Erro no handleConfirmSale:", error);
+        setErrorMessage(error.message);
+        // Mostra o erro detalhado no toast
+        toast.error("Falha ao finalizar venda", { description: error.message });
+    } finally {
+        setIsLoading(false);
+    }
+  }, [currentInputValue, paymentsList, totalVenda, pdvSession, cartItems, activeSale, selectedClient, onSaleSuccess, valorRestante, paymentType, totalPago]);
+
   const handlePrimaryAction = () => {
       const valorInput = parseFloat(currentInputValue);
       
@@ -262,20 +282,29 @@ const mainButtonConfig = React.useMemo(() => {
       };
   }, [paymentType, selectedClient, currentInputValue, valorRestante, isLoading]);
 
-React.useEffect(() => {
+  React.useEffect(() => {
     const handleKeyDown = (e) => {
-      if (!open || isLoading || isClientModalOpen) return; 
+      // Guarda principal (silenciador)
+      if (!open || isLoading || isClientModalOpen || isOverrideModalOpen) return; 
 
+      // Atalhos das Abas (F5-F7)
       if (e.key === 'F5') { e.preventDefault(); setPaymentType('dinheiro'); }
       if (e.key === 'F6') { e.preventDefault(); setPaymentType('cartao'); }
       if (e.key === 'F7') { e.preventDefault(); setPaymentType('pix'); }
-      if (e.key === 'F8') { e.preventDefault(); setPaymentType('crediario'); }
-
-      if (e.key === 'Escape') { 
-        e.preventDefault(); 
-        handleOnOpenChange(false);
+      
+      if (e.key === 'F8') { 
+          e.preventDefault();
+          console.log("F8 pressionado. Awaiting Override?", isAwaitingOverride); // Debug
+          if (isAwaitingOverride) {
+              setIsOverrideModalOpen(true);
+          } else {
+              setPaymentType('crediario'); 
+          }
       }
 
+      if (e.key === 'Escape') { e.preventDefault(); handleOnOpenChange(false); }
+      
+      // Atalho de Ação Principal (Enter ou F1)
       if (e.key.toLowerCase() === mainButtonConfig.hotkey.toLowerCase() || 
          (e.key === 'Enter' && mainButtonConfig.hotkey === 'F1') ||
          (e.key === 'Enter' && mainButtonConfig.hotkey === 'Enter')
@@ -289,8 +318,8 @@ React.useEffect(() => {
 
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-    
-  }, [open, isLoading, mainButtonConfig, isClientModalOpen, handleOnOpenChange]);
+  
+  }, [open, isLoading, mainButtonConfig, isAwaitingOverride, paymentType, isClientModalOpen, isOverrideModalOpen, handleOnOpenChange, isAwaitingOverride]); // Adiciona isAwaitingOverride
 
   React.useEffect(() => {
   if (open) {
@@ -302,6 +331,7 @@ React.useEffect(() => {
 }, [open]);
 
   return (
+    <>
     <Dialog open={open} onOpenChange={handleOnOpenChange}>
       <DialogContent className="sm:max-w-lg p-0" onOpenAutoFocus={(e) => e.preventDefault()}>
         <DialogHeader className="p-6 pb-2">
@@ -357,7 +387,14 @@ React.useEffect(() => {
                     <TabsTrigger value="dinheiro">Dinheiro<Kbd className="ml-2">F5</Kbd></TabsTrigger>
                     <TabsTrigger value="cartao">Cartão<Kbd className="ml-2">F6</Kbd></TabsTrigger>
                     <TabsTrigger value="pix">PIX<Kbd className="ml-2">F7</Kbd></TabsTrigger>
-                    <TabsTrigger value="crediario">Crediário<Kbd className="ml-2">F8</Kbd></TabsTrigger>
+                    {/* ✅ F8 agora é condicional */}
+                    <TabsTrigger value="crediario">
+                        Crediário
+                        {/* Mostra F8 ou F8+Shield se o override estiver armado */}
+                        <Kbd className={cn("ml-2", isAwaitingOverride && "bg-destructive text-destructive-foreground")}>
+                           {isAwaitingOverride && <ShieldAlert className="h-3 w-3 mr-1" />} F8
+                        </Kbd>
+                    </TabsTrigger>
                 </TabsList>
                 
                 <div className="space-y-2 py-4">
@@ -417,6 +454,8 @@ React.useEffect(() => {
          </Button>
         </DialogFooter>
       </DialogContent>
+
+    </Dialog>
       <ClientSelectionModal 
         open={isClientModalOpen}
         onOpenChange={setIsClientModalOpen}
@@ -424,9 +463,14 @@ React.useEffect(() => {
             setSelectedClient(client);
             // Opcional: Focar no input de valor após selecionar
             setTimeout(() => inputRef.current?.focus(), 100);
-        }}
+          }}
+      />
+    <LimitOverrideModal
+        open={isOverrideModalOpen}
+        onOpenChange={setIsOverrideModalOpen}
+        message={overrideMessage}
+        onConfirmOverride={handleOverrideConfirm}
     />
-    </Dialog>
-    
+    </>
   )
 }
