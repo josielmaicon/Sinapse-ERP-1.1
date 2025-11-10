@@ -177,14 +177,13 @@ def finalizar_venda_pdv(
     if round(valor_total_pago, 2) < round(request.total_calculado, 2):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Pagamento insuficiente. Total: {request.total_calculado:.2f}, Pago: {valor_total_pago:.2f}"
+            detail=f"Pagamento insuficiente. Total: {request.total_calculado}, Pago: {valor_total_pago}"
         )
         
-    valor_troco = max(0.0, valor_total_pago - request.total_calculado)
+    valor_troco = max(0, valor_total_pago - request.total_calculado)
 
     try:
         with db.begin():
-            # 1. Busca e trava a venda
             venda = db.query(models.Venda).filter(
                 models.Venda.pdv_id == request.pdv_db_id,
                 models.Venda.operador_id == request.operador_db_id,
@@ -192,26 +191,17 @@ def finalizar_venda_pdv(
             ).with_for_update().first()
 
             if not venda:
-                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Nenhuma venda 'em andamento' encontrada para este operador/PDV.")
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Nenhuma venda 'em andamento' encontrada.")
 
-            # 2. Atualiza status da venda
             venda.status = "concluida"
             venda.cliente_id = request.cliente_db_id
-            
-            # (Opcional: Auditoria de valor se necessário)
-            # if round(venda.valor_total, 2) != round(request.total_calculado, 2): ...
-
             db.add(venda)
             
-            # 3. Processa os pagamentos
             for pagamento in request.pagamentos:
-                
-                # --- PAGAMENTO CREDIÁRIO ---
                 if pagamento.tipo == 'crediario':
                     if not request.cliente_db_id:
-                        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cliente não identificado para venda em crediário.")
+                        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cliente não identificado.")
                     
-                    # A. Busca o Cliente e TRAVA a linha para evitar condições de corrida
                     db_cliente = db.query(models.Cliente).filter(
                         models.Cliente.id == request.cliente_db_id
                     ).with_for_update().first()
@@ -219,37 +209,41 @@ def finalizar_venda_pdv(
                     if not db_cliente:
                         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cliente do crediário não encontrado.")
                         
-                    # B. VALIDAÇÃO 1: Status da Conta (O Porteiro)
-                    if db_cliente.status_conta != 'ativo':
-                         raise HTTPException(
-                             status_code=status.HTTP_403_FORBIDDEN, # 403 = Bloqueado/Atrasado
-                             detail=f"Compra negada: A conta de {db_cliente.nome} não está ativa (Status: {db_cliente.status_conta.upper()})."
-                         )
+                    # --- ✅ A LÓGICA DE OVERRIDE CORRIGIDA ---
                     
-                    # C. VALIDAÇÃO 2: Limite de Crédito (O Gerente)
-                    # Calcula o limite ANTES de adicionar a nova compra
-                    limite_disponivel = (db_cliente.limite_credito - db_cliente.saldo_devedor)
+                    autorizado_por_override = False
+                    admin_autorizador = None
                     
-                    if not db_cliente.trust_mode and pagamento.valor > limite_disponivel:
-                         # --- LÓGICA DE OVERRIDE ---
-                         autorizado = False
-                         # Verifica se o "crachá" (senha de admin) foi enviado
-                         if request.override_auth and request.override_auth.admin_senha:
-                             # Tenta autenticar o admin com a senha fornecida
-                             # (Requer que get_admin_by_password_only esteja acessível aqui)
-                             admin = get_admin_by_password_only(request.override_auth, db)
-                             if admin:
-                                 autorizado = True
-                                 print(f"AUDITORIA: Override de limite para Cliente {db_cliente.id} autorizado por Admin {admin.id}")
+                    # 1. O GERENTE APRESENTA O CRACHÁ?
+                    if request.override_auth and request.override_auth.admin_senha:
+                        try:
+                            admin_autorizador = get_admin_by_password_only(request.override_auth, db)
+                            if admin_autorizador:
+                                autorizado_por_override = True
+                                print(f"AUDITORIA: Override de limite/status para Cliente {db_cliente.id} AUTORIZADO por Admin {admin_autorizador.id}")
+                        except HTTPException as e:
+                            # Se a senha do crachá estiver ERRADA, retorna 401
+                            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=f"Senha de autorização inválida: {e.detail}")
 
-                         if not autorizado:
-                             # 🛑 GATILHO DO MODAL DE SENHA (402)
+                    # 2. SE O GERENTE NÃO AUTORIZOU, o Porteiro (Status) e o Gerente (Limite) entram
+                    if not autorizado_por_override:
+                        
+                        # 2a. Verificação de Status (O Porteiro)
+                        if db_cliente.status_conta != 'ativo':
                              raise HTTPException(
-                                 status_code=status.HTTP_402_PAYMENT_REQUIRED, 
-                                 detail=f"Limite insuficiente. Disponível: R$ {limite_disponivel:.2f}. Necessário: R$ {pagamento.valor:.2f}"
+                                 status_code=status.HTTP_403_FORBIDDEN, # 403 (Bloqueado)
+                                 detail=f"Conta de {db_cliente.nome} não está ativa (Status: {db_cliente.status_conta.upper()})."
+                             )
+                        
+                        # 2b. Verificação de Limite (O Gerente de Limite)
+                        limite_disponivel = (db_cliente.limite_credito - db_cliente.saldo_devedor)
+                        if not db_cliente.trust_mode and pagamento.valor > limite_disponivel:
+                             raise HTTPException(
+                                 status_code=status.HTTP_402_PAYMENT_REQUIRED, # 402 (Sem Limite)
+                                 detail=f"Limite insuficiente. Disponível: R$ {limite_disponivel:.2f}"
                              )
                     
-                    # D. EFETIVAÇÃO: Só chega aqui se passou por todas as travas
+                    # 3. Processa a transação (agora seguro, pois foi validado OU autorizado)
                     db_cliente.saldo_devedor += pagamento.valor
                     db.add(db_cliente)
                     
@@ -257,12 +251,12 @@ def finalizar_venda_pdv(
                         cliente_id=request.cliente_db_id,
                         tipo='compra',
                         valor=pagamento.valor,
-                        descricao=f"Venda #{venda.id}",
+                        # Adiciona a auditoria na descrição da transação
+                        descricao=f"Venda #{venda.id}" + (" (AUTORIZADA)" if autorizado_por_override else ""),
                         venda_id=venda.id
                     )
                     db.add(db_transacao)
                 
-                # --- PAGAMENTO DINHEIRO ---
                 if pagamento.tipo == 'dinheiro':
                     db_mov = models.MovimentacaoCaixa(
                         tipo='suprimento',
