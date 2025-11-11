@@ -45,4 +45,23 @@ def verify_admin_password(
         detail="Senha de administrador inválida."
     )
 
-# Adicione outras rotas de auth (login, etc.) se precisar
+def get_admin_by_password(senha: str, db: Session):
+    admins = db.query(models.Usuario).filter(models.Usuario.funcao == "admin").all()
+    if not admins:
+        raise HTTPException(status_code=404, detail="Nenhum administrador cadastrado.")
+    for admin_user in admins:
+        if verify_password(senha, admin_user.senha_hash):
+            return admin_user
+    raise HTTPException(status_code=401, detail="Código de Administrador inválido.")
+
+@router.post("/validar-admin", response_model=schemas.Usuario) # Retorna o admin
+def validar_admin_senha(
+    auth_request: schemas.AdminAuthRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Verifica a senha (PIN/Código) de um admin e retorna o usuário.
+    Usado pelo PDV para autorizações locais (presenciais).
+    """
+    admin_user = get_admin_by_password(auth_request.admin_senha, db)
+    return admin_user

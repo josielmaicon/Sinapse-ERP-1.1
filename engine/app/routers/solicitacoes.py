@@ -1,63 +1,122 @@
 # app/routers/solicitacoes.py
-import json
-from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
-from sqlalchemy.orm import Session
+from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect, status
+from sqlalchemy.orm import Session, joinedload
 from .. import models, schemas
 from ..database import get_db
-from ..websockets import manager # ✅ Importa nosso gerenciador de conexões
+from ..websockets import manager
+from datetime import datetime
 
 router = APIRouter(
     prefix="/solicitacoes",
-    tags=["Solicitações"]
+    tags=["Solicitações (Socket)"]
 )
 
-# Endpoint para o operador de caixa criar uma solicitação
+# --- 1. O CANAL ÚNICO (WebSocket) ---
+@router.websocket("/ws")
+async def websocket_endpoint(websocket: WebSocket):
+    """
+    Canal global. Tanto PDVs quanto Gerentes se conectam aqui.
+    Eles apenas 'escutam'. As ações são feitas via rotas HTTP abaixo.
+    """
+    await manager.connect(websocket)
+    try:
+        while True:
+            # Mantém a conexão viva e escuta mensagens (ping/pong)
+            # Se quiser que o front mande algo pelo socket, processaria aqui.
+            # Por enquanto, é apenas one-way (Server -> Client)
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        manager.disconnect(websocket)
+    except Exception as e:
+        print(f"Erro no socket: {e}")
+        manager.disconnect(websocket)
+
+
+# --- 2. O PEDIDO (Lado do PDV) ---
 @router.post("/", response_model=schemas.Solicitacao)
-async def create_solicitacao(solicitacao: schemas.SolicitacaoCreate, db: Session = Depends(get_db)):
+async def create_solicitacao(
+    solicitacao: schemas.SolicitacaoCreate, 
+    db: Session = Depends(get_db)
+):
+    """
+    PDV cria uma solicitação (ex: cancelamento de item).
+    Salva 'pendente' no banco e avisa os gerentes.
+    """
+    # Cria no Banco
     db_solicitacao = models.Solicitacao(**solicitacao.dict())
+    # Status inicial padrão deve ser 'pendente' no model, mas garantindo:
+    db_solicitacao.status = "pendente" 
+    db_solicitacao.data_hora_criacao = datetime.now()
+    
     db.add(db_solicitacao)
     db.commit()
     db.refresh(db_solicitacao)
 
-    # ✅ A NOTIFICAÇÃO EM TEMPO REAL!
-    # Avisa a todos os gerentes conectados que há uma nova solicitação
-    await manager.broadcast(json.dumps({
-        "evento": "NOVA_SOLICITACAO",
-        "pdv_id": db_solicitacao.pdv_id
-    }))
+    # Carrega dados extras para o painel do gerente (ex: nome do operador, nome do PDV)
+    # Isso evita que o gerente precise fazer outro fetch imediato
+    detailed_solicitacao = db.query(models.Solicitacao).options(
+        joinedload(models.Solicitacao.pdv),
+        joinedload(models.Solicitacao.operador)
+    ).filter(models.Solicitacao.id == db_solicitacao.id).first()
+
+    pdv_nome = detailed_solicitacao.pdv.nome if detailed_solicitacao.pdv else "Desconhecido"
+    operador_nome = detailed_solicitacao.operador.nome if detailed_solicitacao.operador else "Desconhecido"
+
+    # 🔔 NOTIFICAÇÃO LEVE (Broadcast)
+    # "Ei Gerentes, tem uma bucha nova no PDV X"
+    await manager.broadcast({
+        "type": "NOVA_SOLICITACAO",  # Tipo do evento
+        "payload": {
+            "id": db_solicitacao.id,
+            "tipo": db_solicitacao.tipo, # ex: 'cancelamento_item'
+            "pdv_id": db_solicitacao.pdv_id,
+            "pdv_nome": pdv_nome,
+            "operador_nome": operador_nome,
+            "mensagem": "Aprovação necessária"
+        }
+    })
     
     return db_solicitacao
 
-# Endpoint para o gerente responder a uma solicitação
+
+# --- 3. A RESPOSTA (Lado do Gerente) ---
 @router.put("/{solicitacao_id}", response_model=schemas.Solicitacao)
-async def resolve_solicitacao(solicitacao_id: int, status: str, db: Session = Depends(get_db)):
-    # ... (lógica para encontrar a solicitação, atualizar o status, etc.)
-    # ... (depois de salvar no banco, notificar o PDV de volta)
-    
-    # Exemplo de notificação de volta para o PDV (requer lógica mais avançada de canais)
-    # await manager.broadcast(json.dumps({
-    #     "evento": "SOLICITACAO_RESOLVIDA",
-    #     "solicitacao_id": solicitacao_id,
-    #     "status": status
-    # }))
-    
-    # Placeholder de retorno
+async def resolve_solicitacao(
+    solicitacao_id: int, 
+    status_update: schemas.SolicitacaoUpdate, # Schema deve ter campo 'status' e opcional 'autorizado_por_id'
+    db: Session = Depends(get_db)
+):
+    """
+    Gerente aprova ou rejeita.
+    Atualiza o banco e avisa o PDV específico via broadcast global.
+    """
     db_solicitacao = db.query(models.Solicitacao).filter(models.Solicitacao.id == solicitacao_id).first()
     if not db_solicitacao:
         raise HTTPException(status_code=404, detail="Solicitação não encontrada")
-    db_solicitacao.status = status
+
+    # Atualiza no Banco
+    if status_update.status not in ['aprovado', 'rejeitado']:
+         raise HTTPException(status_code=400, detail="Status inválido")
+
+    db_solicitacao.status = status_update.status
+    db_solicitacao.data_hora_resolucao = datetime.now()
+    
+    if status_update.autorizado_por_id:
+        db_solicitacao.autorizado_por_id = status_update.autorizado_por_id
+
     db.commit()
     db.refresh(db_solicitacao)
+
+    # 🔔 NOTIFICAÇÃO LEVE (Broadcast)
+    # "Ei PDVs, a solicitação ID X foi resolvida. Se for sua, atualize-se."
+    await manager.broadcast({
+        "type": "SOLICITACAO_CONCLUIDA",
+        "payload": {
+            "id": db_solicitacao.id,
+            "pdv_id": db_solicitacao.pdv_id, # O PDV usa isso pra saber se é pra ele
+            "status": db_solicitacao.status, # 'aprovado' ou 'rejeitado'
+            "tipo": db_solicitacao.tipo
+        }
+    })
+
     return db_solicitacao
-
-
-# O "túnel" do WebSocket que os painéis de gerente vão "ouvir"
-@router.websocket("/ws")
-async def websocket_endpoint(websocket: WebSocket):
-    await manager.connect(websocket)
-    try:
-        while True:
-            # Apenas mantém a conexão ativa
-            await websocket.receive_text()
-    except WebSocketDisconnect:
-        manager.disconnect(websocket)

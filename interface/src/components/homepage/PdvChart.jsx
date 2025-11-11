@@ -27,7 +27,7 @@ export default function PdvRevenueChart() {
       setIsLoading(true);
       
       // Decide qual URL da API chamar
-      const isDailyView = timeframe === 'hoje';
+      const isDailyView = timeframe === 'daily';
       const endpoint = isDailyView
         ? "http://localhost:8000/vendas/resumo-hoje-por-hora"
         : "http://localhost:8000/vendas/resumo-diario-dinamico";

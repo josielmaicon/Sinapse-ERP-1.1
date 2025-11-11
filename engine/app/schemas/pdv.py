@@ -134,3 +134,7 @@ class ManualItemRequest(BaseModel):
     
     pdv_id: int
     operador_id: int 
+
+class SolicitacaoUpdate(BaseModel):
+    status: str
+    autorizado_por_id: Optional[int] = None
