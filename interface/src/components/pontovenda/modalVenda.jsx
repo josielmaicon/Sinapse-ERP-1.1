@@ -30,12 +30,11 @@ export function PaymentModal({ open, onOpenChange, cartItems, pdvSession, onSale
   const [currentInputValue, setCurrentInputValue] = React.useState(0); 
   const [paymentsList, setPaymentsList] = React.useState([]); 
   const [selectedClient, setSelectedClient] = React.useState(null); 
-  const [isAwaitingOverride, setIsAwaitingOverride] = React.useState(false);
   const [isOverrideModalOpen, setIsOverrideModalOpen] = React.useState(false);
   const [overrideMessage, setOverrideMessage] = React.useState("");
 
   const inputRef = React.useRef(null);
-
+  const [isAwaitingOverride, setIsAwaitingOverride] = React.useState(false);
   const totalVenda = React.useMemo(() => 
     cartItems.reduce((acc, item) => acc + item.totalPrice, 0)
   , [cartItems]);
@@ -72,6 +71,10 @@ export function PaymentModal({ open, onOpenChange, cartItems, pdvSession, onSale
     }
   }, [open, isClientModalOpen, paymentType, totalPago]);
 
+  const handleOverrideConfirm = async (password) => {
+      await handleConfirmSale(password);
+  };
+
   const handleAddPayment = () => {
     const valor = parseFloat(currentInputValue);
     
@@ -99,14 +102,17 @@ export function PaymentModal({ open, onOpenChange, cartItems, pdvSession, onSale
     setPaymentsList(prev => [...prev, newPayment]);
   };
 
+// ...
   const handleConfirmSale = React.useCallback(async (adminPassword = null) => {
     const valorInput = parseFloat(currentInputValue);
     let finalPaymentsList = [...paymentsList];
     
+    // Adiciona o pagamento atual se ele completar o valor (com margem de erro float)
     if (valorInput > 0 && Math.abs(valorInput - valorRestante) < 0.01) {
         finalPaymentsList.push({
             tipo: paymentType,
             valor: valorInput,
+            // Garante que cliente_id seja null se não for crediário
             cliente_id: paymentType === 'crediario' ? selectedClient?.id : null,
             cliente_nome: paymentType === 'crediario' ? selectedClient?.nome : null,
         });
@@ -153,11 +159,9 @@ export function PaymentModal({ open, onOpenChange, cartItems, pdvSession, onSale
         });
         
         const result = await response.json();
-        
         console.log("Status da resposta da venda:", response.status);
-
-        if (!response.ok) {
-            // ✅ MUDANÇA AQUI: Aceita 402 (Limite) E 403 (Bloqueio) para override
+        
+          if (!response.ok) {
             if (response.status === 402 || response.status === 403) { 
                 const tipoBloqueio = response.status === 402 ? "Limite Excedido" : "Conta Bloqueada";
                 toast.warning(tipoBloqueio, { 
@@ -185,19 +189,32 @@ export function PaymentModal({ open, onOpenChange, cartItems, pdvSession, onSale
     }
   }, [currentInputValue, paymentsList, totalVenda, pdvSession, cartItems, activeSale, selectedClient, onSaleSuccess, valorRestante, paymentType, totalPago]);
 
-  const handleOverrideConfirm = async (password) => {
-      await handleConfirmSale(password);
+  const handlePrimaryAction = () => {
+      const valorInput = parseFloat(currentInputValue);
+      
+      if (valorInput < valorRestante) {
+          console.log("Ação: Adicionar Pagamento");
+          handleAddPayment();
+      } 
+      else {
+          console.log("Ação: Finalizar Venda");
+          handleConfirmSale();
+      }
   };
 
-const handleOnOpenChange = React.useCallback((isOpen) => {
-      if (isLoading) return; 
-      if (!isOpen) {
-          setCurrentInputValue(0); setSelectedClient(null); setErrorMessage(""); setPaymentType("dinheiro"); setPaymentsList([]);
-          setIsOverrideModalOpen(false);
-          setIsAwaitingOverride(false); // ✅ Reseta a trava ao fechar
-      }
-      onOpenChange(isOpen);
-  }, [isLoading, onOpenChange]);
+  const handleOnOpenChange = (isOpen) => {
+    if (!isOpen) {
+      setCurrentInputValue(0);
+      setSelectedClient(null);
+      setErrorMessage("");
+      setPaymentType("dinheiro");
+      setPaymentsList([]);
+    }
+
+    if (isLoading && isOpen) return;
+
+    onOpenChange(isOpen);
+  };
 
   const CrediarioStatus = ({ selectedClient, onRemoveClient }) => {
   if (!selectedClient) {
@@ -228,7 +245,7 @@ const handleOnOpenChange = React.useCallback((isOpen) => {
     );
   };
 
-    const mainButtonConfig = React.useMemo(() => {
+const mainButtonConfig = React.useMemo(() => {
       // ESTADO 1: Crediário sem cliente -> "Selecionar Cliente"
       if (paymentType === 'crediario' && !selectedClient) {
           return {
@@ -265,28 +282,29 @@ const handleOnOpenChange = React.useCallback((isOpen) => {
       };
   }, [paymentType, selectedClient, currentInputValue, valorRestante, isLoading]);
 
-React.useEffect(() => {
+  React.useEffect(() => {
     const handleKeyDown = (e) => {
-      if (!open || isLoading || isClientModalOpen, isOverrideModalOpen) return; 
+      // Guarda principal (silenciador)
+      if (!open || isLoading || isClientModalOpen || isOverrideModalOpen) return; 
 
+      // Atalhos das Abas (F5-F7)
       if (e.key === 'F5') { e.preventDefault(); setPaymentType('dinheiro'); }
       if (e.key === 'F6') { e.preventDefault(); setPaymentType('cartao'); }
       if (e.key === 'F7') { e.preventDefault(); setPaymentType('pix'); }
+      
       if (e.key === 'F8') { 
           e.preventDefault();
+          console.log("F8 pressionado. Awaiting Override?", isAwaitingOverride); // Debug
           if (isAwaitingOverride) {
               setIsOverrideModalOpen(true);
-              setIsAwaitingOverride(false);
-          } 
-          else {
+          } else {
               setPaymentType('crediario'); 
           }
       }
-      if (e.key === 'Escape') { 
-        e.preventDefault(); 
-        handleOnOpenChange(false);
-      }
 
+      if (e.key === 'Escape') { e.preventDefault(); handleOnOpenChange(false); }
+      
+      // Atalho de Ação Principal (Enter ou F1)
       if (e.key.toLowerCase() === mainButtonConfig.hotkey.toLowerCase() || 
          (e.key === 'Enter' && mainButtonConfig.hotkey === 'F1') ||
          (e.key === 'Enter' && mainButtonConfig.hotkey === 'Enter')
@@ -300,8 +318,8 @@ React.useEffect(() => {
 
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-    
-  }, [open, isLoading, mainButtonConfig, isClientModalOpen, handleOnOpenChange, isOverrideModalOpen]);
+  
+  }, [open, isLoading, mainButtonConfig, isAwaitingOverride, paymentType, isClientModalOpen, isOverrideModalOpen, handleOnOpenChange, isAwaitingOverride]); // Adiciona isAwaitingOverride
 
   React.useEffect(() => {
   if (open) {
@@ -372,7 +390,7 @@ React.useEffect(() => {
                     <TabsTrigger value="cartao">Cartão<Kbd className="ml-2">F6</Kbd></TabsTrigger>
                     <TabsTrigger value="pix">PIX<Kbd className="ml-2">F7</Kbd></TabsTrigger>
                     <TabsTrigger value="crediario"> Crediário <Kbd className={cn("ml-2 transition-all duration-300")}>
-                            <span>F8 </span>
+                            <span>F8</span>
                         </Kbd>
                     </TabsTrigger>
                 </TabsList>
@@ -434,15 +452,17 @@ React.useEffect(() => {
          </Button>
         </DialogFooter>
       </DialogContent>
+
     </Dialog>
-    <ClientSelectionModal 
+      <ClientSelectionModal 
         open={isClientModalOpen}
         onOpenChange={setIsClientModalOpen}
         onClientSelect={(client) => {
             setSelectedClient(client);
+            // Opcional: Focar no input de valor após selecionar
             setTimeout(() => inputRef.current?.focus(), 100);
-        }}
-    />
+          }}
+      />
     <LimitOverrideModal
         open={isOverrideModalOpen}
         onOpenChange={setIsOverrideModalOpen}
