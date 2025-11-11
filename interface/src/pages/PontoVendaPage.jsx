@@ -105,59 +105,67 @@ export default function PontoVenda() {
       setIsCancelItemModalOpen(true);
   };
 
-  const handleConfirmSaleCancel = async (adminCreds) => {
-    if (!activeSale) {
-      toast.error("Erro Interno", { description: "Nenhuma venda ativa para cancelar." });
-      return;
-    }
-    setIsAddingItem(true);
-    let errorToThrow = null;
-    try {
-      const response = await fetch(`${API_URL}/vendas/${activeSale.id}/cancelar`, { 
-          method: "DELETE",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(adminCreds)
-      });
-      
-      if (response.status === 204) {
-          setActiveSale(null);
-          setIsCancelItemModalOpen(false);
-          toast.info(`Venda #${activeSale.id} cancelada com sucesso.`);
-      
-      } else {
-          let errorData;
-          try {
-              errorData = await response.json();
-          } catch (parseError) {
-              throw new Error(`Erro ${response.status}: ${response.statusText}`);
-          }
-          
-          const detail = errorData.detail || "Falha ao cancelar a venda.";
-
-          if (response.status === 401) {
-              toast.warning("Autorização Falhou", { description: detail });
-          } else if (response.status === 404) {
-              toast.error("Venda não encontrada", { description: "Esta venda pode já ter sido finalizada." });
+const handleConfirmSaleCancel = async (adminCreds) => {
+    if (!activeSale) {
+      toast.error("Erro Interno", { description: "Nenhuma venda ativa para cancelar." });
+      return;
+    }
+    setIsAddingItem(true);
+    let errorToThrow = null;
+    try {
+      const response = await fetch(`${API_URL}/vendas/${activeSale.id}/cancelar`, { 
+          method: "POST", // <-- MUDANÇA CRUCIAL
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(adminCreds) // O POST envia o body
+      });
+      
+      if (response.status === 204) {
+          setActiveSale(null);
+          setIsCancelItemModalOpen(false); // (Assume que é o modal de item que chama)
+          toast.info(`Venda #${activeSale.id} cancelada com sucesso.`);
+      
+      } else {
+          let errorData;
+          try {
+              errorData = await response.json();
+          } catch (parseError) {
+              throw new Error(`Erro ${response.status}: ${response.statusText}`);
+          }
+          
+          let detail = "Falha ao cancelar a venda.";
+          if (response.status === 422 && Array.isArray(errorData.detail)) {
+              detail = errorData.detail.map(err => `${err.loc[err.loc.length - 1]}: ${err.msg}`).join(", ");
           } else {
-              toast.error("Erro ao Cancelar Venda", { description: detail });
+              detail = errorData.detail || "Falha ao cancelar a venda.";
           }
-          throw new Error(detail);
-      }
-      
-    } catch (error) {
-        console.error("Falha grave em handleConfirmSaleCancel:", error);
-        if (!toast.isActive(error.message)) {
-            toast.error("Erro de Comunicação", { id: error.message, description: "Não foi possível conectar ao servidor para cancelar a venda." });
-        }
-        errorToThrow = error;
-    } finally {
-        setIsAddingItem(false);
-        if (errorToThrow) {
-            throw errorToThrow;
-        }
-    }
-  };
 
+          if (response.status === 401) {
+              toast.warning("Autorização Falhou", { description: detail });
+          } else {
+              toast.error("Erro ao Cancelar Venda", { description: detail });
+          }
+          throw new Error(detail);
+      }
+      
+    } catch (error) {
+        console.error("Falha grave em handleConfirmSaleCancel:", error);
+        
+        // ✅ CORREÇÃO 4: O bug do 'toast.isActive'
+        // 'sonner' não usa 'isActive'. Apenas mostramos o erro.
+        // Se quisermos evitar duplicatas, passamos o 'id'
+        toast.error("Erro de Comunicação", { 
+            id: `err-cancel-${activeSale.id}`, // Evita toasts duplicados
+            description: "Não foi possível conectar ao servidor para cancelar a venda." 
+        });
+        
+        errorToThrow = error;
+    } finally {
+        setIsAddingItem(false);
+        if (errorToThrow) {
+            throw errorToThrow;
+        }
+    }
+  };
 
   const handleItemCancelApi = async ({ item_db_id, quantidade_a_remover }, adminCreds) => {
       setIsAddingItem(true);
@@ -487,6 +495,8 @@ const handleBarcodeSubmit = async (codigo) => {
         cartItems={cartItems} 
         onConfirmRemoval={handleItemCancelApi}
         onTotalSaleCancel={handleConfirmSaleCancel}
+        pdvSession={pdvSession} 
+        activeSale={activeSale}
       />
       <RecoveryModal
        open={isRecoveryModalOpen}

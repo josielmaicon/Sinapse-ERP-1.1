@@ -18,7 +18,7 @@ class PdvPagamento(BaseModel):
     valor: float
 
 class AdminAuthRequest(BaseModel):
-    admin_senha: str
+    admin_senha: Optional[str] = None
 
 class PdvVendaRequest(BaseModel):
     pdv_db_id: int

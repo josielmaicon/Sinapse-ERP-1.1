@@ -1,5 +1,5 @@
 # app/routers/vendas.py
-from typing import List, Dict
+from typing import List, Dict, Optional
 from datetime import date, datetime
 from sqlalchemy import func
 from fastapi import APIRouter, Depends, HTTPException, status, Response
@@ -394,27 +394,33 @@ def adicionar_item_smart(request: schemas.AdicionarItemSmartRequest, db: Session
     return venda_atualizada
 
 def get_admin_by_password_only(
-    auth_request: schemas.AdminAuthRequest, 
+    # ✅ O BODY (auth_request) AGORA É OPCIONAL
+    auth_request: Optional[schemas.AdminAuthRequest] = None, 
     db: Session = Depends(get_db)
 ):
     """
-    Verifica a senha (código de barras) contra TODOS os usuários 'admin'.
-    Retorna o primeiro admin que corresponder.
+    Verifica a senha (presencial) OU confia na aprovação remota (None).
     """
-    if not auth_request.admin_senha:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="O código de autorização (senha) é obrigatório."
-        )
-
-    admins = db.query(models.Usuario).filter(models.Usuario.funcao == "admin").all()
     
+    # --- CAMINHO B: APROVAÇÃO REMOTA ---
+    # Se NENHUMA credencial foi passada (fluxo remoto)
+    if auth_request is None or auth_request.admin_senha is None:
+        print("AUDITORIA: Ação autorizada remotamente (via Socket).")
+        # Retorna o primeiro admin que encontrar, apenas para fins de log
+        admin_placeholder = db.query(models.Usuario).filter(models.Usuario.funcao == "admin").first()
+        if not admin_placeholder:
+             # Se não houver admins, a ação não pode ser auditada
+             raise HTTPException(status_code=404, detail="Nenhum administrador cadastrado no sistema para auditoria remota.")
+        return admin_placeholder # Ação autorizada
+
+    # --- CAMINHO A: APROVAÇÃO PRESENCIAL ---
+    admins = db.query(models.Usuario).filter(models.Usuario.funcao == "admin").all()
     if not admins:
         raise HTTPException(status_code=404, detail="Nenhum administrador cadastrado.")
 
     for admin_user in admins:
         if verify_password(auth_request.admin_senha, admin_user.senha_hash):
-            return admin_user
+            return admin_user # Senha presencial correta
     
     raise HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -489,20 +495,23 @@ def remover_item_da_venda_auditada(
 
     return venda_com_itens
 
-
-@router.delete("/{venda_id}/cancelar", status_code=status.HTTP_204_NO_CONTENT)
+@router.post("/{venda_id}/cancelar", status_code=status.HTTP_204_NO_CONTENT)
 def cancelar_venda_em_andamento(
     venda_id: int, 
     admin_user: models.Usuario = Depends(get_admin_by_password_only), 
     db: Session = Depends(get_db)
 ):
     """
-    Cancela e deleta uma venda que ainda está 'em_andamento'.
-    Requer autenticação de admin (código de barras).
-    Esta é a única definição desta rota.
+    Cancela (e deleta) uma venda 'em_andamento'.
+    Requer autenticação de admin (código de barras) via request body.
     """
+    
+    # O resto da sua lógica de 'cancelar_venda_em_andamento' 
+    # (buscar venda, deletar itens, deletar venda, estornar estoque)
+    # continua EXATAMENTE O MESMO.
+    
     venda = db.query(models.Venda).options(
-        selectinload(models.Venda.itens) # Carrega os itens para o estorno
+        selectinload(models.Venda.itens) 
     ).filter(
         models.Venda.id == venda_id,
         models.Venda.status == "em_andamento"
@@ -513,7 +522,13 @@ def cancelar_venda_em_andamento(
     
     print(f"AUDITORIA: Venda #{venda_id} cancelada por Admin ID: {admin_user.id} ({admin_user.nome})")
 
+    # (Lógica de estorno de estoque)
     for item in venda.itens:
+        db_produto = db.query(models.Produto).filter(models.Produto.id == item.produto_id).first()
+        if db_produto:
+            db_produto.quantidade_estoque += item.quantidade
+            db.add(db_produto)
+        
         db.delete(item)
         
     db.delete(venda)

@@ -32,19 +32,15 @@ async def websocket_endpoint(websocket: WebSocket):
         manager.disconnect(websocket)
 
 
-# --- 2. O PEDIDO (Lado do PDV) ---
 @router.post("/", response_model=schemas.Solicitacao)
 async def create_solicitacao(
     solicitacao: schemas.SolicitacaoCreate, 
     db: Session = Depends(get_db)
 ):
     """
-    PDV cria uma solicitação (ex: cancelamento de item).
-    Salva 'pendente' no banco e avisa os gerentes.
+    PDV cria uma solicitação. Salva e avisa os gerentes.
     """
-    # Cria no Banco
     db_solicitacao = models.Solicitacao(**solicitacao.dict())
-    # Status inicial padrão deve ser 'pendente' no model, mas garantindo:
     db_solicitacao.status = "pendente" 
     db_solicitacao.data_hora_criacao = datetime.now()
     
@@ -52,8 +48,7 @@ async def create_solicitacao(
     db.commit()
     db.refresh(db_solicitacao)
 
-    # Carrega dados extras para o painel do gerente (ex: nome do operador, nome do PDV)
-    # Isso evita que o gerente precise fazer outro fetch imediato
+    # Carrega dados extras (como antes)
     detailed_solicitacao = db.query(models.Solicitacao).options(
         joinedload(models.Solicitacao.pdv),
         joinedload(models.Solicitacao.operador)
@@ -62,16 +57,19 @@ async def create_solicitacao(
     pdv_nome = detailed_solicitacao.pdv.nome if detailed_solicitacao.pdv else "Desconhecido"
     operador_nome = detailed_solicitacao.operador.nome if detailed_solicitacao.operador else "Desconhecido"
 
-    # 🔔 NOTIFICAÇÃO LEVE (Broadcast)
-    # "Ei Gerentes, tem uma bucha nova no PDV X"
+    # 🔔 NOTIFICAÇÃO (CORRIGIDA)
     await manager.broadcast({
-        "type": "NOVA_SOLICITACAO",  # Tipo do evento
+        "type": "NOVA_SOLICITACAO",
         "payload": {
             "id": db_solicitacao.id,
-            "tipo": db_solicitacao.tipo, # ex: 'cancelamento_item'
+            "tipo": db_solicitacao.tipo, 
             "pdv_id": db_solicitacao.pdv_id,
             "pdv_nome": pdv_nome,
             "operador_nome": operador_nome,
+            
+            # ✅ A CORREÇÃO: Envia os detalhes (que contêm os valores/itens)
+            "detalhes": db_solicitacao.detalhes, 
+            
             "mensagem": "Aprovação necessária"
         }
     })
