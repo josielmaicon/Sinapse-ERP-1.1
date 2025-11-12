@@ -231,8 +231,8 @@ const cartItems = React.useMemo(() => {
         return ({
             id: item.id,
             name: isDiverse 
-                ? `PRODUTO DIVERSO` 
-                : item.produto.nome,
+                ? (item.descricao_manual || "Produto Diverso") // Usa a descrição do backend!
+                : item.produto.nome, // Ou o nome do produto normal
             barcode: item.produto?.codigo_barras || 'DIVERSOS', 
             quantity: item.quantidade,
             unitPrice: item.preco_unitario_na_venda,

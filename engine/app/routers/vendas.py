@@ -617,7 +617,8 @@ def adicionar_item_manual(request: schemas.ManualItemRequest, db: Session = Depe
         venda_id=venda.id,
         produto_id=produto_diverso_id, # Usando o ID Fictício
         quantidade=request.quantidade,
-        preco_unitario_na_venda=request.preco_unitario
+        preco_unitario_na_venda=request.preco_unitario,
+        descricao_manual=request.descricao
     )
     db.add(venda_item)
     

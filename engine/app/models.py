@@ -190,6 +190,7 @@ class VendaItem(Base):
     id = Column(Integer, primary_key=True)
     quantidade = Column(Float, nullable=False)
     preco_unitario_na_venda = Column(Float, nullable=False)
+    descricao_manual = Column(String(100), nullable=True)
     
     # Chaves Estrangeiras, a "ponte" entre Vendas e Produtos
     venda_id = Column(Integer, ForeignKey("vendas.id"), nullable=False)

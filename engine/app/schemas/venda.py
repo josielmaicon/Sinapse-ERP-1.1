@@ -19,7 +19,8 @@ class VendaItem(VendaItemBase):
     id: int
     preco_unitario_na_venda: float
     produto: Optional[Produto]
-
+    descricao_manual: Optional[str] = None
+    
     class Config:
         from_attributes = True
 
