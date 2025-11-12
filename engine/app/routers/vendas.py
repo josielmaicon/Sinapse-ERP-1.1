@@ -428,16 +428,15 @@ def get_admin_by_password_only(
     )
 
 def get_admin_from_remover_request(
-    payload: schemas.RemoverItemRequest, 
+    payload: schemas.RemoverItemRequest, # (Agora recebe o schema corrigido)
     db: Session = Depends(get_db)
 ):
     """
-    Dependência intermediária que extrai 'auth' do payload de REMOÇÃO
-    e usa a verificação 'password_only'.
-    Esta é a única definição desta função.
+    Extrai 'auth' (que pode ser None) e passa para o validador.
     """
+    # ✅ ESTA LINHA ESTÁ CORRETA
+    # (payload.auth pode ser None, e get_admin_by_password_only aceita None)
     return get_admin_by_password_only(payload.auth, db)
-
 
 @router.post("/{venda_id}/itens/{item_venda_id}/remover", response_model=schemas.Venda)
 def remover_item_da_venda_auditada(

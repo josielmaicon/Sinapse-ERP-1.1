@@ -173,8 +173,8 @@ const handleConfirmSaleCancel = async (adminCreds) => {
 
       try {
           const requestBody = {
-              auth: adminCreds,
-              quantidade: quantidade_a_remover
+              auth: adminCreds ? adminCreds : {}, 
+              quantidade: quantidade_a_remover
           };
           console.log(`Tentando remover item: ${item_db_id}, Qtd: ${quantidade_a_remover}, Venda: ${activeSale.id}`);
 
@@ -186,8 +186,15 @@ const handleConfirmSaleCancel = async (adminCreds) => {
           const responseData = await response.json();
 
           if (!response.ok) {
-              const detail = responseData.detail || "Erro desconhecido ao remover item.";
-              
+            if (response.status === 422 && Array.isArray(responseData.detail)) {
+                const validationErrors = responseData.detail.map(err => {
+                    const field = err.loc[err.loc.length - 1];
+                    return `${field}: ${err.msg}`;
+                }).join(" | ");
+                throw new Error(`Erro de Validação: ${validationErrors}`);
+              }
+
+              const detail = responseData.detail || "Erro desconhecido ao remover item.";              
               if (response.status === 401) {
                   toast.warning("Autorização Falhou", { description: detail });
               } else if (response.status === 404) {

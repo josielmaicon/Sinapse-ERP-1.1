@@ -75,9 +75,9 @@ class AdicionarItemSmartRequest(BaseModel):
 
 class AdminAuthRequest(BaseModel):
     """Schema para autenticar o Administrador que autoriza a ação."""
-    admin_senha: str
+    admin_senha: Optional[str] = None
 
 class RemoverItemRequest(BaseModel):
     """Body para a rota de remoção de item auditada."""
-    auth: AdminAuthRequest
+    auth: Optional[AdminAuthRequest] = None
     quantidade: float     
