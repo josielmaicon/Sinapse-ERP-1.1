@@ -8,16 +8,15 @@ import PontoVendaPage from "@/pages/PontoVendaPage";
 import FiscalPage from "./pages/FiscalPage";
 import CrediarioPage from "./pages/CrediarioPage";
 import LoginPage from "./pages/LoginPage";
-import { Toaster } from "sonner";
 
-// ✅ 1. Importar o "Abraço"
+import { Toaster } from "sonner";
 import { WebSocketProvider } from "./WebSocketContext";
+
+import ConfiguracoesPage from "./pages/ConfiguracoesPage";
+import GeralSettingsPage from "./pages/configuracoes/ConfigGeraisPage";
 
 function App() {
   return (
-  // ✅ 2. "Abraçar" toda a aplicação
-  // (Nota: Em um app real, o Provider viria *depois* do login,
-  // mas para um canal global, colocamos aqui)
   <WebSocketProvider>
     <div>
       <Routes>
@@ -35,6 +34,16 @@ function App() {
           <Route path="/pontovenda" element={<PontoVendaPage />} />
           <Route path="/login" element={<LoginPage />} />
         </Route>
+        <Route path="/configuracoes" element={<ConfiguracoesPage />}>
+          <Route index element={<GeralSettingsPage />} /> 
+          <Route path="geral" element={<GeralSettingsPage />} />
+          {/* <Route path="operacional" element={<OperacionalSettingsPage />} />
+          <Route path="perfil" element={<PerfilSettingsPage />} />
+          <Route path="financeiro" element={<FinanceiroSettingsPage />} />
+          <Route path="fiscal" element={<FiscalSettingsPage />} />
+          <Route path="conexoes" element={<ConexoesSettingsPage />} />
+          */}
+      </Route>
       </Routes>
       <Toaster richColors position="top-center" />  
     </div>
