@@ -116,7 +116,7 @@ export default function GeralSettingsPage() {
   };
 
   return (
-    <div className="flex flex-1 flex-col gap-3 p-8"> 
+    <div className="flex flex-1 flex-col gap-3"> 
       
       <Breadcrumb>
         <BreadcrumbList>

@@ -10,15 +10,23 @@ import {
     CircleDollarSign, 
     FileText, 
     Zap,
-    Home 
+    Home,
+    Search // ✅ Importar o Ícone de Busca
 } from "lucide-react"
-import Logo from "@/components/Logo" // Importando seu Logo
+import Logo from "@/components/Logo"
+import { Input } from "@/components/ui/input" // ✅ Importar o Input
+// ✅ Imports para o novo Breadcrumb (migalha de pão)
+import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbList,
+  BreadcrumbPage,
+  BreadcrumbSeparator,
+} from "@/components/ui/breadcrumb"
 
-// --- Componentes Internos do Layout ---
-
+// --- Componentes Internos do Layout (Sem mudanças) ---
 const SidebarContext = React.createContext(null);
-
-// ✅ Provider agora é o container 100% (sem header)
 function SidebarProvider({ children, className }) {
     return (
         <SidebarContext.Provider value={{}}>
@@ -28,12 +36,11 @@ function SidebarProvider({ children, className }) {
         </SidebarContext.Provider>
     );
 }
-
 function Sidebar({ className, children }) {
     return (
         <aside
             className={cn(
-                "w-2/7 flex-col border-none p-4 flex-shrink-0 overflow-y-auto bg-[var(--sidebar-primary-foreground)]", 
+                "w-64 flex-col border-r border-border/60 p-4 flex-shrink-0 overflow-y-auto bg-background", 
                 className
             )}
         >
@@ -41,11 +48,10 @@ function Sidebar({ className, children }) {
         </aside>
     );
 }
-
-// ✅ SidebarInset (Conteúdo)
 function SidebarInset({ className, children }) {
+    // ✅ Alterado: O SidebarInset agora é um container flex-col
     return (
-        <main className={cn("flex-1 overflow-y-auto bg-muted/30", className)}>
+        <main className={cn("flex-1 flex flex-col h-screen overflow-y-auto", className)}>
             {children}
         </main>
     );
@@ -70,12 +76,11 @@ function ConfigSidebarNav() {
         <NavLink
           key={item.label}
           to={item.href}
-          // 'end' é crucial para "Geral" (index)
-          end={item.href === "/configuracoes/geral"} 
+          end={item.href === "/configuracoes/geral" || item.href === "/configuracoes"} 
+          // ✅ Lógica 'end' corrigida para pegar o 'index'
           className={({ isActive }) =>
             cn(
-              "flex items-center gap-3 rounded-md px-3 py-2 text-base font-regular text-foreground transition-colors hover:bg-muted", // ✅ Fonte na cor normal (text-foreground)
-              // ✅ Lógica de Mestre: Ativo = Estilo Hover
+              "flex items-center gap-3 rounded-md px-3 py-2 text-base font-regular text-foreground transition-colors hover:bg-muted",
               isActive && "bg-muted" 
             )
           }
@@ -85,7 +90,6 @@ function ConfigSidebarNav() {
         </NavLink>
       ))}
       
-      {/* Botão de Voltar */}
       <div className="pt-4 mt-4 border-t">
          <NavLink
           to="/" // Link para o Dashboard Principal
@@ -101,23 +105,75 @@ function ConfigSidebarNav() {
   );
 }
 
+// ✅ NOVO COMPONENTE: O Header com a Busca
+function ConfigHeader() {
+    const location = useLocation();
+    
+    // Encontra o 'label' do item atual baseado na URL
+    const currentItem = [...configNavItems].reverse().find(item => 
+        location.pathname.startsWith(item.href)
+    );
+    const pageTitle = currentItem ? currentItem.label : "Geral";
+
+    return (
+        <header className="flex h-20 shrink-0 items-center justify-end border-b bg-background px-6">
+            {/* 1. Breadcrumb (Localização) 
+            {/* <div className="flex items-center">
+                <Breadcrumb>
+                    <BreadcrumbList>
+                        <BreadcrumbItem>
+                            <BreadcrumbLink asChild>
+                                <NavLink to="/configuracoes/geral">Configurações</NavLink>
+                            </BreadcrumbLink>
+                        </BreadcrumbItem>
+                        <BreadcrumbSeparator />
+                        <BreadcrumbItem>
+                            <BreadcrumbPage>{pageTitle}</BreadcrumbPage>
+                        </BreadcrumbItem>
+                    </BreadcrumbList>
+                </Breadcrumb>
+            </div> */}
+            
+            {/* 2. Busca Global (Seu "Ctrl+F") */}
+            <div className="relative w-full max-w-sm ">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input 
+                    placeholder="Buscar em todas as configurações... (Ctrl+K)" 
+                    className="pl-9" 
+                    // No futuro, isso ativará um Command Palette (como o do VS Code)
+                    // onFocus={() => setIsCommandPaletteOpen(true)}
+                />
+            </div>
+        </header>
+    );
+}
+
+
 // --- O LAYOUT PRINCIPAL DO "CASTELO" ---
 export default function ConfiguracoesPage() {
-  return (
-    <SidebarProvider>
-          <Sidebar>
-              <NavLink 
-                to="/" 
-                className="mb-10 flex justify-start" 
-                title="Voltar ao Dashboard">
-                  <Logo variant="full" size="140px" />
-              </NavLink>
-              <ConfigSidebarNav />
-          </Sidebar>
-          <SidebarInset>
-            <Outlet />
-          </SidebarInset>
+  return (
+    <SidebarProvider>
+          <Sidebar>
+              <NavLink 
+                to="/" 
+                className="mb-6 flex justify-start px-3" 
+                title="Voltar ao Dashboard">
+                  <Logo variant="full" size="140px" />
+              </NavLink>
+              <ConfigSidebarNav />
+          </Sidebar>
+          
+          {/* O Lado Direito (Conteúdo) */}
+          <SidebarInset>
+            {/* ✅ 1. O HEADER (renderizado no topo do conteúdo) */}
+            <ConfigHeader />
             
-    </SidebarProvider>
-  )
+            {/* ✅ 2. O CONTEÚDO (renderizado abaixo do header) */}
+            {/* O Outlet agora está envolvido por um 'div' que dá o padding */}
+            <div className="flex-1 overflow-y-auto p-6 lg:p-8">
+                <Outlet />
+            </div>
+          </SidebarInset>
+    </SidebarProvider>
+  )
 }
