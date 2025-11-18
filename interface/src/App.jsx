@@ -14,6 +14,11 @@ import { WebSocketProvider } from "./WebSocketContext";
 
 import ConfiguracoesPage from "./pages/ConfiguracoesPage";
 import GeralSettingsPage from "./pages/configuracoes/ConfigGeraisPage";
+import OperacionalSettingsPage from "./pages/configuracoes/operacional";
+import PerfilSettingsPage from "./pages/configuracoes/perfils";
+import FinanceiroSettingsPage from "./pages/configuracoes/financeiro";
+import FiscalSettingsPage from "./pages/configuracoes/fiscal";
+import ConexoesSettingsPage from "./pages/configuracoes/conexoes";
 
 function App() {
   return (
@@ -37,12 +42,11 @@ function App() {
         <Route path="/configuracoes" element={<ConfiguracoesPage />}>
           <Route index element={<GeralSettingsPage />} /> 
           <Route path="geral" element={<GeralSettingsPage />} />
-          {/* <Route path="operacional" element={<OperacionalSettingsPage />} />
+          <Route path="operacional" element={<OperacionalSettingsPage />} />
           <Route path="perfil" element={<PerfilSettingsPage />} />
           <Route path="financeiro" element={<FinanceiroSettingsPage />} />
           <Route path="fiscal" element={<FiscalSettingsPage />} />
           <Route path="conexoes" element={<ConexoesSettingsPage />} />
-          */}
       </Route>
       </Routes>
       <Toaster richColors position="top-center" />  

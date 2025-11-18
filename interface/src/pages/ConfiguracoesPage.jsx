@@ -40,7 +40,7 @@ function Sidebar({ className, children }) {
     return (
         <aside
             className={cn(
-                "w-64 flex-col border-r border-border/60 p-4 flex-shrink-0 overflow-y-auto bg-background", 
+                "w-2/9 flex-col border-r border-border/60 p-4 flex-shrink-0 overflow-y-auto bg-background", 
                 className
             )}
         >
@@ -71,7 +71,7 @@ const configNavItems = [
 
 function ConfigSidebarNav() {
   return (
-    <nav className="flex flex-col space-y-1 ">
+    <nav className="flex flex-col space-y-1">
       {configNavItems.map((item) => (
         <NavLink
           key={item.label}
@@ -156,10 +156,13 @@ export default function ConfiguracoesPage() {
           <Sidebar>
               <NavLink 
                 to="/" 
-                className="mb-6 flex justify-start px-3" 
+                className="flex justify-start" 
                 title="Voltar ao Dashboard">
+                <div className="flex h-17 shrink-0 items-start bg-background pl-5 pt-1 pb-25">
                   <Logo variant="full" size="140px" />
+                </div>
               </NavLink>
+
               <ConfigSidebarNav />
           </Sidebar>
           

@@ -1,4 +1,7 @@
-import { NavLink } from "react-router-dom";
+"use client"
+
+import * as React from "react"
+import { NavLink, useNavigate } from "react-router-dom";
 import {
   NavigationMenu,
   NavigationMenuItem,
@@ -15,17 +18,42 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import Logo from "@/components/Logo";
-
-// 1. Importe seu arquivo de rotas
-import routes from "@/routes.jsx"; // Ajuste o caminho se necessário
-
-// Importe a função 'cn' para gerenciar classes condicionalmente
+import { Button } from "@/components/ui/button";
+import { CircleSlash, CircleDot, Settings } from "lucide-react";
+import routes from "@/routes.jsx";
 import { cn } from "@/lib/utils";
 
+function useTheme() {
+    const [theme, setTheme] = React.useState("light");
+
+    React.useEffect(() => {
+        // Checa o tema atual no HTML ou localStorage
+        const isDark = document.documentElement.classList.contains("dark");
+        setTheme(isDark ? "dark" : "light");
+    }, []);
+
+    const toggleTheme = () => {
+        const root = document.documentElement;
+        if (theme === "light") {
+            root.classList.add("dark");
+            setTheme("dark");
+            localStorage.setItem("theme", "dark"); 
+        } else {
+            root.classList.remove("dark");
+            setTheme("light");
+            localStorage.setItem("theme", "light");
+        }
+    };
+
+    return { theme, toggleTheme };
+}
+
 export function TopBar() {
+  const { theme, toggleTheme } = useTheme();
+  const navigate = useNavigate();
+
   return (
-<header className="w-full flex h-1/13 items-center justify-between px-4 md:px-6 ">
-  {/* Esquerda */}
+  <header className="w-full flex h-1/13 items-center justify-between px-4 md:px-6 ">
   <div className="flex items-center gap-2 pr-4">
     <Logo variant="icon" width="36px" height="33px"/>
   </div>
@@ -54,8 +82,7 @@ export function TopBar() {
     </NavigationMenu>
   </div>
 
-  {/* Direita */}
-  <div>
+  <div className="flex items-center gap-4">
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <button className="flex items-center gap-2 rounded-full">
@@ -78,6 +105,33 @@ export function TopBar() {
         <DropdownMenuItem>Sair</DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
+
+    <Button 
+        variant="ghost" 
+        size="icon" 
+        onClick={toggleTheme}
+        title={theme === "dark" ? "Mudar para Tema Claro" : "Mudar para Tema Escuro"}
+        className="w-10 h-10"
+    >
+        {theme === "dark" ? (
+            <CircleDot className="h-8 w-8 text-yellow-500 transition-all" />
+        ) : (
+            <CircleSlash className="h-8 w-8 text-slate-700 transition-all" />
+        )}
+        <span className="sr-only">Alternar Tema</span>
+    </Button>
+
+    {/* C. Configurações (Botão Final) */}
+    <Button 
+        variant="ghost" 
+        size="icon" 
+        onClick={() => navigate("/configuracoes")}
+        title="Configurações do Sistema"
+        className="w-10 h-10"
+    >
+        <Settings className="h-8 w-8 text-muted-foreground transition-transform hover:rotate-90" />
+        <span className="sr-only">Configurações</span>
+    </Button>
   </div>
 </header>
 
