@@ -282,3 +282,27 @@ class ResumoDiarioEstoque(Base):
     itens_vencimento_proximo = Column(Integer, default=0)
     itens_sem_giro = Column(Integer, default=0)
 
+class Empresa(Base):
+    __tablename__ = "empresa_config"
+
+    id = Column(Integer, primary_key=True) # Sempre será 1
+    
+    # Identidade
+    nome_fantasia = Column(String(100), nullable=False, default="Minha Loja")
+    razao_social = Column(String(100), nullable=True)
+    cnpj = Column(String(20), nullable=True)
+    
+    # Logo: Pode ser uma URL, Base64 ou SVG puro
+    # Vamos usar Text para caber um SVG inteiro ou base64 longo
+    logo_data = Column(String, nullable=True) 
+    tipo_logo = Column(String(10), default="url") # 'url', 'base64', 'svg'
+
+    # Aparência
+    tema_preferido = Column(String(20), default="system") # light, dark, system
+    cor_primaria = Column(String(10), default="#000000") # Hex
+
+    # Regional
+    fuso_horario = Column(String(50), default="America/Sao_Paulo")
+
+    # Auditoria
+    atualizado_em = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

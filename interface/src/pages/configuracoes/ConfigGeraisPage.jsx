@@ -4,24 +4,12 @@ import * as React from "react"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
-import { 
-    Card, 
-    CardContent, 
-    CardDescription, 
-    CardFooter, 
-    CardHeader, 
-    CardTitle 
-} from "@/components/ui/card"
-import { 
-    Select, 
-    SelectContent, 
-    SelectItem, 
-    SelectTrigger, 
-    SelectValue 
-} from "@/components/ui/select"
-import { toast } from "sonner"
-import { Loader2, ExternalLink } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { toast } from "sonner"
+import { Loader2, Upload, Wand2, Image as ImageIcon, ExternalLink } from "lucide-react"
+import { Separator } from "@/components/ui/separator"
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -30,61 +18,155 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb"
-import { Separator } from "@/components/ui/separator"
 import CardBodyT from "@/components/CardBodyT"
-import { Skeleton } from "@/components/ui/skeleton"
+import { Skeleton } from "@/components/ui/skeleton" // Certifique-se de ter esse import
 
-const API_URL = "http://localhost:8000"; // Ou sua URL base
+const API_URL = "http://localhost:8000"; 
 
 export default function GeralSettingsPage() {
-  
-  // --- Estados (mesma lógica de antes) ---
-  const [formData, setFormData] = React.useState({
-      nome_loja: "",
-      cnpj: "",
-      logo_url: "",
-      tema: "system",
-      cor_base: "#000000",
-      fuso_horario: "America/Sao_Paulo",
-  });
+  const [isLoading, setIsLoading] = React.useState(false);
+
+  // ✅ 1. ESTADOS QUE FALTAVAM (Restaurados)
+  const [isBillingLoading, setIsBillingLoading] = React.useState(true);
   const [billingInfo, setBillingInfo] = React.useState({
       plano: "Plano Mestre",
       status: "ativo",
       proxima_cobranca: "2025-12-01"
   });
-  const [isLoading, setIsLoading] = React.useState(false);
-  const [isBillingLoading, setIsBillingLoading] = React.useState(true); 
 
-  // --- Carregamento de Dados (sem mudanças) ---
+  // Estado do formulário
+  const [formData, setFormData] = React.useState({
+      nome_fantasia: "",
+      cnpj: "",
+      logo_data: "",     
+      tipo_logo: "url",  
+      tema_preferido: "system",
+      cor_primaria: "#000000",
+      fuso_horario: "America/Sao_Paulo",
+  });
+
+  // Carregar dados ao iniciar
   React.useEffect(() => {
-    const fetchSettings = async () => { 
-        setIsLoading(true);
-        await new Promise(res => setTimeout(res, 750));
-        setFormData({
-             nome_loja: "Mercado do Mestre (Simulado)",
-             cnpj: "00.111.222/0001-99",
-             logo_url: "https://url.da.sua.logo/logo.png",
-             tema: "dark",
-             cor_base: "#3b82f6",
-             fuso_horario: "America/Sao_Paulo",
-        });
-        setIsLoading(false);
-    };
-    const fetchBilling = async () => { 
-        setIsBillingLoading(true);
-        await new Promise(res => setTimeout(res, 1200));
-        setBillingInfo({
-             plano: "Plano Mestre",
-             status: "ativo",
-             proxima_cobranca: "2025-12-01"
-         });
-         setIsBillingLoading(false);
-    };
-    fetchSettings();
-    fetchBilling();
-  }, []); 
+      const fetchConfig = async () => {
+          try {
+              const res = await fetch(`${API_URL}/configuracoes/geral`);
+              if (res.ok) {
+                  const data = await res.json();
+                  setFormData(data);
+              }
+          } catch (e) {
+              console.error("Erro ao carregar configs", e);
+          }
+      };
+
+      // ✅ 2. FUNÇÃO DE FETCH DO BILLING (Restaurada)
+      const fetchBilling = async () => {
+          try {
+              // Simulação de API de billing
+              await new Promise(res => setTimeout(res, 1200)); 
+              setBillingInfo({
+                  plano: "Plano Enterprise",
+                  status: "ativo",
+                  proxima_cobranca: "2025-12-01"
+              });
+          } catch (error) {
+              console.error("Erro ao carregar billing", error);
+          } finally {
+              setIsBillingLoading(false);
+          }
+      };
+
+      fetchConfig();
+      fetchBilling(); // Chama a função
+  }, []);
+
+  // --- LÓGICA DE UPLOAD DE LOGO ---
+  const handleLogoUpload = (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      const isSvg = file.type === "image/svg+xml";
+      const reader = new FileReader();
+
+      reader.onload = (event) => {
+          const content = event.target.result;
+          
+          setFormData(prev => ({
+              ...prev,
+              logo_data: content,
+              tipo_logo: isSvg ? "svg" : "base64"
+          }));
+          
+          toast.success("Logo carregada com sucesso!");
+          
+          // Tenta extrair a cor automaticamente ao carregar
+          if (isSvg) extractColorFromSvg(content);
+      };
+
+      if (isSvg) {
+          reader.readAsText(file); 
+      } else {
+          reader.readAsDataURL(file); 
+      }
+  };
+
+  // --- LÓGICA DE EXTRAÇÃO DE COR ---
+  const extractColorFromSvg = (svgContent) => {
+      const colorMatch = svgContent.match(/fill=["']?(#[a-fA-F0-9]{6}|#[a-fA-F0-9]{3})["']?/);
+      if (colorMatch && colorMatch[1]) {
+          setFormData(prev => ({ ...prev, cor_primaria: colorMatch[1] }));
+          toast.info(`Cor ${colorMatch[1]} detectada na Logo!`);
+      }
+  };
   
-  // --- Handlers (sem mudanças) ---
+  const extractColorFromImage = () => {
+     if (formData.tipo_logo === 'svg') {
+         extractColorFromSvg(formData.logo_data);
+         return;
+     }
+     
+     if (!formData.logo_data) return;
+
+     const img = new Image();
+     img.src = formData.logo_data;
+     img.onload = () => {
+         const canvas = document.createElement('canvas');
+         const ctx = canvas.getContext('2d');
+         canvas.width = 1;
+         canvas.height = 1;
+         ctx.drawImage(img, 0, 0, 1, 1);
+         const [r, g, b] = ctx.getImageData(0, 0, 1, 1).data;
+         const hex = "#" + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
+         
+         setFormData(prev => ({ ...prev, cor_primaria: hex }));
+         toast.info("Cor extraída da imagem!");
+     };
+  };
+
+  const handleSaveIdentidade = async (e) => {
+      e.preventDefault();
+      setIsLoading(true);
+      try {
+          const res = await fetch(`${API_URL}/configuracoes/geral`, {
+              method: 'PUT',
+              headers: {'Content-Type': 'application/json'},
+              body: JSON.stringify(formData)
+          });
+          if (!res.ok) throw new Error();
+          toast.success("Identidade salva!");
+      } catch (e) {
+          toast.error("Erro ao salvar.");
+      } finally {
+          setIsLoading(false);
+      }
+  };
+
+  const handleSaveAparencia = async (e) => {
+    e.preventDefault();
+    handleSaveIdentidade(e);
+  };
+
+  // Handlers de form simples
   const handleFormChange = (e) => {
       const { name, value } = e.target;
       setFormData(prev => ({ ...prev, [name]: value }));
@@ -93,26 +175,8 @@ export default function GeralSettingsPage() {
      setFormData(prev => ({ ...prev, [name]: value }));
   };
   const handleThemeChange = (theme) => {
-      handleSelectChange('tema', theme);
+      handleSelectChange('tema_preferido', theme); // Corrigido nome do campo
       console.log(`Aplicando tema: ${theme}`);
-  };
-  
-  const handleSaveIdentidade = async (e) => {
-      e.preventDefault();
-      setIsLoading(true);
-      console.log("Salvando Identidade:", { nome: formData.nome_loja, cnpj: formData.cnpj, logo: formData.logo_url });
-      await new Promise(res => setTimeout(res, 1000));
-      toast.success("Identidade da loja salva!");
-      setIsLoading(false);
-  };
-  
-  const handleSaveAparencia = async (e) => {
-      e.preventDefault();
-      setIsLoading(true);
-      console.log("Salvando Aparência:", { tema: formData.tema, cor: formData.cor_base, fuso: formData.fuso_horario });
-      await new Promise(res => setTimeout(res, 1000));
-      toast.success("Aparência do sistema salva!");
-      setIsLoading(false);
   };
 
   return (
@@ -131,44 +195,66 @@ export default function GeralSettingsPage() {
       </Breadcrumb>
       
       <form onSubmit={handleSaveIdentidade}>
-          <CardBodyT title="Identidade" subtitle="O nome, CNPJ e logo da sua empresa que aparecem nos impressos e recibos.">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-6">
-                  {/* Coluna 1 */}
+          <CardBodyT title="Identidade" subtitle="Defina a marca da sua empresa.">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8 pt-6">
+                  
+                  {/* Coluna 1: Dados */}
                   <div className="space-y-4">
                       <div className="space-y-2">
                           <Label htmlFor="nome_loja">Nome da Loja</Label>
                           <Input 
                               id="nome_loja" 
-                              name="nome_loja"
-                              value={formData.nome_loja}
-                              onChange={handleFormChange}
-                              placeholder="O nome que aparece nos recibos"
-                              disabled={isLoading}
+                              value={formData.nome_fantasia}
+                              onChange={(e) => setFormData(f => ({...f, nome_fantasia: e.target.value}))}
+                              placeholder="Nome Fantasia"
                           />
                       </div>
                       <div className="space-y-2">
                           <Label htmlFor="cnpj">CNPJ</Label>
                           <Input 
                               id="cnpj" 
-                              name="cnpj"
                               value={formData.cnpj}
-                              onChange={handleFormChange}
+                              onChange={(e) => setFormData(f => ({...f, cnpj: e.target.value}))}
                               placeholder="00.000.000/0001-00"
-                              disabled={isLoading}
                           />
                       </div>
                   </div>
-                  {/* Coluna 2 */}
-                  <div className="space-y-2">
-                      <Label htmlFor="logo_url">URL da Logo</Label>
-                      <Input 
-                          id="logo_url" 
-                          name="logo_url"
-                          value={formData.logo_url}
-                          onChange={handleFormChange}
-                          placeholder="https://.../logo.png (para impressos)"
-                          disabled={isLoading}
-                      />
+
+                  {/* Coluna 2: Logo (Upload Inteligente) */}
+                  <div className="space-y-3">
+                      <Label>Logotipo da Empresa</Label>
+                      
+                      <div className="flex items-start gap-4">
+                          {/* Preview da Logo */}
+                          <div className="h-24 w-24 rounded-lg border bg-muted flex items-center justify-center overflow-hidden relative shadow-sm">
+                              {formData.logo_data ? (
+                                  formData.tipo_logo === 'svg' ? (
+                                      // Renderiza SVG direto
+                                      <div 
+                                        dangerouslySetInnerHTML={{ __html: formData.logo_data }} 
+                                        className="w-full h-full p-2 [&>svg]:w-full [&>svg]:h-full" 
+                                      />
+                                  ) : (
+                                      // Renderiza Imagem
+                                      <img src={formData.logo_data} alt="Logo" className="w-full h-full object-contain" />
+                                  )
+                              ) : (
+                                  <ImageIcon className="h-8 w-8 text-muted-foreground opacity-50" />
+                              )}
+                          </div>
+
+                          <div className="flex-1 space-y-2">
+                              <Input 
+                                  type="file" 
+                                  accept="image/png, image/jpeg, image/svg+xml" 
+                                  onChange={handleLogoUpload}
+                                  className="text-sm"
+                              />
+                              <p className="text-[11px] text-muted-foreground">
+                                  Suporta PNG, JPG e SVG. O SVG será renderizado como código para melhor qualidade.
+                              </p>
+                          </div>
+                      </div>
                   </div>
               </div>
               <div className="pt-5 flex justify-end">
@@ -180,73 +266,72 @@ export default function GeralSettingsPage() {
       </form>
       
       <form onSubmit={handleSaveAparencia}>
-          <CardBodyT title="Aparência & Regional" subtitle="Personalize a aparência do sistema e o fuso horário para os relatórios.">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="space-y-2">
-                      <Label htmlFor="tema">Tema (Aparência)</Label>
-                      <Select 
-                          value={formData.tema} 
-                          onValueChange={handleThemeChange}
-                          disabled={isLoading}
-                      >
-                          <SelectTrigger id="tema"><SelectValue /></SelectTrigger>
-                          <SelectContent>
-                              <SelectItem value="system">Padrão do Sistema</SelectItem>
-                              <SelectItem value="light">Claro (Light)</SelectItem>
-                              <SelectItem value="dark">Escuro (Dark)</SelectItem>
-                          </SelectContent>
-                      </Select>
-                  </div>
-                  
-                  <div className="space-y-2">
-                      <Label htmlFor="cor_base">Cor Destaque (PDV)</Label>
-                      <div className="flex items-center gap-2">
-                           <Input 
-                              id="cor_base" 
-                              name="cor_base"
-                              type="text" 
-                              value={formData.cor_base}
-                              onChange={handleFormChange}
-                              className="w-24 font-mono"
-                              disabled={isLoading}
-                           />
-                           <Input 
-                              type="color" 
-                              value={formData.cor_base}
-                              onChange={handleFormChange}
-                              name="cor_base"
-                              className="w-12 h-10 p-1"
-                              disabled={isLoading}
-                           />
-                      </div>
-                  </div>
-                  
-                  <div className="space-y-2">
-                      <Label htmlFor="fuso_horario">Fuso Horário</Label>
-                      <Select 
-                          value={formData.fuso_horario} 
-                          onValueChange={(val) => handleSelectChange('fuso_horario', val)}
-                          disabled={isLoading}
-                      >
-                          <SelectTrigger id="fuso_horario"><SelectValue /></SelectTrigger>
-                          <SelectContent>
-                              <SelectItem value="America/Sao_Paulo">(UTC-3) São Paulo</SelectItem>
-                              <SelectItem value="America/Manaus">(UTC-4) Manaus</SelectItem>
-                              <SelectItem value="America/Rio_Branco">(UTC-5) Acre</SelectItem>
-                          </SelectContent>
-                      </Select>
-                  </div>
-              </div>
-              <div className="flex justify-end">
+        <CardBodyT title="Aparência" subtitle="Personalize as cores e o tema do sistema.">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 pt-6">
+                
+                {/* Tema */}
+                <div className="space-y-2">
+                    <Label htmlFor="tema">Tema Padrão</Label>
+                    <Select 
+                        value={formData.tema_preferido} 
+                        onValueChange={handleThemeChange}
+                    >
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="system">Automático (Sistema)</SelectItem>
+                            <SelectItem value="light">Claro</SelectItem>
+                            <SelectItem value="dark">Escuro</SelectItem>
+                        </SelectContent>
+                    </Select>
+                </div>
+
+                {/* Cor de Destaque (Simplificado) */}
+                <div className="space-y-2">
+                    <Label htmlFor="cor_primaria">Cor de Destaque</Label>
+                    <div className="flex gap-3">
+                        <div className="relative h-10 w-full flex gap-2">
+                             <div className="relative flex-1">
+                                <input 
+                                    type="color" 
+                                    id="color-picker"
+                                    value={formData.cor_primaria}
+                                    onChange={(e) => setFormData(p => ({...p, cor_primaria: e.target.value}))}
+                                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                                />
+                                <div 
+                                    className="w-full h-full rounded-md border shadow-sm flex items-center justify-center text-xs font-mono font-medium border-input"
+                                    style={{ backgroundColor: formData.cor_primaria, color: getContrastColor(formData.cor_primaria) }}
+                                >
+                                    {formData.cor_primaria.toUpperCase()}
+                                </div>
+                             </div>
+                             
+                             <Button 
+                                type="button" 
+                                variant="outline" 
+                                onClick={extractColorFromImage}
+                                title="Capturar cor da Logo"
+                                disabled={!formData.logo_data}
+                             >
+                                 <Wand2 className="h-4 w-4 mr-2" /> Usar da Logo
+                             </Button>
+                        </div>
+                    </div>
+                    <p className="text-[11px] text-muted-foreground">
+                        Usada em botões principais e destaques do PDV.
+                    </p>
+                </div>
+            </div>
+            <div className="pt-5 flex justify-end">
                    <Button type="submit" disabled={isLoading}>
                       {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : "Salvar Aparência"}
                    </Button>
               </div>
-          </CardBodyT>
+        </CardBodyT>
       </form>
-
+      
         <CardBodyT title="Assinatura & Plano" subtitle="Gerencie seu plano e o status da sua fatura.">
-          <div className="space-y-4">
+          <div className="space-y-4 pt-6">
               {isBillingLoading ? (
                   <div className="space-y-3">
                       <Skeleton className="h-5 w-3/4" />
@@ -263,15 +348,24 @@ export default function GeralSettingsPage() {
                   </div>
               )}
           </div>
-           <div className="flex justify-end">
+           <div className="flex justify-end pt-4">
               <Button variant="outline" asChild disabled={isBillingLoading}>
-                  <a href="https://url.do.seu.portal.de.billing" target="_blank" rel="noopener noreferrer">
+                  <a href="#" target="_blank" rel="noopener noreferrer">
                       Gerenciar Assinatura <ExternalLink className="ml-2 h-4 w-4" />
                   </a>
               </Button>
            </div>
       </CardBodyT>
-      
     </div>
   );
+}
+
+// Helper simples para decidir cor do texto sobre o fundo
+function getContrastColor(hexColor) {
+    if (!hexColor) return 'black';
+    const r = parseInt(hexColor.substr(1, 2), 16);
+    const g = parseInt(hexColor.substr(3, 2), 16);
+    const b = parseInt(hexColor.substr(5, 2), 16);
+    const yiq = ((r * 299) + (g * 587) + (b * 114)) / 1000;
+    return (yiq >= 128) ? 'black' : 'white';
 }

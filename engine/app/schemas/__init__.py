@@ -6,3 +6,4 @@ from .venda import *
 from .pdv import *
 from .fiscal import *
 from .system import *
+from .configuracao import *
