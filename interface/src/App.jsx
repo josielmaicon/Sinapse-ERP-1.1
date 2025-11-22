@@ -19,39 +19,40 @@ import PerfilSettingsPage from "./pages/configuracoes/perfils";
 import FinanceiroSettingsPage from "./pages/configuracoes/financeiro";
 import FiscalSettingsPage from "./pages/configuracoes/fiscal";
 import ConexoesSettingsPage from "./pages/configuracoes/conexoes";
+import { SettingsProvider } from "./ConfigContext";
 
 function App() {
   return (
-  <WebSocketProvider>
-    <div>
-      <Routes>
-        {/* Grupo de rotas que usam o LAYOUT PRINCIPAL (com TopBar) */}
-        <Route element={<MainLayout />}>
-          <Route path="/" element={<HomePage />} />
-          <Route path="/produtos" element={<ProdutosPage />} />
-          <Route path="/pdvs" element={<PdvsPage />} />
-          <Route path="/fiscal" element={<FiscalPage />} />
-          <Route path="/crediario" element={<CrediarioPage />} />
-        </Route>
+  <SettingsProvider>
+    <WebSocketProvider>
+      <div>
+        <Routes>
+          <Route element={<MainLayout />}>
+            <Route path="/" element={<HomePage />} />
+            <Route path="/produtos" element={<ProdutosPage />} />
+            <Route path="/pdvs" element={<PdvsPage />} />
+            <Route path="/fiscal" element={<FiscalPage />} />
+            <Route path="/crediario" element={<CrediarioPage />} />
+          </Route>
 
-        {/* Grupo de rotas que usam o LAYOUT DE TELA CHEIA (sem TopBar) */}
-        <Route element={<FullScreenLayout />}>
-          <Route path="/pontovenda" element={<PontoVendaPage />} />
-          <Route path="/login" element={<LoginPage />} />
+          <Route element={<FullScreenLayout />}>
+            <Route path="/pontovenda" element={<PontoVendaPage />} />
+            <Route path="/login" element={<LoginPage />} />
+          </Route>
+          <Route path="/configuracoes" element={<ConfiguracoesPage />}>
+            <Route index element={<GeralSettingsPage />} /> 
+            <Route path="geral" element={<GeralSettingsPage />} />
+            <Route path="operacional" element={<OperacionalSettingsPage />} />
+            <Route path="perfil" element={<PerfilSettingsPage />} />
+            <Route path="financeiro" element={<FinanceiroSettingsPage />} />
+            <Route path="fiscal" element={<FiscalSettingsPage />} />
+            <Route path="conexoes" element={<ConexoesSettingsPage />} />
         </Route>
-        <Route path="/configuracoes" element={<ConfiguracoesPage />}>
-          <Route index element={<GeralSettingsPage />} /> 
-          <Route path="geral" element={<GeralSettingsPage />} />
-          <Route path="operacional" element={<OperacionalSettingsPage />} />
-          <Route path="perfil" element={<PerfilSettingsPage />} />
-          <Route path="financeiro" element={<FinanceiroSettingsPage />} />
-          <Route path="fiscal" element={<FiscalSettingsPage />} />
-          <Route path="conexoes" element={<ConexoesSettingsPage />} />
-      </Route>
-      </Routes>
-      <Toaster richColors position="top-center" />  
-    </div>
-  </WebSocketProvider>
+        </Routes>
+        <Toaster richColors position="top-center" />  
+      </div>
+    </WebSocketProvider>
+  </SettingsProvider>
   );
 }
 

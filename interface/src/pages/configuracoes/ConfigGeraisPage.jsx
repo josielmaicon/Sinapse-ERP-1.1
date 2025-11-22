@@ -1,10 +1,10 @@
 "use client"
 
 import * as React from "react"
+import { cn } from "@/lib/utils"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
-import { cn } from "@/lib/utils"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { toast } from "sonner"
@@ -360,7 +360,6 @@ export default function GeralSettingsPage() {
   );
 }
 
-// Helper simples para decidir cor do texto sobre o fundo
 function getContrastColor(hexColor) {
     if (!hexColor) return 'black';
     const r = parseInt(hexColor.substr(1, 2), 16);

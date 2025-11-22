@@ -301,7 +301,9 @@ def finalizar_venda_pdv(
 
 @router.post("/adicionar-item-smart", response_model=schemas.Venda)
 def adicionar_item_smart(request: schemas.AdicionarItemSmartRequest, db: Session = Depends(get_db)):
-    
+    config = db.query(models.Empresa).filter(models.Empresa.id == 1).first()
+    permitir_negativo = config.permitir_estoque_negativo if config else False
+
     now = datetime.utcnow()
     produto = db.query(models.Produto).options(
         joinedload(models.Produto.promocoes) 
@@ -322,7 +324,6 @@ def adicionar_item_smart(request: schemas.AdicionarItemSmartRequest, db: Session
     
     for promo in promocoes_validas:
         preco_promocional = produto.preco_venda
-        
         if promo.tipo == 'percentual':
             preco_promocional = produto.preco_venda * (1 - promo.valor / 100.0)
         elif promo.tipo == 'preco_fixo':
@@ -333,8 +334,6 @@ def adicionar_item_smart(request: schemas.AdicionarItemSmartRequest, db: Session
             melhor_promocao_nome = promo.nome
 
     preco_final = round(preco_final, 2)
-    if melhor_promocao_nome:
-         print(f"AUDITORIA: Aplicando promoção '{melhor_promocao_nome}'. Preço final para {produto.nome}: R$ {preco_final}")
 
     venda = db.query(models.Venda).filter(
         models.Venda.pdv_id == request.pdv_id,
@@ -343,8 +342,7 @@ def adicionar_item_smart(request: schemas.AdicionarItemSmartRequest, db: Session
 
     if not venda:
         pdv = db.query(models.Pdv).filter(models.Pdv.id == request.pdv_id).first()
-        if not pdv:
-            raise HTTPException(status_code=404, detail="PDV não encontrado")
+        if not pdv: raise HTTPException(status_code=404, detail="PDV não encontrado")
         
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         codigo_venda_str = f"VENDA_{timestamp}_{pdv.nome.upper().replace(' ', '')}"
@@ -357,16 +355,31 @@ def adicionar_item_smart(request: schemas.AdicionarItemSmartRequest, db: Session
             valor_total=0.0 
         )
         db.add(venda)
-        db.flush()
+        db.flush() # Garante o ID da venda
 
+    # 4. VERIFICAÇÃO DE ESTOQUE (O Juiz)
+    # Verifica se o item já existe na venda para somar a quantidade
     item_existente = db.query(models.VendaItem).filter(
         models.VendaItem.venda_id == venda.id,
         models.VendaItem.produto_id == produto.id
     ).first()
 
+    quantidade_atual_no_carrinho = item_existente.quantidade if item_existente else 0
+    quantidade_final_desejada = quantidade_atual_no_carrinho + request.quantidade
+
+    # ✅ TRAVA DE SEGURANÇA: Verifica o TOTAL (Carrinho + Novo) contra o Estoque
+    if not permitir_negativo and produto.quantidade_estoque < quantidade_final_desejada:
+         raise HTTPException(
+             status_code=status.HTTP_400_BAD_REQUEST, 
+             detail=f"Estoque insuficiente. Disponível: {produto.quantidade_estoque}. Tentando vender: {quantidade_final_desejada}."
+         )
+
+    # 5. EFETIVAÇÃO (A Ação)
     if item_existente:
         item_existente.quantidade += request.quantidade
-        print(f"Item {produto.nome} incrementado para Qtd: {item_existente.quantidade}")
+        # Nota: Mantemos o preço original do item ou atualizamos? 
+        # Em geral, mantemos o preço de quando entrou, ou atualizamos tudo. 
+        # Aqui estamos mantendo o preço antigo do item_existente.
     else:
         venda_item = models.VendaItem(
             venda_id=venda.id,
@@ -375,10 +388,12 @@ def adicionar_item_smart(request: schemas.AdicionarItemSmartRequest, db: Session
             preco_unitario_na_venda=preco_final
         )
         db.add(venda_item)
-        print(f"Item {produto.nome} (Qtd: {request.quantidade}) adicionado ao preço R$ {preco_final}")
+        if melhor_promocao_nome:
+             print(f"Item adicionado com promoção: {melhor_promocao_nome}")
     
     db.flush() 
-    
+
+    # 6. ATUALIZAÇÃO FINAL
     total_calc = db.query(
         func.sum(models.VendaItem.quantidade * models.VendaItem.preco_unitario_na_venda)
     ).filter(models.VendaItem.venda_id == venda.id).scalar() or 0.0
@@ -387,6 +402,7 @@ def adicionar_item_smart(request: schemas.AdicionarItemSmartRequest, db: Session
     db.add(venda)
     db.commit()
 
+    # 7. RETORNO
     venda_atualizada = db.query(models.Venda).options(
         selectinload(models.Venda.itens).joinedload(models.VendaItem.produto)
     ).filter(models.Venda.id == venda.id).first()

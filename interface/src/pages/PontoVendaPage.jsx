@@ -20,6 +20,7 @@ import { RecoveryModal } from "@/components/pontovenda/ModalRecuperacaoV"
 import { SetNextQuantityModal } from "@/components/pontovenda/AjusteQTD"
 import { ManualItemModal } from "@/components/pontovenda/ModalDiverso"
 import { RecebimentoModal } from "@/components/pontovenda/ModalRecebimento"
+import { StoreLogo } from "@/components/storelogo"
 
 const API_URL = "http://localhost:8000"; 
 
@@ -462,8 +463,12 @@ const handleBarcodeSubmit = async (codigo) => {
   return (
     <>
       <ComprasPageLayout
-        Header1={<Logo variant="full" size="180px" />}
-        Header2={<PosHeaderStatus session={pdvSession} activeSale={activeSale} />}
+    	  Header1={
+        <div className="w-full flex items-center justify-between px-2">
+            <Logo variant="full" size="180px" />
+            <StoreLogo className="h-14 w-auto max-w-[200px]" />
+        </div>
+      }        Header2={<PosHeaderStatus session={pdvSession} activeSale={activeSale} />}
         SidePanel={<PosSidePanel lastItem={lastItem} />}
         MainContent={
           <div
