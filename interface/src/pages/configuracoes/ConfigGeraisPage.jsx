@@ -1,14 +1,14 @@
 "use client"
 
-import * as React from "react"
 import { cn } from "@/lib/utils"
+import * as React from "react"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { toast } from "sonner"
-import { Loader2, Upload, Wand2, Image as ImageIcon, ExternalLink } from "lucide-react"
+import { Loader2, Wand2, Image as ImageIcon, ExternalLink } from "lucide-react"
 import { Separator } from "@/components/ui/separator"
 import {
   Breadcrumb,
@@ -19,19 +19,23 @@ import {
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb"
 import CardBodyT from "@/components/CardBodyT"
-import { Skeleton } from "@/components/ui/skeleton" // Certifique-se de ter esse import
+import { Skeleton } from "@/components/ui/skeleton"
+// ✅ Importe o Hook do Contexto
+import { useSettings } from "@/ConfigContext";
 
 const API_URL = "http://localhost:8000"; 
 
 export default function GeralSettingsPage() {
+  // ✅ LINHA CRUCIAL: Trazendo 'settings' do contexto para o componente
+  const { settings, refreshSettings, setTheme } = useSettings();
+  
   const [isLoading, setIsLoading] = React.useState(false);
-
-  // ✅ 1. ESTADOS QUE FALTAVAM (Restaurados)
   const [isBillingLoading, setIsBillingLoading] = React.useState(true);
+  
   const [billingInfo, setBillingInfo] = React.useState({
-      plano: "Plano Mestre",
-      status: "ativo",
-      proxima_cobranca: "2025-12-01"
+      plano: "Carregando...",
+      status: "...",
+      proxima_cobranca: "..."
   });
 
   // Estado do formulário
@@ -41,44 +45,36 @@ export default function GeralSettingsPage() {
       logo_data: "",     
       tipo_logo: "url",  
       tema_preferido: "system",
-      cor_primaria: "#000000",
+      cor_destaque: "#3b82f6", // Padrão azul
       fuso_horario: "America/Sao_Paulo",
   });
 
-  // Carregar dados ao iniciar
+  // ✅ EFEITO 1: Sincronizar formulário com dados do Contexto (Banco)
   React.useEffect(() => {
-      const fetchConfig = async () => {
-          try {
-              const res = await fetch(`${API_URL}/configuracoes/geral`);
-              if (res.ok) {
-                  const data = await res.json();
-                  setFormData(data);
-              }
-          } catch (e) {
-              console.error("Erro ao carregar configs", e);
-          }
-      };
+      if (settings) { // <-- O erro acontecia aqui porque 'settings' não existia
+          setFormData({
+              nome_fantasia: settings.nome_fantasia || "",
+              cnpj: settings.cnpj || "",
+              logo_data: settings.logo_data || "",
+              tipo_logo: settings.tipo_logo || "url",
+              tema_preferido: settings.tema_preferido || "system",
+              cor_destaque: settings.cor_destaque || "#3b82f6", 
+              fuso_horario: settings.fuso_horario || "America/Sao_Paulo",
+          });
+      }
+  }, [settings]);
 
-      // ✅ 2. FUNÇÃO DE FETCH DO BILLING (Restaurada)
-      const fetchBilling = async () => {
-          try {
-              // Simulação de API de billing
-              await new Promise(res => setTimeout(res, 1200)); 
-              setBillingInfo({
-                  plano: "Plano Enterprise",
-                  status: "ativo",
-                  proxima_cobranca: "2025-12-01"
-              });
-          } catch (error) {
-              console.error("Erro ao carregar billing", error);
-          } finally {
-              setIsBillingLoading(false);
-          }
-      };
-
-      fetchConfig();
-      fetchBilling(); // Chama a função
-  }, []);
+  // ✅ EFEITO 2: Carregar dados de Billing
+  React.useEffect(() => {
+      if (settings) {
+         setBillingInfo({
+             plano: settings.plano_atual || "Plano Gratuito",
+             status: settings.status_assinatura || "ativo",
+             proxima_cobranca: "2025-12-01" 
+         });
+         setIsBillingLoading(false);
+      }
+  }, [settings]);
 
   // --- LÓGICA DE UPLOAD DE LOGO ---
   const handleLogoUpload = (e) => {
@@ -98,23 +94,18 @@ export default function GeralSettingsPage() {
           }));
           
           toast.success("Logo carregada com sucesso!");
-          
-          // Tenta extrair a cor automaticamente ao carregar
           if (isSvg) extractColorFromSvg(content);
       };
 
-      if (isSvg) {
-          reader.readAsText(file); 
-      } else {
-          reader.readAsDataURL(file); 
-      }
+      if (isSvg) reader.readAsText(file); 
+      else reader.readAsDataURL(file); 
   };
 
   // --- LÓGICA DE EXTRAÇÃO DE COR ---
   const extractColorFromSvg = (svgContent) => {
       const colorMatch = svgContent.match(/fill=["']?(#[a-fA-F0-9]{6}|#[a-fA-F0-9]{3})["']?/);
       if (colorMatch && colorMatch[1]) {
-          setFormData(prev => ({ ...prev, cor_primaria: colorMatch[1] }));
+          setFormData(prev => ({ ...prev, cor_destaque: colorMatch[1] }));
           toast.info(`Cor ${colorMatch[1]} detectada na Logo!`);
       }
   };
@@ -124,7 +115,6 @@ export default function GeralSettingsPage() {
          extractColorFromSvg(formData.logo_data);
          return;
      }
-     
      if (!formData.logo_data) return;
 
      const img = new Image();
@@ -138,7 +128,7 @@ export default function GeralSettingsPage() {
          const [r, g, b] = ctx.getImageData(0, 0, 1, 1).data;
          const hex = "#" + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
          
-         setFormData(prev => ({ ...prev, cor_primaria: hex }));
+         setFormData(prev => ({ ...prev, cor_destaque: hex }));
          toast.info("Cor extraída da imagem!");
      };
   };
@@ -153,9 +143,12 @@ export default function GeralSettingsPage() {
               body: JSON.stringify(formData)
           });
           if (!res.ok) throw new Error();
-          toast.success("Identidade salva!");
+          
+          toast.success("Configurações salvas com sucesso!");
+          refreshSettings(); // Atualiza o contexto
+          
       } catch (e) {
-          toast.error("Erro ao salvar.");
+          toast.error("Erro ao salvar configurações.");
       } finally {
           setIsLoading(false);
       }
@@ -166,23 +159,25 @@ export default function GeralSettingsPage() {
     handleSaveIdentidade(e);
   };
 
-  // Handlers de form simples
-  const handleFormChange = (e) => {
-      const { name, value } = e.target;
-      setFormData(prev => ({ ...prev, [name]: value }));
-  };
-  const handleSelectChange = (name, value) => {
-     setFormData(prev => ({ ...prev, [name]: value }));
-  };
   const handleThemeChange = (theme) => {
-      handleSelectChange('tema_preferido', theme); // Corrigido nome do campo
-      console.log(`Aplicando tema: ${theme}`);
+      setFormData(prev => ({ ...prev, tema_preferido: theme }));
+      setTheme(theme); 
   };
+  
+  const handleColorChange = (e) => {
+      const newColor = e.target.value;
+      setFormData(prev => ({ ...prev, cor_destaque: newColor }));
+      document.documentElement.style.setProperty('--brand-color', newColor);
+  };
+  
+  const handleFormChange = (e) => setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
+  const handleSelectChange = (name, value) => setFormData(prev => ({ ...prev, [name]: value }));
+
 
   return (
     <div className="flex flex-1 flex-col gap-3"> 
-      
-      <Breadcrumb>
+       
+       <Breadcrumb>
         <BreadcrumbList>
           <BreadcrumbItem>
             <BreadcrumbLink href="/configuracoes">Configurações</BreadcrumbLink>
@@ -193,49 +188,46 @@ export default function GeralSettingsPage() {
           </BreadcrumbItem>
         </BreadcrumbList>
       </Breadcrumb>
-      
-      <form onSubmit={handleSaveIdentidade}>
-          <CardBodyT title="Identidade" subtitle="Defina a marca da sua empresa.">
+
+       <form onSubmit={handleSaveIdentidade}>
+           <CardBodyT title="Identidade" subtitle="Defina a marca da sua empresa.">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-8 pt-6">
-                  
-                  {/* Coluna 1: Dados */}
                   <div className="space-y-4">
                       <div className="space-y-2">
                           <Label htmlFor="nome_loja">Nome da Loja</Label>
                           <Input 
                               id="nome_loja" 
+                              name="nome_fantasia"
                               value={formData.nome_fantasia}
-                              onChange={(e) => setFormData(f => ({...f, nome_fantasia: e.target.value}))}
+                              onChange={handleFormChange}
                               placeholder="Nome Fantasia"
+                              disabled={isLoading}
                           />
                       </div>
                       <div className="space-y-2">
                           <Label htmlFor="cnpj">CNPJ</Label>
                           <Input 
                               id="cnpj" 
+                              name="cnpj"
                               value={formData.cnpj}
-                              onChange={(e) => setFormData(f => ({...f, cnpj: e.target.value}))}
+                              onChange={handleFormChange}
                               placeholder="00.000.000/0001-00"
+                              disabled={isLoading}
                           />
                       </div>
                   </div>
 
-                  {/* Coluna 2: Logo (Upload Inteligente) */}
                   <div className="space-y-3">
                       <Label>Logotipo da Empresa</Label>
-                      
                       <div className="flex items-start gap-4">
-                          {/* Preview da Logo */}
                           <div className="h-24 w-24 rounded-lg border bg-muted flex items-center justify-center overflow-hidden relative shadow-sm">
                               {formData.logo_data ? (
                                   formData.tipo_logo === 'svg' ? (
-                                      // Renderiza SVG direto
                                       <div 
                                         dangerouslySetInnerHTML={{ __html: formData.logo_data }} 
                                         className="w-full h-full p-2 [&>svg]:w-full [&>svg]:h-full" 
                                       />
                                   ) : (
-                                      // Renderiza Imagem
                                       <img src={formData.logo_data} alt="Logo" className="w-full h-full object-contain" />
                                   )
                               ) : (
@@ -251,7 +243,7 @@ export default function GeralSettingsPage() {
                                   className="text-sm"
                               />
                               <p className="text-[11px] text-muted-foreground">
-                                  Suporta PNG, JPG e SVG. O SVG será renderizado como código para melhor qualidade.
+                                  Suporta PNG, JPG e SVG.
                               </p>
                           </div>
                       </div>
@@ -262,75 +254,59 @@ export default function GeralSettingsPage() {
                       {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : "Salvar Identidade"}
                    </Button>
               </div>
-          </CardBodyT>
-      </form>
-      
-      <form onSubmit={handleSaveAparencia}>
-        <CardBodyT title="Aparência" subtitle="Personalize as cores e o tema do sistema.">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 pt-6">
-                
-                {/* Tema */}
-                <div className="space-y-2">
-                    <Label htmlFor="tema">Tema Padrão</Label>
-                    <Select 
-                        value={formData.tema_preferido} 
-                        onValueChange={handleThemeChange}
-                    >
-                        <SelectTrigger><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="system">Automático (Sistema)</SelectItem>
-                            <SelectItem value="light">Claro</SelectItem>
-                            <SelectItem value="dark">Escuro</SelectItem>
-                        </SelectContent>
-                    </Select>
-                </div>
+           </CardBodyT>
+       </form>
 
-                {/* Cor de Destaque (Simplificado) */}
-                <div className="space-y-2">
-                    <Label htmlFor="cor_primaria">Cor de Destaque</Label>
-                    <div className="flex gap-3">
-                        <div className="relative h-10 w-full flex gap-2">
-                             <div className="relative flex-1">
-                                <input 
-                                    type="color" 
-                                    id="color-picker"
-                                    value={formData.cor_primaria}
-                                    onChange={(e) => setFormData(p => ({...p, cor_primaria: e.target.value}))}
-                                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                                />
-                                <div 
-                                    className="w-full h-full rounded-md border shadow-sm flex items-center justify-center text-xs font-mono font-medium border-input"
-                                    style={{ backgroundColor: formData.cor_primaria, color: getContrastColor(formData.cor_primaria) }}
-                                >
-                                    {formData.cor_primaria.toUpperCase()}
+       <form onSubmit={handleSaveAparencia}>
+           <CardBodyT title="Aparência" subtitle="Personalize as cores e o tema do sistema.">
+               <div className="grid grid-cols-1 md:grid-cols-2 gap-8 pt-6">
+                   <div className="space-y-2">
+                       <Label>Tema Padrão</Label>
+                       <Select value={formData.tema_preferido} onValueChange={handleThemeChange}>
+                           <SelectTrigger><SelectValue /></SelectTrigger>
+                           <SelectContent>
+                               <SelectItem value="system">Automático</SelectItem>
+                               <SelectItem value="light">Claro</SelectItem>
+                               <SelectItem value="dark">Escuro</SelectItem>
+                           </SelectContent>
+                       </Select>
+                   </div>
+
+                   <div className="space-y-2">
+                        <Label>Cor Destaque</Label>
+                        <div className="flex gap-3">
+                            <div className="relative h-10 w-full flex gap-2">
+                                <div className="relative flex-1">
+                                    <input type="color" value={formData.cor_destaque} onChange={handleColorChange} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"/>
+                                    <div 
+                                        className="w-full h-full rounded-md border shadow-sm flex items-center justify-center text-xs font-mono font-medium" 
+                                        style={{ backgroundColor: formData.cor_destaque, color: getContrastColor(formData.cor_destaque) }}
+                                    >
+                                        {(formData.cor_destaque || "#000000").toUpperCase()}
+                                    </div>
                                 </div>
-                             </div>
-                             
-                             <Button 
-                                type="button" 
-                                variant="outline" 
-                                onClick={extractColorFromImage}
-                                title="Capturar cor da Logo"
-                                disabled={!formData.logo_data}
-                             >
-                                 <Wand2 className="h-4 w-4 mr-2" /> Usar da Logo
-                             </Button>
+                                <Button 
+                                    type="button" 
+                                    variant="outline" 
+                                    onClick={extractColorFromImage}
+                                    title="Capturar cor da Logo"
+                                    disabled={!formData.logo_data}
+                                >
+                                     <Wand2 className="h-4 w-4 mr-2" /> Usar da Logo
+                                </Button>
+                            </div>
                         </div>
-                    </div>
-                    <p className="text-[11px] text-muted-foreground">
-                        Usada em botões principais e destaques do PDV.
-                    </p>
-                </div>
-            </div>
-            <div className="pt-5 flex justify-end">
+                   </div>
+               </div>
+               <div className="pt-5 flex justify-end">
                    <Button type="submit" disabled={isLoading}>
                       {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : "Salvar Aparência"}
                    </Button>
               </div>
-        </CardBodyT>
-      </form>
-      
-        <CardBodyT title="Assinatura & Plano" subtitle="Gerencie seu plano e o status da sua fatura.">
+           </CardBodyT>
+       </form>
+
+       <CardBodyT title="Assinatura & Plano" subtitle="Gerencie seu plano e o status da sua fatura.">
           <div className="space-y-4 pt-6">
               {isBillingLoading ? (
                   <div className="space-y-3">
@@ -360,6 +336,7 @@ export default function GeralSettingsPage() {
   );
 }
 
+// Helper
 function getContrastColor(hexColor) {
     if (!hexColor) return 'black';
     const r = parseInt(hexColor.substr(1, 2), 16);

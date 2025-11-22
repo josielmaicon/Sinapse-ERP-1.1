@@ -7,11 +7,11 @@ export default function ComprasPageLayout({
   Resume
 }) {
   return (
-    // h-screen garante ocupar a viewport; flex-col para usar flex-1 corretamente
-    <div className="w-full h-screen bg-[#0b5077] font-mono flex flex-col p-2">
-      {/* container principal que ocupa todo o espaço restante */}
+    <div 
+        className="w-full h-screen font-mono flex flex-col p-2 transition-colors duration-500 ease-in-out"
+        style={{ backgroundColor: 'var(--brand-color, #0b5077)' }}
+    >
       <div className="flex-1 flex flex-col overflow-hidden gap-2 rounded-2xl">
-        {/* --- LINHA DE CABEÇALHOS: duas colunas separadas --- */}
         <div className="grid grid-cols-[4fr_6fr] gap-2">
           <div className="bg-card p-4 flex items-center justify-center overflow-hidden rounded-xl">
             {Header1 || "[CABEÇALHO 1]"}

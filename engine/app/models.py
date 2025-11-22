@@ -284,25 +284,20 @@ class ResumoDiarioEstoque(Base):
 
 class Empresa(Base):
     __tablename__ = "empresa_config"
-
-    id = Column(Integer, primary_key=True) # Sempre será 1
+    id = Column(Integer, primary_key=True)
     
     # Identidade
     nome_fantasia = Column(String(100), nullable=False, default="Minha Loja")
     razao_social = Column(String(100), nullable=True)
     cnpj = Column(String(20), nullable=True)
+    logo_data = Column(String, nullable=True)
+    tipo_logo = Column(String(10), default="url")
     
-    # Logo: Pode ser uma URL, Base64 ou SVG puro
-    # Vamos usar Text para caber um SVG inteiro ou base64 longo
-    logo_data = Column(String, nullable=True) 
-    tipo_logo = Column(String(10), default="url") # 'url', 'base64', 'svg'
+    tema_preferido = Column(String(20), default="system") 
+    cor_destaque = Column(String(10), default="#3b82f6")
 
-    # Aparência
-    tema_preferido = Column(String(20), default="system") # light, dark, system
-    cor_primaria = Column(String(10), default="#000000") # Hex
-
-    # Regional
     fuso_horario = Column(String(50), default="America/Sao_Paulo")
 
-    # Auditoria
-    atualizado_em = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    plano_atual = Column(String(50), default="Plano Gratuito")
+    status_assinatura = Column(String(20), default="ativo") # ativo, pendente, cancelado
+    data_vencimento_assinatura = Column(Date, nullable=True)

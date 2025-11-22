@@ -7,11 +7,10 @@ router = APIRouter(prefix="/configuracoes", tags=["Configurações"])
 
 @router.get("/geral", response_model=schemas.EmpresaConfig)
 def get_configuracoes_geral(db: Session = Depends(get_db)):
-    # Busca a configuração ID 1
     config = db.query(models.Empresa).filter(models.Empresa.id == 1).first()
     
-    # Se não existir (primeira vez), cria uma padrão
     if not config:
+        # Cria o padrão se não existir
         config = models.Empresa(id=1, nome_fantasia="Minha Loja Nova")
         db.add(config)
         db.commit()
@@ -26,18 +25,23 @@ def update_configuracoes_geral(
 ):
     config = db.query(models.Empresa).filter(models.Empresa.id == 1).first()
     if not config:
-        # Fallback de segurança
         config = models.Empresa(id=1)
         db.add(config)
 
-    # Atualiza campos
+    # --- Mapeamento Manual (Segurança e Controle) ---
     config.nome_fantasia = settings.nome_fantasia
     config.cnpj = settings.cnpj
     config.logo_data = settings.logo_data
     config.tipo_logo = settings.tipo_logo
+    
     config.tema_preferido = settings.tema_preferido
-    config.cor_primaria = settings.cor_primaria
+    config.cor_destaque = settings.cor_destaque # ✅ Atualizando a cor
     config.fuso_horario = settings.fuso_horario
+    
+    # 🛡️ NOTA DE MESTRE:
+    # Não atualizamos 'plano_atual' ou 'status_assinatura' aqui.
+    # O usuário não pode mudar seu próprio plano editando o JSON desta rota.
+    # Esses campos só seriam alterados por um webhook de pagamento ou painel de super-admin.
     
     db.commit()
     db.refresh(config)
