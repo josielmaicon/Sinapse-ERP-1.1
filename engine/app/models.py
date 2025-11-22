@@ -295,9 +295,22 @@ class Empresa(Base):
     
     tema_preferido = Column(String(20), default="system") 
     cor_destaque = Column(String(10), default="#3b82f6")
-
     fuso_horario = Column(String(50), default="America/Sao_Paulo")
+
+    permitir_estoque_negativo = Column(Boolean, default=False)
+    perfis_abertura = relationship("PerfilAbertura", back_populates="empresa")
 
     plano_atual = Column(String(50), default="Plano Gratuito")
     status_assinatura = Column(String(20), default="ativo") # ativo, pendente, cancelado
     data_vencimento_assinatura = Column(Date, nullable=True)
+
+class PerfilAbertura(Base):
+    __tablename__ = "perfis_abertura"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    nome = Column(String(50), nullable=False) # Ex: "Manhã Padrão"
+    horario_sugerido = Column(String(5), nullable=True) # Ex: "08:00"
+    valor_padrao = Column(Float, default=0.0) # Ex: 100.00
+    
+    empresa_id = Column(Integer, ForeignKey("empresa_config.id"))
+    empresa = relationship("Empresa", back_populates="perfis_abertura")

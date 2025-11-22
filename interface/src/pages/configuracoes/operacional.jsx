@@ -32,9 +32,9 @@ import {
     Upload, 
     Download, 
     Edit,
-    Receipt,    // Para Cupom
-    MessageCircle, // Para Mensagens
-    Gift,        // Para Aniversário
+    Receipt,
+    MessageCircle, 
+    Gift,
     AlertTriangle,
     Clock
 } from "lucide-react"
@@ -49,21 +49,17 @@ import {
 import CardBodyT from "@/components/CardBodyT" // Seu componente padrão
 import { Separator } from "@/components/ui/separator"
 
+const API_URL = "http://localhost:8000";
+
 export default function OperacionalSettingsPage() {
   const [isLoading, setIsLoading] = React.useState(false); 
-
-  // --- Estados ---
-
   const [permitirEstoqueNegativo, setPermitirEstoqueNegativo] = React.useState(false);
-
-  // ✅ Estado: Perfis de Abertura (Lista para a Tabela)
   const [perfisAbertura, setPerfisAbertura] = React.useState([
       { id: 1, nome: "Padrão Manhã", valor: "100.00", horario: "08:00" },
       { id: 2, nome: "Padrão Tarde", valor: "150.00", horario: "14:00" },
       { id: 3, nome: "Fim de Semana", valor: "300.00", horario: "09:00" },
   ]);
 
-  // ✅ Estado: Mensagens (Expandido)
   const [mensagens, setMensagens] = React.useState({
       // Impressos
       cupomHeader: "Promoções toda sexta!",
@@ -106,6 +102,49 @@ export default function OperacionalSettingsPage() {
       setIsLoading(false);
   };
 
+const fetchData = React.useCallback(async () => {
+      try {
+          // Busca Regras Gerais
+          const resGeral = await fetch(`${API_URL}/configuracoes/geral`);
+          const dataGeral = await resGeral.json();
+          setPermitirEstoqueNegativo(dataGeral.permitir_estoque_negativo);
+
+          // Busca Perfis
+          const resPerfis = await fetch(`${API_URL}/configuracoes/operacional/perfis`);
+          const dataPerfis = await resPerfis.json();
+          setPerfisAbertura(dataPerfis);
+      } catch (e) {
+          console.error(e);
+      }
+  }, []);
+
+  React.useEffect(() => { fetchData(); }, [fetchData]);
+
+  // ✅ SALVAR SWITCH (Instantâneo)
+  const handleToggleStock = async (checked) => {
+      setPermitirEstoqueNegativo(checked); // UI otimista
+      try {
+          await fetch(`${API_URL}/configuracoes/operacional/regras`, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ permitir_estoque_negativo: checked })
+          });
+          toast.success(`Venda negativa ${checked ? "ativada" : "desativada"}.`);
+      } catch (e) {
+          toast.error("Erro ao salvar regra.");
+          setPermitirEstoqueNegativo(!checked); // Reverte em caso de erro
+      }
+  };
+  
+  // ✅ DELETAR PERFIL
+  const handleDeleteProfile = async (id) => {
+      try {
+          await fetch(`${API_URL}/configuracoes/operacional/perfis/${id}`, { method: 'DELETE' });
+          toast.success("Perfil removido.");
+          fetchData();
+      } catch (e) { toast.error("Erro ao remover."); }
+  };
+
   return (
     <div className="flex flex-1 flex-col gap-3"> 
       
@@ -135,7 +174,7 @@ export default function OperacionalSettingsPage() {
                       <Switch 
                           id="permitirEstoqueNegativo"
                           checked={permitirEstoqueNegativo}
-                          onCheckedChange={setPermitirEstoqueNegativo}
+                          onCheckedChange={handleToggleStock}
                           disabled={isLoading}
                       />
                   </div>
