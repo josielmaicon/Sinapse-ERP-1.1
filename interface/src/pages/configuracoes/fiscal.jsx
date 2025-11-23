@@ -130,7 +130,6 @@ export default function FiscalSettingsPage() {
         </BreadcrumbList>
       </Breadcrumb>
 
-      {/* --- CARD 0: VALIDADOR DE CONFORMIDADE (Seu Diferencial) --- */}
       <div className="rounded-lg border bg-card text-card-foreground p-6">
           <div className="flex items-start justify-between">
               <div className="space-y-1">

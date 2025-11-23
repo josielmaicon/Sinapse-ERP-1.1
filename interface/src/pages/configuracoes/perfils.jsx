@@ -23,6 +23,16 @@ import {
     DropdownMenuTrigger 
 } from "@/components/ui/dropdown-menu"
 import { toast } from "sonner"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { 
     Loader2, 
     Plus, 
@@ -32,7 +42,8 @@ import {
     History, 
     UserCog,
     LogOut,
-    Search
+    Search,
+    UserX
 } from "lucide-react"
 import {
   Breadcrumb,
@@ -44,41 +55,109 @@ import {
 } from "@/components/ui/breadcrumb"
 import CardBodyT from "@/components/CardBodyT"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { UserModal } from "./ModalCriacaoUser"
+
+const API_URL = "http://localhost:8000";
 
 export default function PerfilSettingsPage() {
-  const [isLoading, setIsLoading] = React.useState(false); 
+  const [isDataLoading, setIsDataLoading] = React.useState(true); 
+  
+  const [users, setUsers] = React.useState([]);
+  const [logs, setLogs] = React.useState([]);
+  
+  // Estados do Modal
+  const [isUserModalOpen, setIsUserModalOpen] = React.useState(false);
+  const [userToEdit, setUserToEdit] = React.useState(null);
+  const [userToDelete, setUserToDelete] = React.useState(null); // Guarda o objeto usuário a ser deletado
 
-  // --- Mock: Lista de Usuários ---
-  const [users, setUsers] = React.useState([
-      { id: 1, nome: "Administrador", email: "admin@sinapse.com", funcao: "admin", status: "ativo", ultimo_acesso: "Agora" },
-      { id: 2, nome: "Josiel Maicon", email: "josiel@loja.com", funcao: "gerente", status: "ativo", ultimo_acesso: "Hoje, 14:30" },
-      { id: 3, nome: "Ana Paula", email: "ana@caixa.com", funcao: "operador", status: "ativo", ultimo_acesso: "Ontem, 18:00" },
-      { id: 4, nome: "Carlos Silva", email: "carlos@estoque.com", funcao: "operador", status: "bloqueado", ultimo_acesso: "Há 5 dias" },
-  ]);
+  // --- FETCH DATA ---
+  const fetchData = React.useCallback(async () => {
+      setIsDataLoading(true);
+      try {
+          const [resUsers, resLogs] = await Promise.all([
+              fetch(`${API_URL}/usuarios/`),
+              fetch(`${API_URL}/usuarios/logs/auditoria`)
+          ]);
+          
+          if (resUsers.ok) setUsers(await resUsers.json());
+          if (resLogs.ok) setLogs(await resLogs.json());
 
-  // --- Mock: Logs de Auditoria (O diferencial) ---
-  const [logs] = React.useState([
-      { id: 101, ator: "Josiel Maicon", acao: "Autorizou Cancelamento", alvo: "Venda #5402", data: "Hoje, 14:35" },
-      { id: 102, ator: "Ana Paula", acao: "Abriu Caixa 01", alvo: "PDV 01", data: "Hoje, 08:00" },
-      { id: 103, ator: "Administrador", acao: "Alterou Permissões", alvo: "Usuário Carlos Silva", data: "Ontem, 20:15" },
-      { id: 104, ator: "Sistema", acao: "Backup Automático", alvo: "Banco de Dados", data: "Ontem, 23:00" },
-  ]);
+      } catch (error) {
+          console.error("Erro ao carregar perfil:", error);
+      } finally {
+          setIsDataLoading(false);
+      }
+  }, []);
+
+  React.useEffect(() => { fetchData(); }, [fetchData]);
 
   // --- Handlers ---
-  const handleStatusToggle = (userId) => {
-      // Simula alteração de status
-      setUsers(prev => prev.map(u => 
-          u.id === userId ? { ...u, status: u.status === 'ativo' ? 'bloqueado' : 'ativo' } : u
-      ));
-      toast.success("Status do usuário atualizado.");
+  
+  const handleStatusToggle = async (userId, currentStatus) => {
+      const newStatus = currentStatus === 'ativo' ? 'bloqueado' : 'ativo';
+      // Otimismo na UI
+      setUsers(prev => prev.map(u => u.id === userId ? { ...u, status: newStatus } : u));
+      
+      try {
+          await fetch(`${API_URL}/usuarios/${userId}`, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ status: newStatus })
+          });
+          toast.success(`Usuário ${newStatus}!`);
+      } catch (e) {
+          toast.error("Erro ao alterar status.");
+          fetchData(); // Reverte
+      }
   };
 
-  const handleResetPassword = (userId) => {
-      toast.promise(new Promise(r => setTimeout(r, 1500)), {
-          loading: "Enviando email de redefinição...",
-          success: "Link de redefinição enviado para o email do usuário."
-      });
+  const handleEditUser = (user) => {
+      setUserToEdit(user);
+      setIsUserModalOpen(true);
   };
+  
+  const handleNewUser = () => {
+      setUserToEdit(null);
+      setIsUserModalOpen(true);
+  };
+  
+  const handleDeleteUser = async (user) => {
+      if (!confirm(`Tem certeza que deseja excluir ${user.nome}?`)) return;
+      try {
+          const res = await fetch(`${API_URL}/usuarios/${user.id}`, { method: 'DELETE' });
+          if(!res.ok) throw new Error();
+          toast.success("Usuário excluído.");
+          fetchData();
+      } catch (e) {
+          toast.error("Erro ao excluir (Admin principal não pode ser removido).");
+      }
+  }
+
+    // ✅ 3. GATILHO DO MODAL (Apenas seleciona o usuário)
+  const handleDeleteClick = (user) => {
+      setUserToDelete(user);
+  }
+
+  // ✅ 4. AÇÃO REAL DE EXCLUSÃO (Chamada pelo AlertDialog)
+  const confirmDeleteUser = async () => {
+      if (!userToDelete) return;
+      
+      try {
+          const res = await fetch(`${API_URL}/usuarios/${userToDelete.id}`, { method: 'DELETE' });
+          
+          if(!res.ok) {
+              const err = await res.json().catch(() => ({}));
+              throw new Error(err.detail || "Erro ao excluir.");
+          }
+          
+          toast.success(`Usuário ${userToDelete.nome} excluído.`);
+          fetchData();
+      } catch (e) {
+          toast.error(e.message || "Erro ao excluir usuário.");
+      } finally {
+          setUserToDelete(null); // Fecha o modal
+      }
+  }
 
   return (
     <div className="flex flex-1 flex-col gap-3"> 
@@ -95,7 +174,6 @@ export default function PerfilSettingsPage() {
         </BreadcrumbList>
       </Breadcrumb>
       
-      {/* --- SEÇÃO 1: GESTÃO DE USUÁRIOS --- */}
       <CardBodyT 
         title="Equipe e Acesso" 
         subtitle="Gerencie quem tem acesso ao sistema e suas permissões."
@@ -108,20 +186,19 @@ export default function PerfilSettingsPage() {
                       <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
                       <Input placeholder="Buscar usuário..." className="pl-8" />
                   </div>
-                  <Button onClick={() => toast.info("Abrir Modal de Novo Usuário")}>
+                  <Button onClick={handleNewUser} disabled={isDataLoading}>
                       <Plus className="mr-2 h-4 w-4" /> Novo Usuário
                   </Button>
               </div>
 
               {/* Tabela de Usuários */}
-              <div className="rounded-md border overflow-hidden">
+              <div className="rounded-md border overflow-hidden h-[300px] overflow-y-auto relative">
                   <Table>
-                      <TableHeader className="bg-muted/50">
+                      <TableHeader className="bg-muted/50 sticky top-0 z-10">
                           <TableRow>
                               <TableHead>Usuário</TableHead>
                               <TableHead>Função (Role)</TableHead>
                               <TableHead>Status</TableHead>
-                              <TableHead className="hidden md:table-cell">Último Acesso</TableHead>
                               <TableHead className="text-right">Ações</TableHead>
                           </TableRow>
                       </TableHeader>
@@ -130,13 +207,12 @@ export default function PerfilSettingsPage() {
                               <TableRow key={user.id}>
                                   <TableCell className="flex items-center gap-3">
                                       <Avatar className="h-9 w-9">
-                                          {/* Fallback para iniciais */}
                                           <AvatarImage src={`https://ui-avatars.com/api/?name=${user.nome}&background=random`} />
                                           <AvatarFallback>{user.nome.substring(0,2).toUpperCase()}</AvatarFallback>
                                       </Avatar>
                                       <div className="flex flex-col">
                                           <span className="font-medium">{user.nome}</span>
-                                          <span className="text-xs text-muted-foreground">{user.email}</span>
+                                          <span className="text-xs text-muted-foreground">{user.email || "Sem e-mail"}</span>
                                       </div>
                                   </TableCell>
                                   <TableCell>
@@ -148,11 +224,8 @@ export default function PerfilSettingsPage() {
                                   <TableCell>
                                       <Switch 
                                           checked={user.status === 'ativo'}
-                                          onCheckedChange={() => handleStatusToggle(user.id)}
+                                          onCheckedChange={() => handleStatusToggle(user.id, user.status)}
                                       />
-                                  </TableCell>
-                                  <TableCell className="hidden md:table-cell text-muted-foreground text-sm">
-                                      {user.ultimo_acesso}
                                   </TableCell>
                                   <TableCell className="text-right">
                                       <DropdownMenu>
@@ -164,15 +237,12 @@ export default function PerfilSettingsPage() {
                                           </DropdownMenuTrigger>
                                           <DropdownMenuContent align="end">
                                               <DropdownMenuLabel>Ações</DropdownMenuLabel>
-                                              <DropdownMenuItem onClick={() => toast.info(`Editar ${user.nome}`)}>
+                                              <DropdownMenuItem onClick={() => handleEditUser(user)}>
                                                   <UserCog className="mr-2 h-4 w-4" /> Editar Dados
                                               </DropdownMenuItem>
-                                              <DropdownMenuItem onClick={() => handleResetPassword(user.id)}>
-                                                  <KeyRound className="mr-2 h-4 w-4" /> Redefinir Senha
-                                              </DropdownMenuItem>
                                               <DropdownMenuSeparator />
-                                              <DropdownMenuItem className="text-destructive">
-                                                  <LogOut className="mr-2 h-4 w-4" /> Derrubar Sessão
+                                              <DropdownMenuItem className="text-destructive" onClick={() => handleDeleteClick(user)}>
+                                                  <UserX className="mr-2 h-4 w-4" /> Excluir Usuário
                                               </DropdownMenuItem>
                                           </DropdownMenuContent>
                                       </DropdownMenu>
@@ -185,53 +255,69 @@ export default function PerfilSettingsPage() {
           </div>
       </CardBodyT>
 
-      {/* --- SEÇÃO 2: AUDITORIA E SEGURANÇA --- */}
-      <CardBodyT 
-        title="Registro de Auditoria" 
-        subtitle="Histórico de ações sensíveis realizadas no sistema."
-      >
+      <CardBodyT title="Registro de Auditoria" subtitle="Histórico de ações sensíveis (Logs do sistema).">
           <div className="pt-6">
               <div className="rounded-md border h-[300px] overflow-y-auto relative">
                   <Table>
-                      <TableHeader className="sticky top-0 bg-card z-10">
+                      <TableHeader className="sticky top-0 bg-card z-10 shadow-sm">
                           <TableRow>
                               <TableHead className="w-[180px]">Data / Hora</TableHead>
                               <TableHead>Usuário</TableHead>
                               <TableHead>Ação</TableHead>
-                              <TableHead>Alvo / Detalhe</TableHead>
+                              <TableHead>Detalhe</TableHead>
                           </TableRow>
                       </TableHeader>
                       <TableBody>
-                          {logs.map((log) => (
-                              <TableRow key={log.id} className="hover:bg-muted/50">
-                                  <TableCell className="font-mono text-xs text-muted-foreground">
-                                      {log.data}
-                                  </TableCell>
-                                  <TableCell className="font-medium">{log.ator}</TableCell>
-                                  <TableCell>
-                                      <Badge variant="secondary" className="font-normal">
-                                          {log.acao}
-                                      </Badge>
-                                  </TableCell>
-                                  <TableCell className="text-muted-foreground text-sm">
-                                      {log.alvo}
-                                  </TableCell>
-                              </TableRow>
-                          ))}
-                          {/* Linhas vazias para preencher visualmente se tiver poucos logs */}
-                          {logs.length < 5 && Array.from({ length: 5 - logs.length }).map((_, i) => (
-                              <TableRow key={`empty-${i}`}><TableCell colSpan={4} className="h-12" /></TableRow>
-                          ))}
+                          {logs.length === 0 ? (
+                              <TableRow><TableCell colSpan={4} className="text-center py-8 text-muted-foreground">Nenhum registro recente.</TableCell></TableRow>
+                          ) : (
+                              logs.map((log) => (
+                                  <TableRow key={log.id} className="hover:bg-muted/50">
+                                      <TableCell className="font-mono text-xs text-muted-foreground">
+                                          {new Date(log.data_hora).toLocaleString('pt-BR')}
+                                      </TableCell>
+                                      <TableCell className="font-medium">{log.usuario_nome || "Sistema"}</TableCell>
+                                      <TableCell>
+                                          <Badge variant="secondary" className="font-normal text-[10px]">
+                                              {log.acao}
+                                          </Badge>
+                                      </TableCell>
+                                      <TableCell className="text-muted-foreground text-sm truncate max-w-xs" title={log.detalhe}>
+                                          {log.detalhe}
+                                      </TableCell>
+                                  </TableRow>
+                              ))
+                          )}
                       </TableBody>
                   </Table>
               </div>
-              <div className="pt-4 flex justify-end">
-                   <Button variant="outline" size="sm" onClick={() => toast.info("Exportar logs para CSV")}>
-                       <History className="mr-2 h-4 w-4" /> Exportar Histórico Completo
-                   </Button>
-              </div>
           </div>
       </CardBodyT>
+
+      <UserModal 
+          open={isUserModalOpen} 
+          onOpenChange={setIsUserModalOpen} 
+          userToEdit={userToEdit} 
+          onSuccess={fetchData} 
+      />
+
+      <AlertDialog open={!!userToDelete} onOpenChange={(open) => !open && setUserToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir Usuário?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tem certeza que deseja remover <b>{userToDelete?.nome}</b>? <br/>
+              Essa ação não pode ser desfeita e o histórico será mantido apenas nos logs.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDeleteUser} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Sim, Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
     </div>
   );

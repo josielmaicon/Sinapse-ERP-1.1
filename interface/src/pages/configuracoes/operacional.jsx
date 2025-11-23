@@ -61,6 +61,9 @@ export default function OperacionalSettingsPage() {
   const [isPrinterModalOpen, setIsPrinterModalOpen] = React.useState(false); // ✅ Faltava esse
   const [isPdvModalOpen, setIsPdvModalOpen] = React.useState(false);         // ✅ Faltava esse
   const [pdvToEdit, setPdvToEdit] = React.useState(null);                    // ✅ Faltava esse
+  const [impressoras, setImpressoras] = React.useState([]);
+  const [pdvs, setPdvs] = React.useState([]);
+
   const [perfisAbertura, setPerfisAbertura] = React.useState([
       { id: 1, nome: "Padrão Manhã", valor: "100.00", horario: "08:00" },
       { id: 2, nome: "Padrão Tarde", valor: "150.00", horario: "14:00" },
@@ -95,18 +98,6 @@ export default function OperacionalSettingsPage() {
       cobranca30: "Olá [NOME], consta um débito pendente há 30 dias. Entre em contato para regularizar.",
       cobranca60: "Prezado [NOME], seu débito completou 60 dias. Evite restrições de crédito."
   });
-
-  // Mock Hardware
-  const [pdvs] = React.useState([
-      { id: 1, nome: "Caixa 01 (Principal)", status: "ativo", impressora: "EPSON T20" },
-      { id: 2, nome: "Caixa 02", status: "inativo", impressora: null },
-      { id: 3, nome: "Retaguarda", status: "ativo", impressora: "PDF" },
-  ]);
-
-  const [impressoras] = React.useState([
-      { id: 1, nome: "EPSON T20", ip: "192.168.0.100", status: "online" },
-      { id: 2, nome: "Bematech Cozinha", ip: "192.168.0.101", status: "erro" },
-  ]);
 
   // --- Handlers ---
   const handleMensagensChange = (e) => {
@@ -336,7 +327,7 @@ export default function OperacionalSettingsPage() {
                                           <TableCell>
                                               <Badge variant={pdv.status === 'ativo' ? 'default' : 'secondary'}>{pdv.status}</Badge>
                                           </TableCell>
-                                          <TableCell className="text-xs font-mono">{pdv.impressora || "-"}</TableCell>
+                                                                                    <TableCell className="text-xs font-mono">{pdv.impressora?.nome || "-"}</TableCell>
                                           <TableCell className="text-right space-x-1">
                                               <Button variant="ghost" size="sm" onClick={() => toast.info("Editar PDV")}>Configurar</Button>
                                               <Button variant="ghost" size="icon" className="text-destructive"><Trash2 className="h-4 w-4"/></Button>

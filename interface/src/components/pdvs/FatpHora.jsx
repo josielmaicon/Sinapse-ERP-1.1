@@ -106,16 +106,16 @@ export default function HourlyRevenueChart({ pdv }) {
               />
               <ChartTooltip cursor={false} content={<ChartTooltipContent />} />
               <defs>
-                <linearGradient id="fillRevenue" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="var(--chart-1)" stopOpacity={0.8} />
-                  <stop offset="95%" stopColor="var(--chart-1)" stopOpacity={0.1} />
+                <linearGradient id="fillGradient" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="var(--color-primary)" stopOpacity={0.8}/>
+                    <stop offset="95%" stopColor="var(--color-primary)" stopOpacity={0.1}/>
                 </linearGradient>
               </defs>
               <Area
                 dataKey="revenue"
                 type="natural"
-                fill="url(#fillRevenue)"
-                stroke="var(--chart-1)"
+                fill="url(#fillGradient)"
+                stroke={`var(--primary`}
                 strokeWidth={2}
               />  
             </AreaChart>
