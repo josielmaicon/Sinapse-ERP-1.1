@@ -468,7 +468,8 @@ const handleBarcodeSubmit = async (codigo) => {
             <Logo variant="full" size="180px" />
             <StoreLogo className="h-14 w-auto max-w-[200px]" />
         </div>
-      }        Header2={<PosHeaderStatus session={pdvSession} activeSale={activeSale} />}
+      }
+      Header2={<PosHeaderStatus session={pdvSession} activeSale={activeSale} />}
         SidePanel={<PosSidePanel lastItem={lastItem} />}
         MainContent={
           <div

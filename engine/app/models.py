@@ -309,10 +309,16 @@ class Empresa(Base):
 
     permitir_estoque_negativo = Column(Boolean, default=False)
     perfis_abertura = relationship("PerfilAbertura", back_populates="empresa")
+    pix_chave_padrao = Column(String(100), nullable=True)
+    pix_tipo_chave = Column(String(20), default="cnpj") # cpf, cnpj, email, aleatoria
 
     plano_atual = Column(String(50), default="Plano Gratuito")
     status_assinatura = Column(String(20), default="ativo") # ativo, pendente, cancelado
     data_vencimento_assinatura = Column(Date, nullable=True)
+
+    crediario_multa = Column(Float, default=0.0) # Valor fixo ou %
+    crediario_juros_mensal = Column(Float, default=0.0) # %
+    crediario_dias_carencia = Column(Integer, default=0)
 
 class PerfilAbertura(Base):
     __tablename__ = "perfis_abertura"
@@ -324,3 +330,15 @@ class PerfilAbertura(Base):
     
     empresa_id = Column(Integer, ForeignKey("empresa_config.id"))
     empresa = relationship("Empresa", back_populates="perfis_abertura")
+
+class FormaPagamento(Base):
+    __tablename__ = "formas_pagamento"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    nome = Column(String(50), nullable=False)
+    tipo = Column(String(20), nullable=False)
+    
+    taxa = Column(Float, default=0.0)
+    ativo = Column(Boolean, default=True)
+    sistema = Column(Boolean, default=False)
+    hotkey = Column(String(5), nullable=True)

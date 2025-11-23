@@ -34,5 +34,27 @@ class EmpresaConfig(BaseModel):
     permitir_estoque_negativo: bool = False
     perfis_abertura: List[PerfilAbertura] = [] 
 
+    pix_chave_padrao: Optional[str] = None
+    pix_tipo_chave: Optional[str] = "cnpj"
+    crediario_multa: float = 0.0
+    crediario_juros_mensal: float = 0.0
+    crediario_dias_carencia: int = 0
+    
+    class Config:
+        from_attributes = True
+
+class FormaPagamentoBase(BaseModel):
+    nome: str
+    tipo: str
+    taxa: float = 0.0
+    ativo: bool = True
+    hotkey: Optional[str] = None
+    
+class FormaPagamentoCreate(FormaPagamentoBase):
+    pass
+
+class FormaPagamento(FormaPagamentoBase):
+    id: int
+    sistema: bool
     class Config:
         from_attributes = True

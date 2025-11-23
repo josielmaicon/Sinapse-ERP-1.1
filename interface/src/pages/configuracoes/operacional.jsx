@@ -63,12 +63,7 @@ export default function OperacionalSettingsPage() {
   const [pdvToEdit, setPdvToEdit] = React.useState(null);                    // ✅ Faltava esse
   const [impressoras, setImpressoras] = React.useState([]);
   const [pdvs, setPdvs] = React.useState([]);
-
-  const [perfisAbertura, setPerfisAbertura] = React.useState([
-      { id: 1, nome: "Padrão Manhã", valor: "100.00", horario: "08:00" },
-      { id: 2, nome: "Padrão Tarde", valor: "150.00", horario: "14:00" },
-      { id: 3, nome: "Fim de Semana", valor: "300.00", horario: "09:00" },
-  ]);
+  const [perfisAbertura, setPerfisAbertura] = React.useState([]);
 
   const [isProfileModalOpen, setIsProfileModalOpen] = React.useState(false);
 
@@ -327,7 +322,7 @@ export default function OperacionalSettingsPage() {
                                           <TableCell>
                                               <Badge variant={pdv.status === 'ativo' ? 'default' : 'secondary'}>{pdv.status}</Badge>
                                           </TableCell>
-                                                                                    <TableCell className="text-xs font-mono">{pdv.impressora?.nome || "-"}</TableCell>
+                                          <TableCell className="text-xs font-mono">{pdv.impressora?.nome || "-"}</TableCell>
                                           <TableCell className="text-right space-x-1">
                                               <Button variant="ghost" size="sm" onClick={() => toast.info("Editar PDV")}>Configurar</Button>
                                               <Button variant="ghost" size="icon" className="text-destructive"><Trash2 className="h-4 w-4"/></Button>

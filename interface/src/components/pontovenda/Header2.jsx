@@ -69,9 +69,8 @@ export default function PosHeaderStatus({ session }) {
       </div>
 
       <div className="flex items-center gap-6">
-        <InfoItem label="Operador" className="text-2xl" value={operatorName} />
+        <InfoItem label="Operador" value={operatorName} />
         <InfoItem label="Caixa" value={pdvName} />
-        <InfoItem label="Venda Nº" value={saleId} />
         <InfoItem label="Horário" value={format(currentTime, "HH:mm:ss")} />
       </div>
     </div>
