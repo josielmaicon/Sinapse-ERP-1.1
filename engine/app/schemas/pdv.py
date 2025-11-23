@@ -138,3 +138,34 @@ class ManualItemRequest(BaseModel):
 class SolicitacaoUpdate(BaseModel):
     status: str
     autorizado_por_id: Optional[int] = None
+
+class ImpressoraBase(BaseModel):
+    nome: str
+    tipo: str = "rede"
+    caminho: Optional[str] = None
+
+class ImpressoraCreate(ImpressoraBase):
+    pass
+
+class Impressora(ImpressoraBase):
+    id: int
+    class Config:
+        from_attributes = True
+
+# --- ATUALIZAÇÃO NO PDV ---
+class PdvCreate(BaseModel): # Para criar novos PDVs
+    nome: str
+    impressora_id: Optional[int] = None
+
+class PdvUpdate(BaseModel): # Para editar PDVs existentes
+    nome: Optional[str] = None
+    impressora_id: Optional[int] = None
+
+class Pdv(BaseModel): # Schema de leitura
+    id: int
+    nome: str
+    status: str
+    impressora: Optional[Impressora] = None # Retorna o objeto completo
+    # ... outros campos ...
+    class Config:
+        from_attributes = True

@@ -48,17 +48,36 @@ import {
 } from "@/components/ui/breadcrumb"
 import CardBodyT from "@/components/CardBodyT" // Seu componente padrão
 import { Separator } from "@/components/ui/separator"
+import { ProfileModal } from "./modalPerfil"
+import { PrinterModal, PdvConfigModal } from "./ModalHardware"
 
 const API_URL = "http://localhost:8000";
 
 export default function OperacionalSettingsPage() {
   const [isLoading, setIsLoading] = React.useState(false); 
   const [permitirEstoqueNegativo, setPermitirEstoqueNegativo] = React.useState(false);
+  const [isSaving, setIsSaving] = React.useState(false); // Usado nos botões de salvar
+  const [isDataLoading, setIsDataLoading] = React.useState(true); // Usado no carregamento inicial
+  const [isPrinterModalOpen, setIsPrinterModalOpen] = React.useState(false); // ✅ Faltava esse
+  const [isPdvModalOpen, setIsPdvModalOpen] = React.useState(false);         // ✅ Faltava esse
+  const [pdvToEdit, setPdvToEdit] = React.useState(null);                    // ✅ Faltava esse
   const [perfisAbertura, setPerfisAbertura] = React.useState([
       { id: 1, nome: "Padrão Manhã", valor: "100.00", horario: "08:00" },
       { id: 2, nome: "Padrão Tarde", valor: "150.00", horario: "14:00" },
       { id: 3, nome: "Fim de Semana", valor: "300.00", horario: "09:00" },
   ]);
+
+  const [isProfileModalOpen, setIsProfileModalOpen] = React.useState(false);
+
+  const handleNewPdv = () => {
+      setPdvToEdit(null);
+      setIsPdvModalOpen(true);
+  };
+
+  const handleEditPdv = (pdv) => {
+      setPdvToEdit(pdv);
+      setIsPdvModalOpen(true);
+  };
 
   const [mensagens, setMensagens] = React.useState({
       // Impressos
@@ -102,21 +121,66 @@ export default function OperacionalSettingsPage() {
       setIsLoading(false);
   };
 
-const fetchData = React.useCallback(async () => {
+  const fetchData = React.useCallback(async () => {
+      setIsDataLoading(true);
       try {
-          // Busca Regras Gerais
+          // 1. Busca Regras (Geral)
           const resGeral = await fetch(`${API_URL}/configuracoes/geral`);
-          const dataGeral = await resGeral.json();
-          setPermitirEstoqueNegativo(dataGeral.permitir_estoque_negativo);
+          if (resGeral.ok) {
+              const dataGeral = await resGeral.json();
+              // ❌ ERRO ANTERIOR: setRegras(...) - Variável não existia
+              // ✅ CORREÇÃO: Usar o setter correto
+              setPermitirEstoqueNegativo(dataGeral.permitir_estoque_negativo);
+          }
 
-          // Busca Perfis
+          const [resImp, resPdv] = await Promise.all([
+              fetch(`${API_URL}/configuracoes/hardware/impressoras`),
+              fetch(`${API_URL}/configuracoes/hardware/pdvs`)
+          ]);
+          
+          if (resImp.ok) setImpressoras(await resImp.json());
+          if (resPdv.ok) setPdvs(await resPdv.json());
+
+          // 2. Busca Perfis de Abertura
           const resPerfis = await fetch(`${API_URL}/configuracoes/operacional/perfis`);
-          const dataPerfis = await resPerfis.json();
-          setPerfisAbertura(dataPerfis);
-      } catch (e) {
-          console.error(e);
+          if (resPerfis.ok) {
+              const dataPerfis = await resPerfis.json();
+              // Mapeia para garantir formato correto se o backend mudar
+              const perfisFormatados = dataPerfis.map(p => ({
+                  id: p.id,
+                  nome: p.nome,
+                  horario: p.horario_sugerido, // Ajuste de nome de campo se necessário
+                  valor: p.valor_padrao
+              }));
+              setPerfisAbertura(perfisFormatados);
+          }
+
+          // 3. Mocks (para dados que ainda não têm rota)
+          // (Pode remover o delay artificial se quiser que carregue mais rápido)
+          await new Promise(r => setTimeout(r, 300)); 
+          
+          setMensagens({
+              cupomHeader: "Promoções toda sexta!",
+              cupomFooter: "Obrigado pela preferência. Volte sempre!",
+              politicaTroca: "Trocas em até 7 dias com a etiqueta afixada.",
+              boasVindas: "Olá [NOME], seja bem-vindo ao [LOJA]!",
+              aniversario: "Parabéns [NOME]! Venha nos visitar hoje.",
+              posVenda: "Olá [NOME], o que achou da sua compra?",
+              cobrancaPreventiva: "Olá [NOME], seu vencimento é amanhã.",
+              cobranca30: "Olá [NOME], consta um débito pendente há 30 dias.",
+              cobranca60: "Prezado [NOME], seu débito completou 60 dias."
+          });
+
+        
+
+      } catch (error) {
+          console.error("Erro ao buscar dados operacionais:", error);
+          toast.error("Erro ao carregar dados.");
+      } finally {
+          setIsDataLoading(false);
       }
   }, []);
+
 
   React.useEffect(() => { fetchData(); }, [fetchData]);
 
@@ -144,6 +208,8 @@ const fetchData = React.useCallback(async () => {
           fetchData();
       } catch (e) { toast.error("Erro ao remover."); }
   };
+
+
 
   return (
     <div className="flex flex-1 flex-col gap-3"> 
@@ -190,7 +256,7 @@ const fetchData = React.useCallback(async () => {
                                </Label>
                                <p className="text-sm text-muted-foreground">Valores pré-definidos para agilizar a abertura do dia.</p>
                            </div>
-                           <Button size="sm" variant="outline" type="button" onClick={() => toast.info("Modal: Novo Perfil")}>
+                           <Button size="sm" variant="outline" type="button" onClick={() => setIsProfileModalOpen(true)} disabled={isDataLoading}>
                                <Plus className="mr-2 h-4 w-4" /> Novo Perfil
                            </Button>
                        </div>
@@ -241,10 +307,10 @@ const fetchData = React.useCallback(async () => {
                           <TabsTrigger value="impressoras">Impressoras</TabsTrigger>
                       </TabsList>
                       <div className="flex gap-2">
-                          <Button size="sm" variant="outline" onClick={() => toast.info("Modal Nova Impressora")}>
+                          <Button size="sm" variant="outline" onClick={() => setIsPrinterModalOpen(true)}>
                               <Plus className="mr-2 h-4 w-4" /> Impressora
                           </Button>
-                          <Button size="sm" onClick={() => toast.info("Modal Novo PDV")}>
+                          <Button size="sm" variant="outline" type="button" onClick={handleNewPdv} disabled={isDataLoading}>
                               <Plus className="mr-2 h-4 w-4" /> PDV
                           </Button>
                       </div>
@@ -495,7 +561,25 @@ const fetchData = React.useCallback(async () => {
               </div>
           </div>
       </CardBodyT>
+      <ProfileModal 
+          open={isProfileModalOpen} 
+          onOpenChange={setIsProfileModalOpen} 
+          onSuccess={fetchData} // Passa a função de recarregar a tabela
+      />
 
+      <PrinterModal 
+          open={isPrinterModalOpen} 
+          onOpenChange={setIsPrinterModalOpen} 
+          onSuccess={fetchData}
+      />
+      
+      <PdvConfigModal 
+          open={isPdvModalOpen} 
+          onOpenChange={setIsPdvModalOpen} 
+          onSuccess={fetchData}
+          printers={impressoras} // Passa a lista de impressoras para o select
+          pdvToEdit={pdvToEdit} 
+      />
     </div>
   );
 }

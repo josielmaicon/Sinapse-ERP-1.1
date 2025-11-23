@@ -146,13 +146,23 @@ class TransacaoCrediario(Base):
     cliente = relationship("Cliente", back_populates="transacoes_crediario")
     venda_original = relationship("Venda") # Relação simples com a Venda (se aplicável)
 
+class Impressora(Base):
+    __tablename__ = "impressoras"
+
+    id = Column(Integer, primary_key=True, index=True)
+    nome = Column(String(100), nullable=False)
+    tipo = Column(String(20), default="rede")
+    caminho = Column(String(255), nullable=True)
+    pdvs = relationship("Pdv", back_populates="impressora")
+
 class Pdv(Base):
     __tablename__ = "pdvs"
     id = Column(Integer, primary_key=True)
-    nome = Column(String(50), unique=True, nullable=False) # Ex: "Caixa 01"
-    status = Column(String(50), default="fechado") # Ex: "aberto", "fechado", "pausado"
+    nome = Column(String(50), unique=True, nullable=False)
+    status = Column(String(50), default="fechado")
     
-    # Relação: Um PDV pode ter várias vendas e movimentações
+    impressora = relationship("Impressora", back_populates="pdvs")
+    impressora_id = Column(Integer, ForeignKey("impressoras.id"), nullable=True)
     operador_atual_id = Column(Integer, ForeignKey("usuarios.id"), nullable=True)
     vendas = relationship("Venda", back_populates="pdv")
     movimentacoes_caixa = relationship("MovimentacaoCaixa", back_populates="pdv")

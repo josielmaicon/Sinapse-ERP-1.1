@@ -131,9 +131,9 @@ export default function FiscalSettingsPage() {
       </Breadcrumb>
 
       {/* --- CARD 0: VALIDADOR DE CONFORMIDADE (Seu Diferencial) --- */}
-      <div className="rounded-lg border bg-card text-card-foreground shadow-sm p-6">
+      <div className="rounded-lg border bg-card text-card-foreground p-6">
           <div className="flex items-start justify-between">
-              <div className="space-y-1">w
+              <div className="space-y-1">
                   <h3 className="text-lg font-semibold flex items-center gap-2">
                       {fiscalStatus.allGood ? (
                           <ShieldCheck className="h-6 w-6 text-green-600" />

@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session,joinedload
 from .. import models, schemas
 from ..database import get_db
 from typing import List
@@ -76,3 +76,53 @@ def delete_perfil_abertura(id: int, db: Session = Depends(get_db)):
     if not db_perfil: raise HTTPException(status_code=404)
     db.delete(db_perfil)
     db.commit()
+
+@router.get("/hardware/impressoras", response_model=List[schemas.Impressora])
+def list_impressoras(db: Session = Depends(get_db)):
+    return db.query(models.Impressora).all()
+
+@router.post("/hardware/impressoras", response_model=schemas.Impressora)
+def create_impressora(impressora: schemas.ImpressoraCreate, db: Session = Depends(get_db)):
+    db_imp = models.Impressora(**impressora.dict())
+    db.add(db_imp)
+    db.commit()
+    db.refresh(db_imp)
+    return db_imp
+
+@router.delete("/hardware/impressoras/{id}", status_code=204)
+def delete_impressora(id: int, db: Session = Depends(get_db)):
+    # Verifica se está em uso
+    uso = db.query(models.Pdv).filter(models.Pdv.impressora_id == id).first()
+    if uso:
+        raise HTTPException(status_code=400, detail=f"Impressora em uso no {uso.nome}")
+    
+    db.query(models.Impressora).filter(models.Impressora.id == id).delete()
+    db.commit()
+
+# --- PDVS (Gestão) ---
+@router.get("/hardware/pdvs", response_model=List[schemas.Pdv])
+def list_pdvs_config(db: Session = Depends(get_db)):
+    # Retorna todos os PDVs com suas impressoras
+    return db.query(models.Pdv).options(joinedload(models.Pdv.impressora)).all()
+
+@router.post("/hardware/pdvs", response_model=schemas.Pdv)
+def create_pdv_config(pdv: schemas.PdvCreate, db: Session = Depends(get_db)):
+    db_pdv = models.Pdv(**pdv.dict(), status='fechado')
+    db.add(db_pdv)
+    db.commit()
+    db.refresh(db_pdv)
+    return db_pdv
+
+@router.put("/hardware/pdvs/{id}", response_model=schemas.Pdv)
+def update_pdv_config(id: int, pdv_update: schemas.PdvUpdate, db: Session = Depends(get_db)):
+    db_pdv = db.query(models.Pdv).filter(models.Pdv.id == id).first()
+    if not db_pdv: raise HTTPException(status_code=404)
+    
+    if pdv_update.nome: db_pdv.nome = pdv_update.nome
+    if pdv_update.impressora_id is not None: 
+        # Se enviou 0 ou -1, remove a impressora
+        db_pdv.impressora_id = pdv_update.impressora_id if pdv_update.impressora_id > 0 else None
+        
+    db.commit()
+    db.refresh(db_pdv)
+    return db_pdv

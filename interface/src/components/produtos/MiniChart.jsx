@@ -45,7 +45,6 @@ export default function MiniChart({
                 </linearGradient>
             </defs>
             
-            {/* ✅ 4. Trocado <Line> por <Area> */}
             <Area
               dataKey={dataKey}
               type="monotone"

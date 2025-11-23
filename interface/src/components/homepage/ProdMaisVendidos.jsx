@@ -18,7 +18,7 @@ import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/
 const chartConfig = {
   totalSales: {
     label: "Vendas (R$)",
-    color: "hsl(var(--chart-1))", // Usa o token de cor da paleta de gráficos
+    color: "hsl(var(--primary))", // Usa o token de cor da paleta de gráficos
   },
 }
 
@@ -86,7 +86,7 @@ const [chartData, setChartData] = React.useState([]);
               {/* ✅ Aqui a cor vem do ChartContainer */}
               <Bar
                 dataKey="totalSales"
-                fill="var(--chart-1)"
+                fill="var(--primary)"
                 radius={4}
                 barSize={25}
               >

@@ -22,21 +22,16 @@ export default function ComprasPageLayout({
           </div>
         </div>
 
-        {/* --- CORPO PRINCIPAL: mantém as duas colunas (4fr / 6fr) --- */}
         <div className="flex-1 grid grid-cols-[4fr_6fr] gap-2 min-h-0">
-          {/* Coluna Esquerda — Painel lateral, dentro do seu próprio card */}
           <div className="bg-card p-4 flex flex-col overflow-auto min-h-0 rounded-xl">
             {SidePanel || "[PAINEL LATERAL]"}
           </div>
 
-          {/* Coluna Direita — Conteúdo principal (lista rolável) + subtotal em card separado */}
           <div className="flex flex-col min-h-0 gap-2">
-            {/* Card do conteúdo principal (rolável) */}
             <div className="bg-card p-4 flex-1 overflow-auto min-h-0 rounded-xl">
               {MainContent || "[CONTEÚDO PRINCIPAL]"}
             </div>
 
-            {/* Card do subtotal — separado, alinhado só à coluna direita */}
             <div>
               <div className="bg-card p-4 rounded-xl">
                 {Resume || "[SUBTOTAL]"}
