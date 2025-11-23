@@ -24,7 +24,7 @@ export default function PosSidePanel({ lastItem }) {
   return (
     <div className="h-full w-full flex flex-col justify-between font-mono">
       {/* 🧭 SEÇÃO SUPERIOR */}
-      <div className="flex flex-col gap-2 flex-1 justify-center">
+      <div className="flex flex-col gap-2 flex-1 justify-cetopnter">
         {!lastItem ? (
           // Estado "aguardando produto"
           <div className="flex flex-col items-center justify-center text-center text-muted-foreground h-full">
