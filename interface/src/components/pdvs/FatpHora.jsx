@@ -113,7 +113,7 @@ export default function HourlyRevenueChart({ pdv }) {
               </defs>
               <Area
                 dataKey="revenue"
-                type="natural"
+                type="bumpX"
                 fill="url(#fillGradient)"
                 stroke={`var(--primary`}
                 strokeWidth={2}

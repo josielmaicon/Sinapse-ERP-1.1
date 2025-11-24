@@ -47,7 +47,7 @@ export default function MiniChart({
             
             <Area
               dataKey={dataKey}
-              type="monotone"
+              type="bumpX"
               stroke={lineColor}
               strokeWidth={2}
               fill="url(#fillGradient)" // Usa o gradiente definido acima
