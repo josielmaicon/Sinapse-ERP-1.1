@@ -29,11 +29,13 @@ import {
     QrCode, 
     Banknote, 
     Wallet, 
+    Badge,
+    RefreshCcw,
     Edit,
     Percent,
     DollarSign
 } from "lucide-react"
-import { Separator } from "@/components/ui/separator" // Adicionei se quiser usar
+import { Separator } from "@/components/ui/separator"
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -42,16 +44,17 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb"
-import { Kbd } from "@/components/ui/kbd"
 import CardBodyT from "@/components/CardBodyT"
-// Certifique-se que este arquivo existe com esse nome:
-import { PaymentMethodModal } from "./ModalFormPag" 
+import { PaymentMethodModal } from "./ModalFormPag"
+import { PixOverrideModal } from "./ModalSubsPix"
 
 const API_URL = "http://localhost:8000";
 
 export default function FinanceiroSettingsPage() {
   const [isLoading, setIsLoading] = React.useState(false); 
   const [isModalOpen, setIsModalOpen] = React.useState(false);
+  const [isPixModalOpen, setIsPixModalOpen] = React.useState(false); // Estado do modal PIX
+  const [isProcessingJuros, setIsProcessingJuros] = React.useState(false);
 
   // Estados REAIS
   const [paymentMethods, setPaymentMethods] = React.useState([]);
@@ -68,6 +71,35 @@ export default function FinanceiroSettingsPage() {
       diasCarencia: "0"
   });
 
+const handleProcessarJuros = async () => {
+    if(!confirm("ATENÇÃO: Isso irá calcular e aplicar juros...")) return;
+    
+    setIsProcessingJuros(true);
+    try {
+        // ✅ Adicione o /api se o seu backend usar prefixo global
+        // (Baseado nos seus logs anteriores, parece que você removeu o /api global, então use /rotinas)
+        const res = await fetch(`${API_URL}/rotinas/processar-juros`, { method: 'POST' });
+        
+        // Tenta ler o JSON mesmo se der erro
+        const data = await res.json().catch(() => ({ detail: "Erro desconhecido (JSON inválido)" }));
+        
+        if (res.ok) {
+            toast.success("Rotina finalizada!", {
+                description: `${data.cobrancas_geradas} clientes cobrados.`
+            });
+        } else {
+            console.error("Erro API Juros:", data); // Olha no console (F12)
+            throw new Error(data.detail || `Erro HTTP: ${res.status}`);
+        }
+    } catch (e) {
+        console.error(e);
+        toast.error("Erro ao processar juros", { description: e.message });
+    } finally {
+        setIsProcessingJuros(false);
+    }
+  };
+
+
   // --- FETCH DATA ---
   const fetchData = React.useCallback(async () => {
       try {
@@ -75,16 +107,29 @@ export default function FinanceiroSettingsPage() {
           const resMethods = await fetch(`${API_URL}/configuracoes/financeiro/metodos`);
           if (resMethods.ok) setPaymentMethods(await resMethods.json());
 
-          // 2. Configurações Gerais
+          // 2. Configurações Gerais (Onde fica o PIX e Crediário global)
           const resConfig = await fetch(`${API_URL}/configuracoes/geral`);
+          
+          // 3. Overrides de PIX (Lista de PDVs)
+          const resOverrides = await fetch(`${API_URL}/configuracoes/financeiro/pix/overrides`);
+          let overridesData = [];
+          
+          if (resOverrides.ok) {
+              const allPdvs = await resOverrides.json();
+              // Filtra apenas os que têm override configurado
+              overridesData = allPdvs.filter(p => p.pix_chave_especifica);
+          }
+
           if (resConfig.ok) {
               const data = await resConfig.json();
+              
+              console.log("Dados carregados do Banco:", data); // DEBUG
+
               setPixSettings(prev => ({
                   ...prev,
                   chavePadrao: data.pix_chave_padrao || "",
                   tipoChave: data.pix_tipo_chave || "cnpj",
-                  // Se o backend enviar overrides no futuro, mapeie aqui
-                  pdvOverrides: [] 
+                  pdvOverrides: overridesData // ✅ Usa os overrides reais
               }));
               setCrediarioRules({
                   multaAtraso: String(data.crediario_multa || 0),
@@ -97,10 +142,10 @@ export default function FinanceiroSettingsPage() {
 
   React.useEffect(() => { fetchData(); }, [fetchData]);
 
+  // --- HANDLERS ---
+
   const handleToggleMethod = async (id, currentStatus, currentData) => {
-      // Otimismo UI
       setPaymentMethods(prev => prev.map(m => m.id === id ? { ...m, ativo: !currentStatus } : m));
-      
       try {
           await fetch(`${API_URL}/configuracoes/financeiro/metodos/${id}`, {
               method: 'PUT',
@@ -110,26 +155,51 @@ export default function FinanceiroSettingsPage() {
           toast.success("Status atualizado.");
       } catch (e) {
           toast.error("Erro ao salvar.");
-          fetchData(); // Reverte
+          fetchData(); 
       }
   };
 
-  // Salvar PIX (PUT /regras)
-  const handleSavePix = async (e) => {
-      e.preventDefault();
-      setIsLoading(true);
+  // Handler para remover override de PIX
+  const handleDeleteOverride = async (pdvId) => {
       try {
-          await fetch(`${API_URL}/configuracoes/financeiro/regras`, {
+          await fetch(`${API_URL}/configuracoes/financeiro/pix/overrides/${pdvId}`, {
               method: 'PUT',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ 
-                  pix_chave_padrao: pixSettings.chavePadrao,
-                  pix_tipo_chave: pixSettings.tipoChave
-              })
+              body: JSON.stringify({ pix_chave_especifica: null, pix_tipo_especifico: null })
           });
+          toast.success("Exceção removida.");
+          fetchData();
+      } catch (e) { toast.error("Erro ao remover."); }
+  };
+
+  // ✅ Salvar PIX (PUT /regras) - CORRIGIDO COM DEBUG
+  const handleSavePix = async (e) => {
+      e.preventDefault();
+      console.log("Botão Salvar PIX clicado!"); // DEBUG: Se não aparecer, o botão não está ligado
+
+      setIsLoading(true);
+      try {
+          const payload = { 
+              pix_chave_padrao: pixSettings.chavePadrao,
+              pix_tipo_chave: pixSettings.tipoChave
+          };
+          console.log("Enviando payload PIX:", payload);
+
+          const res = await fetch(`${API_URL}/configuracoes/financeiro/regras`, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(payload)
+          });
+
+          if (!res.ok) throw new Error("Falha na API");
+
           toast.success("Configuração PIX salva!");
-      } catch (e) { toast.error("Erro ao salvar."); }
-      finally { setIsLoading(false); }
+      } catch (e) { 
+          console.error(e);
+          toast.error("Erro ao salvar."); 
+      } finally { 
+          setIsLoading(false); 
+      }
   };
 
   // Salvar Crediário (PUT /regras)
@@ -151,7 +221,6 @@ export default function FinanceiroSettingsPage() {
       finally { setIsLoading(false); }
   };
 
-  // Helper para ícones
   const getMethodIcon = (type) => {
       switch(type) {
           case 'especie': return <Banknote className="h-4 w-4 text-green-600" />;
@@ -161,14 +230,6 @@ export default function FinanceiroSettingsPage() {
           case 'crediario': return <Wallet className="h-4 w-4 text-orange-600" />;
           default: return <CreditCard className="h-4 w-4 text-muted-foreground" />;
       }
-  };
-
-  const handleSaveGeneric = async (e, section) => {
-      e.preventDefault();
-      setIsLoading(true);
-      await new Promise(res => setTimeout(res, 1000)); 
-      toast.success(`${section} salvas com sucesso!`);
-      setIsLoading(false);
   };
 
   return (
@@ -187,7 +248,7 @@ export default function FinanceiroSettingsPage() {
       </Breadcrumb>
       
       {/* SEÇÃO 1: FORMAS DE PAGAMENTO */}
-      <CardBodyT title="Formas de Pagamento" subtitle="Gerencie quais métodos são aceitos no PDV e suas taxas administrativas.">
+      <CardBodyT title="Formas de Pagamento" subtitle="Gerencie quais métodos são aceitos no PDV.">
           <div className="pt-6 space-y-4">
               <div className="flex justify-end">
                   <Button size="sm" onClick={() => setIsModalOpen(true)}>
@@ -199,7 +260,6 @@ export default function FinanceiroSettingsPage() {
                       <TableHeader className="sticky top-0 bg-card z-10 shadow-sm">
                           <TableRow>
                               <TableHead>Método</TableHead>
-                              <TableHead>Atalho</TableHead>
                               <TableHead>Tipo</TableHead>
                               <TableHead>Taxa (%)</TableHead>
                               <TableHead>Ativo no PDV</TableHead>
@@ -212,11 +272,8 @@ export default function FinanceiroSettingsPage() {
                                       <div className="p-2 bg-muted rounded-md">{getMethodIcon(method.tipo)}</div>
                                       {method.nome}
                                   </TableCell>
-                                  <TableCell>
-                                    {method.hotkey ? <Kbd>{method.hotkey}</Kbd> : <span className="text-muted-foreground text-xs">-</span>}
-                                </TableCell>
                                   <TableCell className="capitalize text-muted-foreground">{method.tipo}</TableCell>
-                                  <TableCell>{method.taxa > 0 ? `${method.taxa}%` : 'Isento'}</TableCell>
+                                  <TableCell>{method.taxa}%</TableCell>
                                   <TableCell>
                                       <Switch 
                                           checked={method.ativo}
@@ -232,7 +289,8 @@ export default function FinanceiroSettingsPage() {
       </CardBodyT>
 
       {/* SEÇÃO 2: CONFIGURAÇÃO PIX */}
-      <form onSubmit={handleSavePix}>
+      {/* ✅ ID DO FORMULÁRIO ADICIONADO */}
+      <form id="form-pix" onSubmit={handleSavePix}>
           <CardBodyT title="Configuração PIX" subtitle="Defina as chaves para geração de QR Code nos caixas.">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-8 pt-6">
                   
@@ -269,100 +327,101 @@ export default function FinanceiroSettingsPage() {
                       </div>
                   </div>
 
-                  {/* Lado Direito: Overrides por PDV (RESTAURADO) */}
+                  {/* Lado Direito: Overrides por PDV */}
                   <div className="space-y-4 border-l pl-6 md:pl-8">
                       <div className="flex items-center justify-between">
                           <div className="space-y-1">
                               <h4 className="font-medium">Chaves Específicas por PDV</h4>
                               <p className="text-xs text-muted-foreground">Use se algum caixa precisar receber em outra conta.</p>
                           </div>
-                          <Button type="button" variant="ghost" size="sm" className="h-8" onClick={() => toast.info("Em breve: Adicionar exceção")}>
+                          <Button type="button" variant="ghost" size="sm" className="h-8" onClick={() => setIsPixModalOpen(true)}>
                               <Plus className="h-3 w-3 mr-1"/> Adicionar
                           </Button>
                       </div>
                       
-                      <div className="space-y-3">
+                      <div className="space-y-3 max-h-[200px] overflow-y-auto">
                           {pixSettings.pdvOverrides.length === 0 && (
                               <div className="h-24 flex items-center justify-center border-2 border-dashed rounded-md">
                                   <p className="text-sm text-muted-foreground italic">Nenhuma exceção configurada.</p>
                               </div>
                           )}
-                          {/* (Aqui viria o .map dos overrides se houvesse) */}
+                          
+                          {pixSettings.pdvOverrides.map(pdv => (
+                              <div key={pdv.id} className="flex items-center gap-3 p-3 bg-muted/30 rounded-md border group">
+                                  <div className="flex-1">
+                                      <p className="text-sm font-medium">{pdv.nome}</p>
+                                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                                          <Badge variant="outline" className="text-[10px] h-5 px-1">{pdv.pix_tipo_especifico}</Badge>
+                                          <span className="font-mono">{pdv.pix_chave_especifica}</span>
+                                      </div>
+                                  </div>
+                                  <Button 
+                                      type="button" variant="ghost" size="icon" 
+                                      className="h-6 w-6 text-destructive opacity-0 group-hover:opacity-100 transition-opacity"
+                                      onClick={() => handleDeleteOverride(pdv.id)}
+                                  >
+                                      <Trash2 className="h-3 w-3" />
+                                  </Button>
+                              </div>
+                          ))}
                       </div>
                   </div>
               </div>
               
               <div className="pt-5 flex justify-end">
-                   <Button type="submit" disabled={isLoading}>
+                   {/* ✅ VÍNCULO EXPLÍCITO COM O FORMULÁRIO */}
+                   <Button type="submit" form="form-pix" disabled={isLoading}>
                        {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : "Salvar Configurações PIX"}
                    </Button>
               </div>
           </CardBodyT>
       </form>
 
-      {/* SEÇÃO 3: REGRAS DE CREDIÁRIO */}
-      <form onSubmit={handleSaveCrediario}>
+      <form id="form-crediario" onSubmit={handleSaveCrediario}>
           <CardBodyT title="Regras de Crediário" subtitle="Defina juros e multas automáticas para clientes em atraso.">
               <div className="flex flex-col gap-6 pt-6">
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                      
-                      {/* Multa */}
                       <div className="space-y-2">
-                          <Label className="flex items-center gap-2">
-                              <DollarSign className="h-4 w-4 text-amber-600" /> Multa por Atraso (R$)
-                          </Label>
-                          <Input 
-                              type="number" 
-                              step="0.01" 
-                              value={crediarioRules.multaAtraso} 
-                              onChange={e => setCrediarioRules({...crediarioRules, multaAtraso: e.target.value})}
-                          />
-                          <p className="text-xs text-muted-foreground">Valor fixo cobrado uma única vez após o vencimento.</p>
+                          <Label className="flex items-center gap-2"><DollarSign className="h-4 w-4 text-amber-600" /> Multa por Atraso (R$)</Label>
+                          <Input type="number" step="0.01" value={crediarioRules.multaAtraso} onChange={e => setCrediarioRules({...crediarioRules, multaAtraso: e.target.value})} />
                       </div>
-
-                      {/* Juros */}
                       <div className="space-y-2">
-                          <Label className="flex items-center gap-2">
-                              <Percent className="h-4 w-4 text-blue-600" /> Juros ao Mês (%)
-                          </Label>
-                          <Input 
-                              type="number" 
-                              step="0.1" 
-                              value={crediarioRules.jurosMensais} 
-                              onChange={e => setCrediarioRules({...crediarioRules, jurosMensais: e.target.value})}
-                          />
-                          <p className="text-xs text-muted-foreground">Juros compostos calculados pro-rata dia.</p>
+                          <Label className="flex items-center gap-2"><Percent className="h-4 w-4 text-blue-600" /> Juros ao Mês (%)</Label>
+                          <Input type="number" step="0.1" value={crediarioRules.jurosMensais} onChange={e => setCrediarioRules({...crediarioRules, jurosMensais: e.target.value})} />
                       </div>
-
-                      {/* Carência */}
                       <div className="space-y-2">
-                          <Label className="flex items-center gap-2">
-                              <Wallet className="h-4 w-4 text-green-600" /> Dias de Carência
-                          </Label>
-                          <Input 
-                              type="number" 
-                              value={crediarioRules.diasCarencia} 
-                              onChange={e => setCrediarioRules({...crediarioRules, diasCarencia: e.target.value})}
-                          />
-                          <p className="text-xs text-muted-foreground">Dias após o vencimento antes de aplicar juros/multa.</p>
+                          <Label className="flex items-center gap-2"><Wallet className="h-4 w-4 text-green-600" /> Dias de Carência</Label>
+                          <Input type="number" value={crediarioRules.diasCarencia} onChange={e => setCrediarioRules({...crediarioRules, diasCarencia: e.target.value})} />
                       </div>
                   </div>
               </div>
               
-              <div className="pt-5 flex justify-end">
-                   <Button type="submit" disabled={isLoading}>
-                       {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : "Salvar Regras Financeiras"}
-                   </Button>
-              </div>
+            <div className="pt-5 flex justify-between items-center">
+                {/* Botão de Teste (Lado Esquerdo) */}
+                <Button 
+                    type="button" 
+                    variant="secondary" 
+                    className="text-amber-600 border-amber-200 bg-amber-50 hover:bg-amber-100"
+                    onClick={handleProcessarJuros}
+                    disabled={isProcessingJuros}
+                >
+                    {isProcessingJuros ? <Loader2 className="animate-spin mr-2 h-4 w-4"/> : <RefreshCcw className="mr-2 h-4 w-4"/>}
+                    Rodar Processamento de Juros (Manual)
+                </Button>
+
+                {/* Botão Salvar (Lado Direito) */}
+                <Button type="submit" form="form-crediario" disabled={isLoading}>
+                    {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : "Salvar Regras Financeiras"}
+                </Button>
+            </div>
+
           </CardBodyT>
       </form>
 
-      {/* Modal */}
-      <PaymentMethodModal 
-          open={isModalOpen} 
-          onOpenChange={setIsModalOpen} 
-          onSuccess={fetchData} 
-      />
+      {/* Modais */}
+      <PaymentMethodModal open={isModalOpen} onOpenChange={setIsModalOpen} onSuccess={fetchData} />
+      <PixOverrideModal open={isPixModalOpen} onOpenChange={setIsPixModalOpen} onSuccess={fetchData} />
+
     </div>
   );
 }

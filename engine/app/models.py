@@ -1,4 +1,4 @@
-from sqlalchemy import (Column, Integer, String, Date, Float, DateTime, ForeignKey, Boolean, Enum, Table)
+from sqlalchemy import (Column, Integer, String, Date, Float, DateTime, ForeignKey, Boolean, Enum, LargeBinary, Table)
 from sqlalchemy.orm import relationship
 from .database import Base
 from datetime import datetime
@@ -170,6 +170,8 @@ class Pdv(Base):
     vendas = relationship("Venda", back_populates="pdv")
     movimentacoes_caixa = relationship("MovimentacaoCaixa", back_populates="pdv")
     solicitacoes = relationship("Solicitacao", back_populates="pdv")
+    pix_chave_especifica = Column(String(100), nullable=True)
+    pix_tipo_especifico = Column(String(20), nullable=True)  
 
 class Venda(Base):
     __tablename__ = "vendas"
@@ -319,6 +321,41 @@ class Empresa(Base):
     crediario_multa = Column(Float, default=0.0) # Valor fixo ou %
     crediario_juros_mensal = Column(Float, default=0.0) # %
     crediario_dias_carencia = Column(Integer, default=0)
+
+    regime_tributario = Column(String(20), default="simples") # simples, presumido, real, mei
+    inscricao_estadual = Column(String(20))
+    inscricao_municipal = Column(String(20))
+    
+    # Token CSC (Para NFC-e)
+    csc_id = Column(String(10)) # "000001"
+    csc_token = Column(String(100)) # "ASJDA-123..."
+
+    # Padrões de Cadastro (Para agilizar produtos)
+    padrao_ncm = Column(String(15))
+    padrao_cfop_dentro = Column(String(5), default="5.102")
+    padrao_cfop_fora = Column(String(5), default="6.102")
+    padrao_csosn = Column(String(5), default="102") # Ou CST
+
+    # Regras de Envio (Sua Ideia!)
+    ambiente_sefaz = Column(String(10), default="homologacao") # homologacao / producao
+    tentativas_envio_automatico = Column(Boolean, default=True)
+    intervalo_tentativas_minutos = Column(Integer, default=15) # Robô de retransmissão
+
+class CertificadoDigital(Base):
+    __tablename__ = "certificados_digitais"
+    
+    id = Column(Integer, primary_key=True)
+    empresa_id = Column(Integer, ForeignKey("empresa_config.id"))
+    
+    nome_arquivo = Column(String(100))
+    senha_arquivo = Column(String(100)) # (Idealmente criptografada)
+    data_validade = Column(DateTime)
+    emissor = Column(String(100))
+    serial_number = Column(String(100))
+    
+    conteudo_pfx = Column(LargeBinary) 
+    
+    ativo = Column(Boolean, default=True)
 
 class PerfilAbertura(Base):
     __tablename__ = "perfis_abertura"

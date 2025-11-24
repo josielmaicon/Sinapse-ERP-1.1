@@ -600,7 +600,6 @@ export function PaymentModal({ open, onOpenChange, cartItems, pdvSession, onSale
       </DialogContent>
     </Dialog>
     
-    {/* MODAIS AUXILIARES */}
     <ClientSelectionModal 
         open={isClientModalOpen}
         onOpenChange={setIsClientModalOpen}

@@ -169,3 +169,24 @@ class Pdv(BaseModel): # Schema de leitura
     # ... outros campos ...
     class Config:
         from_attributes = True
+
+class PdvBase(BaseModel):
+    nome: str
+    status: str = 'fechado'
+    # Adicione se quiser retornar sempre, ou use um schema específico para config
+    pix_chave_especifica: Optional[str] = None
+    pix_tipo_especifico: Optional[str] = None
+
+class PdvUpdatePix(BaseModel):
+    """Schema específico para atualizar apenas o PIX do PDV"""
+    pix_chave_especifica: Optional[str] = None # Enviar null para remover override
+    pix_tipo_especifico: Optional[str] = None
+
+# ... (Atualize o schema Pdv de leitura para incluir os campos)
+class Pdv(PdvBase):
+    id: int
+    machine_id: Optional[str] = None
+    impressora: Optional[Impressora] = None
+    
+    class Config:
+        from_attributes = True

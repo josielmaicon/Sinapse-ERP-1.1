@@ -53,3 +53,26 @@ def update_financeiro_rules(data: dict, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(config)
     return config
+
+@router.get("/pix/overrides", response_model=List[schemas.Pdv])
+def list_pdv_pix_overrides(db: Session = Depends(get_db)):
+    """Lista todos os PDVs (para preencher o select ou mostrar a lista de exceções)."""
+    # Retorna todos, o front filtra ou mostra status
+    return db.query(models.Pdv).all()
+
+@router.put("/pix/overrides/{pdv_id}", response_model=schemas.Pdv)
+def update_pdv_pix_override(
+    pdv_id: int, 
+    pix_data: schemas.PdvUpdatePix, 
+    db: Session = Depends(get_db)
+):
+    """Define ou remove (se enviar null) a chave PIX específica de um PDV."""
+    pdv = db.query(models.Pdv).filter(models.Pdv.id == pdv_id).first()
+    if not pdv: raise HTTPException(status_code=404, detail="PDV não encontrado")
+    
+    pdv.pix_chave_especifica = pix_data.pix_chave_especifica
+    pdv.pix_tipo_especifico = pix_data.pix_tipo_especifico
+    
+    db.commit()
+    db.refresh(pdv)
+    return pdv
