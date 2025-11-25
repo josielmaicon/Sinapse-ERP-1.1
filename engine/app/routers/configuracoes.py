@@ -1,4 +1,5 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, APIRouter, Depends, HTTPException, status, UploadFile, File, Form
+from datetime import datetime, timedelta # Para simular validade
 from sqlalchemy.orm import Session,joinedload
 from .. import models, schemas
 from ..database import get_db
@@ -126,3 +127,78 @@ def update_pdv_config(id: int, pdv_update: schemas.PdvUpdate, db: Session = Depe
     db.commit()
     db.refresh(db_pdv)
     return db_pdv
+
+@router.put("/fiscal/regras", response_model=schemas.EmpresaConfig)
+def update_fiscal_rules(regras: dict, db: Session = Depends(get_db)):
+    """Atualiza campos fiscais na tabela Empresa."""
+    config = db.query(models.Empresa).filter(models.Empresa.id == 1).first()
+    if not config: raise HTTPException(status_code=404)
+    
+    # Mapeamento dinâmico seguro
+    campos_permitidos = [
+        "regime_tributario", "inscricao_estadual", "inscricao_municipal",
+        "csc_id", "csc_token", "padrao_ncm", "padrao_cfop_dentro",
+        "padrao_cfop_fora", "padrao_csosn", "ambiente_sefaz", "tentativas_envio"
+    ]
+    
+    for campo in campos_permitidos:
+        if campo in regras:
+            setattr(config, campo, regras[campo])
+            
+    db.commit()
+    db.refresh(config)
+    return config
+
+# ✅ UPLOAD DE CERTIFICADO (SIMULADO)
+@router.post("/fiscal/certificado", response_model=schemas.CertificadoInfo)
+async def upload_certificado(
+    file: UploadFile = File(...),
+    senha: str = Form(...), # Recebe via Form-Data
+    db: Session = Depends(get_db)
+):
+    """
+    Recebe o arquivo .pfx, salva no banco e simula a leitura dos dados.
+    (Futuro: Usar biblioteca 'cryptography' para ler validade real)
+    """
+    
+    # 1. Ler o arquivo
+    conteudo = await file.read()
+    
+    # 2. Simulação de Leitura (Mock)
+    # Vamos fingir que lemos o certificado e ele vence em 1 ano
+    validade_simulada = datetime.utcnow() + timedelta(days=365)
+    titular_simulado = "MINHA EMPRESA LTDA (Simulado)"
+    emissor_simulado = "Autoridade Certificadora Raiz"
+    
+    # 3. Salvar no Banco
+    db_cert = models.CertificadoDigital(
+        empresa_id=1,
+        nome_arquivo=file.filename,
+        senha_arquivo=senha, # Cuidado: Em prod, criptografar!
+        arquivo_binario=conteudo,
+        
+        # Dados extraídos (Simulados)
+        titular=titular_simulado,
+        emissor=emissor_simulado,
+        data_validade=validade_simulada,
+        serial_number="12345678900",
+        ativo=True
+    )
+    
+    # Desativar outros certificados da mesma empresa? (Regra de negócio: só 1 ativo)
+    # db.query(models.CertificadoDigital).update({"ativo": False})
+    
+    db.add(db_cert)
+    db.commit()
+    db.refresh(db_cert)
+    
+    return db_cert
+
+@router.get("/fiscal/certificados", response_model=List[schemas.CertificadoInfo])
+def list_certificados(db: Session = Depends(get_db)):
+    return db.query(models.CertificadoDigital).filter(models.CertificadoDigital.empresa_id == 1).all()
+    
+@router.delete("/fiscal/certificados/{id}", status_code=204)
+def delete_certificado(id: int, db: Session = Depends(get_db)):
+    db.query(models.CertificadoDigital).filter(models.CertificadoDigital.id == id).delete()
+    db.commit()
