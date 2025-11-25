@@ -202,3 +202,25 @@ def list_certificados(db: Session = Depends(get_db)):
 def delete_certificado(id: int, db: Session = Depends(get_db)):
     db.query(models.CertificadoDigital).filter(models.CertificadoDigital.id == id).delete()
     db.commit()
+
+@router.put("/conexoes", response_model=schemas.EmpresaConfig)
+def update_conexoes_config(regras: dict, db: Session = Depends(get_db)):
+    """Atualiza as configurações de integrações externas."""
+    config = db.query(models.Empresa).filter(models.Empresa.id == 1).first()
+    if not config: raise HTTPException(status_code=404)
+    
+    campos_permitidos = [
+        "api_produtos_ativo", "api_produtos_token",
+        "ecommerce_ativo", "ecommerce_url", "ecommerce_key", "ecommerce_secret",
+        "ifood_ativo", "ifood_merchant_id", "ifood_auto_aceitar",
+        "whatsapp_ativo", "whatsapp_sessao",
+        "contabilidade_email", "contabilidade_sistema", "contabilidade_auto_envio"
+    ]
+    
+    for campo in campos_permitidos:
+        if campo in regras:
+            setattr(config, campo, regras[campo])
+            
+    db.commit()
+    db.refresh(config)
+    return config

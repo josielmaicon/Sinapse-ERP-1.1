@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { NavLink, Outlet, useLocation } from "react-router-dom"
+import { NavLink, Outlet, useLocation, Link, useNavigate } from "react-router-dom"
 import { cn } from "@/lib/utils"
 import { 
     Settings, 
@@ -11,11 +11,10 @@ import {
     FileText, 
     Zap,
     Home,
-    Search // ✅ Importar o Ícone de Busca
+    ArrowLeft,
 } from "lucide-react"
 import Logo from "@/components/Logo"
 import { Input } from "@/components/ui/input" // ✅ Importar o Input
-// ✅ Imports para o novo Breadcrumb (migalha de pão)
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -24,6 +23,8 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb"
+import { Button } from "@/components/ui/button"
+import { SettingsCommandMenu } from "@/components/configuracoes/buscageral"
 
 // --- Componentes Internos do Layout (Sem mudanças) ---
 const SidebarContext = React.createContext(null);
@@ -89,26 +90,13 @@ function ConfigSidebarNav() {
           <span className="flex-1">{item.label}</span>
         </NavLink>
       ))}
-      
-      <div className="pt-4 mt-4 border-t">
-         <NavLink
-          to="/" // Link para o Dashboard Principal
-          className={
-            "flex items-center gap-3 rounded-md px-3 py-2 text-base font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-          }
-        >
-          <Home className="h-5 w-5 flex-shrink-0" />
-          <span className="flex-1">Voltar ao Dashboard</span>
-        </NavLink>
-      </div>
     </nav>
   );
 }
 
-// ✅ NOVO COMPONENTE: O Header com a Busca
 function ConfigHeader() {
     const location = useLocation();
-    
+    const navigate = useNavigate();
     // Encontra o 'label' do item atual baseado na URL
     const currentItem = [...configNavItems].reverse().find(item => 
         location.pathname.startsWith(item.href)
@@ -133,50 +121,46 @@ function ConfigHeader() {
                     </BreadcrumbList>
                 </Breadcrumb>
             </div> */}
-            
-            {/* 2. Busca Global (Seu "Ctrl+F") */}
-            <div className="relative w-full max-w-sm ">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input 
-                    placeholder="Buscar em todas as configurações... (Ctrl+K)" 
-                    className="pl-9" 
-                    // No futuro, isso ativará um Command Palette (como o do VS Code)
-                    // onFocus={() => setIsCommandPaletteOpen(true)}
-                />
-            </div>
-        </header>
+              <div className="max-w-sm flex items-center justify-end gap-5">
+                  <SettingsCommandMenu />
+                <Button 
+                    variant="ghost" 
+                    size="icon" 
+                    onClick={() => navigate("/")} 
+                    title="Voltar ao Dashboard"
+                    className="h-8 w-8 -ml-2 text-muted-foreground hover:text-foreground"
+                >
+                    <Home className="h-5 w-5" />
+                </Button>
+              </div>
+              </header>
     );
 }
 
 
 // --- O LAYOUT PRINCIPAL DO "CASTELO" ---
 export default function ConfiguracoesPage() {
-  return (
-    <SidebarProvider>
-          <Sidebar>
-              <NavLink 
-                to="/" 
-                className="flex justify-start" 
-                title="Voltar ao Dashboard">
-                <div className="flex h-17 shrink-0 items-start bg-background pl-5 pt-1 pb-25">
-                  <Logo variant="full" size="140px" />
-                </div>
-              </NavLink>
-
-              <ConfigSidebarNav />
-          </Sidebar>
-          
-          {/* O Lado Direito (Conteúdo) */}
-          <SidebarInset>
-            {/* ✅ 1. O HEADER (renderizado no topo do conteúdo) */}
+  return (
+    <SidebarProvider>
+          <Sidebar>
+              <div className="p-6 pb-8 flex justify-start">
+                  <Link 
+                    to="/" 
+                    className="block hover:opacity-80 transition-opacity"
+                    title="Ir para Início"
+                  >
+                    <Logo variant="full" size="140px" />
+                  </Link>
+              </div>
+              <ConfigSidebarNav />
+          </Sidebar>
+          
+          <SidebarInset>
             <ConfigHeader />
-            
-            {/* ✅ 2. O CONTEÚDO (renderizado abaixo do header) */}
-            {/* O Outlet agora está envolvido por um 'div' que dá o padding */}
             <div className="flex-1 overflow-y-auto p-6 lg:p-8">
-                <Outlet />
+                <Outlet />
             </div>
-          </SidebarInset>
-    </SidebarProvider>
-  )
+          </SidebarInset>
+    </SidebarProvider>
+  )
 }

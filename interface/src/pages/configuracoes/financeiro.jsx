@@ -45,8 +45,8 @@ import {
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb"
 import CardBodyT from "@/components/CardBodyT"
-import { PaymentMethodModal } from "./ModalFormPag"
-import { PixOverrideModal } from "./ModalSubsPix"
+import { PaymentMethodModal } from "../../components/configuracoes/ModalFormPag"
+import { PixOverrideModal } from "../../components/configuracoes/ModalSubsPix"
 
 const API_URL = "http://localhost:8000";
 

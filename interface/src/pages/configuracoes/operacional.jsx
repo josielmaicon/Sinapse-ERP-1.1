@@ -48,8 +48,8 @@ import {
 } from "@/components/ui/breadcrumb"
 import CardBodyT from "@/components/CardBodyT" // Seu componente padrão
 import { Separator } from "@/components/ui/separator"
-import { ProfileModal } from "./modalPerfil"
-import { PrinterModal, PdvConfigModal } from "./ModalHardware"
+import { ProfileModal } from "../../components/configuracoes/modalPerfil"
+import { PrinterModal, PdvConfigModal } from "../../components/configuracoes/ModalHardware"
 
 const API_URL = "http://localhost:8000";
 

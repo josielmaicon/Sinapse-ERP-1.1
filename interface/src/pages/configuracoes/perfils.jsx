@@ -55,7 +55,7 @@ import {
 } from "@/components/ui/breadcrumb"
 import CardBodyT from "@/components/CardBodyT"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { UserModal } from "./ModalCriacaoUser"
+import { UserModal } from "../../components/configuracoes/ModalCriacaoUser"
 
 const API_URL = "http://localhost:8000";
 

@@ -322,40 +322,65 @@ class Empresa(Base):
     crediario_juros_mensal = Column(Float, default=0.0) # %
     crediario_dias_carencia = Column(Integer, default=0)
 
-    regime_tributario = Column(String(20), default="simples") # simples, presumido, real, mei
-    inscricao_estadual = Column(String(20))
-    inscricao_municipal = Column(String(20))
+    # ✅ FISCAL - Identificação
+    regime_tributario = Column(String(20), default="simples")
+    inscricao_estadual = Column(String(20), nullable=True)
+    inscricao_municipal = Column(String(20), nullable=True)
+    csc_id = Column(String(10), nullable=True) 
+    csc_token = Column(String(100), nullable=True) 
+
+    # ✅ FISCAL - Padrões
+    padrao_ncm = Column(String(15), nullable=True)
+    padrao_cfop_dentro = Column(String(10), default="5.102")
+    padrao_cfop_fora = Column(String(10), default="6.102")
+    padrao_csosn = Column(String(10), default="102") 
+
+    # ✅ FISCAL - Estratégia de Envio (Smart Fallback)
+    ambiente_sefaz = Column(String(20), default="homologacao")
+    modo_emissao = Column(String(20), default="automatico") # automatico, offline_forcado
+    contingencia_automatica = Column(Boolean, default=True)
+    timeout_sefaz = Column(Integer, default=8) # Segundos
+    tempo_rejeicao = Column(Integer, default=5) # Minutos
+    certificados = relationship("CertificadoDigital", back_populates="empresa")
+
+    api_produtos_ativo = Column(Boolean, default=True)
+    api_produtos_provider = Column(String(50), default="Cosmos Bluesoft")
+    api_produtos_token = Column(String(100), nullable=True)
+
+    # E-commerce
+    ecommerce_ativo = Column(Boolean, default=False)
+    ecommerce_plataforma = Column(String(50), default="woocommerce")
+    ecommerce_url = Column(String(200), nullable=True)
+    ecommerce_key = Column(String(100), nullable=True)
+    ecommerce_secret = Column(String(100), nullable=True)
+
+    # Delivery (iFood)
+    ifood_ativo = Column(Boolean, default=False)
+    ifood_merchant_id = Column(String(100), nullable=True)
+    ifood_auto_aceitar = Column(Boolean, default=True)
     
-    # Token CSC (Para NFC-e)
-    csc_id = Column(String(10)) # "000001"
-    csc_token = Column(String(100)) # "ASJDA-123..."
-
-    # Padrões de Cadastro (Para agilizar produtos)
-    padrao_ncm = Column(String(15))
-    padrao_cfop_dentro = Column(String(5), default="5.102")
-    padrao_cfop_fora = Column(String(5), default="6.102")
-    padrao_csosn = Column(String(5), default="102") # Ou CST
-
-    # Regras de Envio (Sua Ideia!)
-    ambiente_sefaz = Column(String(10), default="homologacao") # homologacao / producao
-    tentativas_envio_automatico = Column(Boolean, default=True)
-    intervalo_tentativas_minutos = Column(Integer, default=15) # Robô de retransmissão
+    # Comunicação (WhatsApp)
+    whatsapp_ativo = Column(Boolean, default=False)
+    whatsapp_sessao = Column(String(50), default="loja_principal")
+    
+    # Contabilidade
+    contabilidade_email = Column(String(100), nullable=True)
+    contabilidade_sistema = Column(String(50), default="dominio")
+    contabilidade_auto_envio = Column(Boolean, default=True)
 
 class CertificadoDigital(Base):
     __tablename__ = "certificados_digitais"
-    
-    id = Column(Integer, primary_key=True)
+    id = Column(Integer, primary_key=True, index=True)
     empresa_id = Column(Integer, ForeignKey("empresa_config.id"))
-    
     nome_arquivo = Column(String(100))
-    senha_arquivo = Column(String(100)) # (Idealmente criptografada)
-    data_validade = Column(DateTime)
+    senha_arquivo = Column(String(100))
+    titular = Column(String(200))
     emissor = Column(String(100))
+    data_validade = Column(DateTime)
     serial_number = Column(String(100))
-    
-    conteudo_pfx = Column(LargeBinary) 
-    
+    arquivo_binario = Column(LargeBinary)
     ativo = Column(Boolean, default=True)
+    empresa = relationship("Empresa", back_populates="certificados")
 
 class PerfilAbertura(Base):
     __tablename__ = "perfis_abertura"
