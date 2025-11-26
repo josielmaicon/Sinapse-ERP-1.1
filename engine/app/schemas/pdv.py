@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from datetime import date, datetime
 from typing import List, Optional
 from .usuario import UsuarioBase, Usuario
@@ -190,3 +190,23 @@ class Pdv(PdvBase):
     
     class Config:
         from_attributes = True
+
+class MovimentacaoCaixaRequest(BaseModel):
+    valor: float = Field(gt=0, description="Valor da movimentação")
+    observacao: Optional[str] = None # Motivo da sangria/suprimento
+    # A senha do gerente/admin pode ser exigida para sangrias altas no futuro
+    override_auth: Optional[AdminAuthRequest] = None 
+
+class FechamentoCaixaRequest(BaseModel):
+    # O valor que o operador CONTOU fisicamente
+    valor_informado_dinheiro: float 
+    valor_informado_cartao: float = 0.0 # Opcional: conferência de maquininha
+    observacao: Optional[str] = None
+
+class FechamentoCaixaResponse(BaseModel):
+    id: int
+    data_hora: datetime
+    valor_esperado: float
+    valor_informado: float
+    diferenca: float # Positiva (Sobra) ou Negativa (Falta/Quebra)
+    mensagem: str

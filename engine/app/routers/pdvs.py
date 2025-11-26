@@ -534,3 +534,102 @@ def get_pdv_session_by_name(nome_pdv: str, db: Session = Depends(get_db)):
         
     # Chama a mesma lógica centralizada
     return _get_pdv_session_details_logic(pdv, db)
+
+@router.post("/{pdv_id}/suprimento", response_model=schemas.MovimentacaoCaixaRequest) # Use o schema de leitura existente
+def realizar_suprimento(
+    pdv_id: int, 
+    request: schemas.MovimentacaoCaixaRequest,
+    db: Session = Depends(get_db)
+):
+    pdv = db.query(models.Pdv).filter(models.Pdv.id == pdv_id).first()
+    if not pdv or pdv.status != 'aberto':
+        raise HTTPException(status_code=400, detail="PDV não está aberto.")
+
+    mov = models.MovimentacaoCaixa(
+        pdv_id=pdv.id,
+        operador_id=pdv.operador_atual_id,
+        tipo='suprimento',
+        valor=request.valor,
+        # Se o modelo não tiver 'descricao', usamos outro campo ou ignoramos por enquanto
+        # (Idealmente adicionar 'observacao' ao modelo MovimentacaoCaixa)
+    )
+    db.add(mov)
+    db.commit()
+    db.refresh(mov)
+    return mov
+
+@router.post("/{pdv_id}/sangria", response_model=schemas.MovimentacaoCaixaRequest)
+def realizar_sangria(
+    pdv_id: int, 
+    request: schemas.MovimentacaoCaixaRequest,
+    db: Session = Depends(get_db)
+):
+    pdv = db.query(models.Pdv).filter(models.Pdv.id == pdv_id).first()
+    if not pdv or pdv.status != 'aberto':
+        raise HTTPException(status_code=400, detail="PDV não está aberto.")
+
+    # (Opcional: Verificar se tem saldo suficiente para sangrar?)
+    
+    mov = models.MovimentacaoCaixa(
+        pdv_id=pdv.id,
+        operador_id=pdv.operador_atual_id,
+        tipo='sangria',
+        valor=request.valor,
+    )
+    db.add(mov)
+    db.commit()
+    db.refresh(mov)
+    return mov
+
+# --- FECHAMENTO CEGO ---
+
+@router.post("/{pdv_id}/fechar-caixa", response_model=schemas.FechamentoCaixaResponse)
+def fechar_caixa_cego(
+    pdv_id: int,
+    request: schemas.FechamentoCaixaRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Realiza o fechamento do caixa, calculando a diferença entre o esperado e o contado.
+    """
+    pdv = db.query(models.Pdv).filter(models.Pdv.id == pdv_id).first()
+    if not pdv or pdv.status != 'aberto':
+         raise HTTPException(status_code=400, detail="PDV não está aberto para fechamento.")
+
+    # 1. Calcular o Valor Esperado (A Matemática do Sistema)
+    # (Reutilizamos a lógica da função interna _get_pdv_session_details_logic)
+    session_details = _get_pdv_session_details_logic(pdv, db)
+    valor_sistema = session_details.valor_em_caixa # O que o sistema acha que tem em dinheiro
+
+    valor_informado = request.valor_informado_dinheiro
+    diferenca = valor_informado - valor_sistema
+
+    # 2. Registrar o Fechamento
+    # Criamos uma movimentação especial de 'fechamento' que zera o caixa lógico ou apenas registra
+    # Para simplificar, vamos apenas mudar o status do PDV e registrar o log.
+    
+    # (Idealmente teríamos uma tabela 'Fechamentos' separada para auditoria completa)
+    
+    # Registra a movimentação final para zerar (ou ajustar) se necessário?
+    # Não, o fechamento é um marco. O saldo do próximo dia começa do zero ou do fundo fixo.
+
+    pdv.status = 'fechado'
+    pdv.operador_atual_id = None
+    
+    # Podemos salvar a diferença numa observação ou tabela de auditoria
+    print(f"FECHAMENTO PDV {pdv.nome}: Sistema={valor_sistema}, Real={valor_informado}, Dif={diferenca}")
+
+    db.commit()
+    
+    status_msg = "Caixa batido com sucesso!"
+    if diferenca > 0: status_msg = f"Sobra de caixa: R$ {diferenca:.2f}"
+    if diferenca < 0: status_msg = f"Quebra de caixa: R$ {diferenca:.2f}"
+
+    return schemas.FechamentoCaixaResponse(
+        id=pdv.id,
+        data_hora=datetime.utcnow(),
+        valor_esperado=valor_sistema,
+        valor_informado=valor_informado,
+        diferenca=diferenca,
+        mensagem=status_msg
+    )

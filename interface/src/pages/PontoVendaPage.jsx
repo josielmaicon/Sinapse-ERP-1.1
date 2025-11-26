@@ -21,6 +21,7 @@ import { SetNextQuantityModal } from "@/components/pontovenda/AjusteQTD"
 import { ManualItemModal } from "@/components/pontovenda/ModalDiverso"
 import { RecebimentoModal } from "@/components/pontovenda/ModalRecebimento"
 import { StoreLogo } from "@/components/storelogo"
+import { CashManagementModal } from "@/components/pdvs/modalGestaoMonetaria"
 
 const API_URL = "http://localhost:8000"; 
 
@@ -33,6 +34,7 @@ const PosLoadingSkeleton = () => (
 );
 
 export default function PontoVenda() {
+  const [isCashModalOpen, setIsCashModalOpen] = React.useState(false);
   const [pdvSession, setPdvSession] = React.useState(null); 
   const [saleStatus, setSaleStatus] = React.useState("loading"); 
   const [barcodeBuffer, setBarcodeBuffer] = React.useState(""); 
@@ -280,10 +282,13 @@ const cartItems = React.useMemo(() => {
     fetchPdvSession(true);
   }, []);
 
-  const handleOpenCloseModalToggle = async () => {
+const handleOpenCloseModalToggle = async () => {
       if (!pdvSession) return;
       if (saleStatus === 'pagamento' || saleStatus === 'loading') return; 
-      
+      if (pdvSession.status === 'aberto') {
+          setIsCashModalOpen(true);
+          return; 
+      }
       if (pdvSession.status === 'fechado' && operatorData.length === 0 && !isLoadingOperators) {
           setIsLoadingOperators(true);
           console.log("Carregando lista de operadores...");
@@ -305,10 +310,9 @@ const cartItems = React.useMemo(() => {
       }
   };
 
-
   React.useEffect(() => {
     const handleKeyPress = (e) => {
-        if (isModalOpen || isPaymentModalOpen || isQtyModalOpen || saleToRecover || isAddingItem || isManualItemModalOpen || isCancelItemModalOpen || isRecebimentoModalOpen ) return;
+        if (isModalOpen || isCashModalOpen || isPaymentModalOpen || isQtyModalOpen || saleToRecover || isAddingItem || isManualItemModalOpen || isCancelItemModalOpen || isRecebimentoModalOpen ) return;
         if (e.key === 'F1') {e.preventDefault(); handleOpenCloseModalToggle(); return;}
         if (e.key === 'F3') { e.preventDefault(); handleCancelItem(); return; }
         if (e.key === 'F4') {e.preventDefault(); if (pdvSession?.status === 'aberto') {setIsQtyModalOpen(true);
@@ -337,7 +341,7 @@ const cartItems = React.useMemo(() => {
     document.addEventListener('keydown', handleKeyPress);
     return () => document.removeEventListener('keydown', handleKeyPress);
   
-  }, [barcodeBuffer, isAddingItem, saleToRecover, isQtyModalOpen, saleStatus, isManualItemModalOpen, pdvSession, isRecebimentoModalOpen, isModalOpen, isPaymentModalOpen, cartItems, handleCancelItem, handleCancelSale]);
+  }, [barcodeBuffer, isAddingItem, isCashModalOpen, saleToRecover, isQtyModalOpen, saleStatus, isManualItemModalOpen, pdvSession, isRecebimentoModalOpen, isModalOpen, isPaymentModalOpen, cartItems, handleCancelItem, handleCancelSale]);
 
   React.useEffect(() => {
       const handleOnline = () => setPdvSession(prev => (prev ? { ...prev, isOnline: true } : null));
@@ -416,6 +420,26 @@ const handleBarcodeSubmit = async (codigo) => {
       });
       setIsPaymentModalOpen(false); 
       setActiveSale(null);
+      printReceipt(vendaId);
+  }
+
+  const printReceipt = async (vendaId) => {
+      try {
+          toast.info("Enviando para impressão...");
+          const res = await fetch(`${API_URL}/impressao/venda/${vendaId}`, {
+              method: 'POST'
+          });
+          
+          if (!res.ok) {
+              const err = await res.json();
+              throw new Error(err.mensagem || "Erro na impressora.");
+          }
+      } catch (e) {
+          console.error("Erro de impressão:", e);
+          toast.error("Falha ao imprimir comprovante.", { 
+              description: "Verifique se a impressora está ligada/conectada."
+          });
+      }
   }
 
     const handlePaymentStart = () => {
@@ -539,6 +563,12 @@ const handleBarcodeSubmit = async (codigo) => {
         open={isRecebimentoModalOpen}
         onOpenChange={setIsRecebimentoModalOpen}
         pdvSession={pdvSession}
+    />
+    <CashManagementModal 
+    open={isCashModalOpen}
+    onOpenChange={setIsCashModalOpen}
+    pdvSession={pdvSession}
+    onSuccess={() => fetchPdvSession(false)}
     />
     </>
   );
