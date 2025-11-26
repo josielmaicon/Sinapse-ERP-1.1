@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session, joinedload, selectinload
 from .. import models, schemas
 from ..utils.security import verify_password
 from ..database import get_db
+from ..services import fiscal_service
 
 router = APIRouter(prefix="/vendas", tags=["Vendas"])
 
@@ -281,8 +282,11 @@ def finalizar_venda_pdv(
             venda.forma_pagamento = "misto" if len(request.pagamentos) > 1 else request.pagamentos[0].tipo
             db.add(venda)
 
-            # Commit automático pelo db.begin()
-
+            try:
+                fiscal_service.inicializar_nota_para_venda(venda.id, db)
+                db.commit() # Salva a nota pendente
+            except Exception as e:
+                print(f"ERRO AO INICIAR NOTA FISCAL: {e}")
             return schemas.PdvVendaResponse(
                 venda_id=venda.id,
                 mensagem=f"Venda #{venda.id} finalizada com sucesso!",
@@ -298,6 +302,8 @@ def finalizar_venda_pdv(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Erro interno ao processar a venda: {str(e)}"
         )
+    
+
 
 @router.post("/adicionar-item-smart", response_model=schemas.Venda)
 def adicionar_item_smart(request: schemas.AdicionarItemSmartRequest, db: Session = Depends(get_db)):
