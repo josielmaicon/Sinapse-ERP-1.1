@@ -5,6 +5,7 @@ from .. import models, schemas
 from ..database import get_db
 from datetime import datetime, timedelta
 from typing import Dict, List
+from ..services import fiscal_service
 import random
 import string
 
@@ -403,74 +404,51 @@ def trigger_emitir_lote(
 @router.post("/emitir/pendentes", response_model=schemas.ActionResponse)
 def trigger_emitir_pendentes(db: Session = Depends(get_db)):
     """
-    Encontra TODAS as vendas REALMENTE pendentes e as marca para emissão.
-    (SIMULAÇÃO)
+    Busca todas as notas fiscais que precisam ser enviadas (pendentes ou rejeitadas)
+    e tenta transmitir uma por uma usando o Motor Fiscal.
     """
     
-    # Reutiliza a lógica de busca e filtro da rota /emitir-meta (Passos 4 e 5)
-    vendas_candidatas = db.query(models.Venda).options(
-        joinedload(models.Venda.nota_fiscal_saida) 
-    ).filter(
-        models.Venda.status_fiscal == 'pendente' 
-    ).order_by(models.Venda.data_hora.asc()).all()
+    # 1. Busca Notas "Encalhadas" (Pendente, Rejeitada ou Erro)
+    #    Não olhamos mais para a Venda, olhamos para o Documento Fiscal.
+    notas_para_emitir = db.query(models.NotaFiscalSaida).filter(
+        models.NotaFiscalSaida.status_sefaz.in_(['pendente', 'rejeitada', 'erro'])
+    ).all()
 
-    vendas_realmente_pendentes: List[models.Venda] = []
-    status_considerados_finais = ['autorizada', 'emitida', 'cancelada', 'rejeitada', 'nao_declarar'] 
+    if not notas_para_emitir:
+        return schemas.ActionResponse(message="Não há notas pendentes para emitir no momento.")
 
-    for venda in vendas_candidatas:
-        status_final = venda.status_fiscal.lower()
-        if venda.nota_fiscal_saida and venda.nota_fiscal_saida.status_sefaz:
-             status_sefaz_lower = venda.nota_fiscal_saida.status_sefaz.lower()
-             if status_sefaz_lower not in status_considerados_finais:
-                 status_final = status_sefaz_lower
-             else:
-                 status_final = status_sefaz_lower
-        if status_final not in status_considerados_finais:
-             vendas_realmente_pendentes.append(venda)
+    sucessos = 0
+    falhas = 0
+    erros_msg = []
 
-    if not vendas_realmente_pendentes:
-        return schemas.ActionResponse(message="Não há vendas pendentes válidas para emitir no momento.")
-
-    # SIMULAÇÃO: Marca todas as pendentes encontradas
-    print(f"--- SIMULAÇÃO: Emitir Todas Pendentes ---")
-    print(f"Total de Vendas Realmente Pendentes Encontradas: {len(vendas_realmente_pendentes)}")
+    print(f"--- INICIANDO LOTE: {len(notas_para_emitir)} notas ---")
     
-    ids_emitidos = []
-    valor_total_emitir = 0.0
-    erros_emissao = []
-
-    # ✅ LÓGICA REAL: Itera e tenta emitir (simuladamente) cada pendente
-    for venda_a_emitir in vendas_realmente_pendentes:
-        print(f"  - Tentando emitir Venda ID {venda_a_emitir.id}...")
+    for nota in notas_para_emitir:
         try:
-            _simular_emissao_bem_sucedida(venda_a_emitir, db)
-            ids_emitidos.append(venda_a_emitir.id)
-            valor_total_emitir += venda_a_emitir.valor_total
+            print(f"  > Transmitindo Nota ID {nota.id}...")
+            
+            # 🚀 Chama o Motor Real (o mesmo do botão individual)
+            nota_atualizada = fiscal_service.transmitir_nota(nota.id, db)
+            
+            if nota_atualizada.status_sefaz == 'autorizada':
+                sucessos += 1
+            else:
+                falhas += 1
+                # Guarda a mensagem de erro da primeira falha para mostrar no toast
+                if len(erros_msg) < 3: 
+                    erros_msg.append(f"Nota {nota.id}: {nota_atualizada.xmotivo}")
+                    
         except Exception as e:
-            print(f"  - ERRO ao processar Venda ID {venda_a_emitir.id} no DB: {e}")
-            erros_emissao.append(f"DB Venda {venda_a_emitir.id}: {e}")
-            # raise e # Descomente se um erro deve parar todas as emissões
+            print(f"  X Erro Crítico Nota {nota.id}: {e}")
+            falhas += 1
+            erros_msg.append(f"Nota {nota.id}: Erro interno")
 
-    # ✅ ADICIONA COMMIT EXPLÍCITO AQUI TAMBÉM
-    try:
-        if ids_emitidos:
-             print(f"Tentando commit explícito (emitir-pendentes) para IDs: {ids_emitidos}")
-             db.commit()
-             print("Commit explícito (emitir-pendentes) bem-sucedido.")
-        else:
-             print("Nenhum ID processado com sucesso (emitir-pendentes), skipando commit explícito.")
-    except Exception as e_commit:
-        print(f"ERRO durante o commit explícito (emitir-pendentes): {e_commit}")
-        db.rollback()
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Erro ao salvar alterações (emitir-pendentes): {e_commit}")
-
-    print(f"Valor Total Emitido: R$ {valor_total_emitir:.2f}")
-    print(f"------------------------------------")
-
-    # ... (lógica de retorno da mensagem) ...
-    message = f"{len(ids_emitidos)} venda(s) pendente(s) marcada(s) como emitida(s)."
-    if erros_emissao: message += f" Erros: {'; '.join(erros_emissao)}"
-    return schemas.ActionResponse(message=message)
+    # 3. Relatório Final
+    resumo = f"Processamento concluído. {sucessos} autorizadas, {falhas} falhas."
+    if erros_msg:
+        resumo += f" Detalhes: {', '.join(erros_msg)}..."
+        
+    return schemas.ActionResponse(message=resumo)
 
 @router.post("/emitir/{venda_id}", response_model=schemas.Venda) # Ou um schema mais específico
 def trigger_emitir_single(venda_id: int, db: Session = Depends(get_db)):
@@ -497,4 +475,18 @@ def trigger_emitir_single(venda_id: int, db: Session = Depends(get_db)):
     print(f"--- Fim do Processamento ---")
     
     db.refresh(venda, ['nota_fiscal_saida']) 
-    return venda 
+    return venda
+
+@router.post("/notas/{nota_id}/transmitir") # URL canônica
+def transmitir_nota_manual(nota_id: int, db: Session = Depends(get_db)):
+    try:
+        nota_atualizada = fiscal_service.transmitir_nota(nota_id, db)
+        return {
+            "status": nota_atualizada.status,
+            "mensagem": nota_atualizada.xmotivo,
+            "protocolo": nota_atualizada.protocolo
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erro interno: {str(e)}")

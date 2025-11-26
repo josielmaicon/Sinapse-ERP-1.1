@@ -171,26 +171,26 @@ export const fiscalColumns = [
             {/* ✅ CORREÇÃO AQUI: onClick chama handleEmit, disabled verifica 'podeEmitir' e 'isSending' */}
             <DropdownMenuItem
               disabled={!podeEmitir || isSending} // Só pode emitir se o status final permitir E não estiver enviando
-              onClick={() => handleEmit?.(sale.id)} // Chama a função real
+              onClick={() => handleEmit?.(nota.id)} // Chama a função real
             >
               {isSending ? "Enviando..." : "Emitir NFe"} {/* Muda o texto */}
             </DropdownMenuItem>
             {/* Mantém a ação de 'Não Declarar' se ainda puder emitir */}
              <DropdownMenuItem
                disabled={!podeEmitir || isSending}
-               onClick={() => alert(`Marcando venda ${sale.id} para não declarar`)}
+               onClick={() => alert(`Marcando venda ${nota.id} para não declarar`)}
              >
               Marcar como 'Não Declarar'
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             {/* Habilita ações de cancelamento/download apenas se emitida com sucesso */}
-            <DropdownMenuItem disabled={!isIssuedSuccessfully} onClick={() => alert(`Cancelando NFe da venda ${sale.id}`)}>
+            <DropdownMenuItem disabled={!isIssuedSuccessfully} onClick={() => alert(`Cancelando NFe da venda ${nota.id}`)}>
               Cancelar NFe
             </DropdownMenuItem>
-            <DropdownMenuItem disabled={!isIssuedSuccessfully} onClick={() => alert(`Baixando DANFE da venda ${sale.id}`)}>
+            <DropdownMenuItem disabled={!isIssuedSuccessfully} onClick={() => alert(`Baixando DANFE da venda ${nota.id}`)}>
               Imprimir DANFE
             </DropdownMenuItem>
-            <DropdownMenuItem disabled={!isIssuedSuccessfully} onClick={() => alert(`Baixando XML da venda ${sale.id}`)}>
+            <DropdownMenuItem disabled={!isIssuedSuccessfully} onClick={() => alert(`Baixando XML da venda ${nota.id}`)}>
               Baixar XML
             </DropdownMenuItem>
           </DropdownMenuContent>

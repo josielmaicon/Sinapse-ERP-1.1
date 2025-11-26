@@ -77,39 +77,43 @@ export default function FiscalDataTable({ columns, data, refetchData, fiscalConf
     }, 0);
   }
 
-  const handleEmitSingleNote = async (vendaId) => {
-    if (sendingIds.has(vendaId)) return; // Já está enviando, não faz nada
+const handleEmitSingleNote = async (notaId) => { // Recebe o ID da NOTA, não da venda (veja abaixo)
+    if (sendingIds.has(notaId)) return; 
 
-    setSendingIds(prev => new Set(prev).add(vendaId)); // Adiciona ao Set (imutável)
+    setSendingIds(prev => new Set(prev).add(notaId)); 
 
-    const apiPromise = fetch(`${API_URL}/fiscal/emitir/${vendaId}`, { // ✅ Chamada para NOVA ROTA
+    // URL CORRIGIDA: /fiscal/notas/{id}/transmitir
+    const apiPromise = fetch(`${API_URL}/fiscal/notas/${notaId}/transmitir`, { 
       method: 'POST',
-      // Headers e Body se necessários (ex: token de autenticação)
     })
     .then(async (response) => {
-      // Mesmo se der erro na API, precisamos limpar o estado 'sendingIds'
-      const result = await response.json().catch(() => ({})); // Tenta pegar JSON, senão objeto vazio
+      const result = await response.json().catch(() => ({}));
       if (!response.ok) {
-        // Tenta pegar 'detail' do erro FastAPI, senão mensagem genérica
-        throw new Error(result.detail || `Erro ${response.status} ao emitir nota ${vendaId}`);
+        throw new Error(result.detail || `Erro ao emitir nota ${notaId}`);
       }
-      return result; // Retorna os dados de sucesso (pode ser o status atualizado)
+      
+      // Verifica se o backend retornou sucesso ou rejeição lógica
+      if (result.status === 'rejeitada') {
+          throw new Error(result.mensagem || "Nota rejeitada pela SEFAZ");
+      }
+      
+      return result; 
     });
   
     toast.promise(apiPromise, {
-      loading: `Enviando NFe para venda ID ${vendaId}...`,
+      loading: `Transmitindo Nota #${notaId} para a SEFAZ...`,
       success: (result) => {
-        // Chamada SÍNCRONA, não precisa de await aqui
-        refetchData(false); // Recarrega os dados da tabela SEM piscar a página
-        // A mensagem pode vir do backend ou ser fixa
-        return `NFe para venda ID ${vendaId} processada com status: ${result.status_sefaz || result.status || 'OK'}`; 
+        refetchData(false); 
+        return `Sucesso! ${result.mensagem}`; 
       },
-      error: (err) => err.message, // Mostra a mensagem de erro da API
+      error: (err) => {
+          refetchData(false); // Recarrega para mostrar o status vermelho
+          return `Falha: ${err.message}`;
+      }, 
       finally: () => {
-        // SEMPRE remove o ID do Set, no sucesso ou erro
         setSendingIds(prev => {
           const next = new Set(prev);
-          next.delete(vendaId);
+          next.delete(notaId);
           return next;
         });
       }

@@ -1,6 +1,8 @@
 from sqlalchemy.orm import Session
 from .. import models
 from datetime import datetime
+import time
+import random
 
 def inicializar_nota_para_venda(venda_id: int, db: Session):
     """
@@ -39,3 +41,40 @@ def inicializar_nota_para_venda(venda_id: int, db: Session):
     # processar_emissao(nova_nota.id)
     
     return nova_nota
+
+def transmitir_nota(nota_id: int, db: Session):
+    """
+    Tenta transmitir uma nota pendente/rejeitada para a SEFAZ.
+    Retorna um dicionário com o resultado.
+    """
+    nota = db.query(models.NotaFiscalSaida).filter(models.NotaFiscalSaida.id == nota_id).first()
+    if not nota:
+        raise ValueError("Nota não encontrada")
+    
+    # --- AQUI ENTRARIA A LIB 'PyNFe' ou similar ---
+    # 1. Gerar XML Assinado
+    # 2. Enviar para URL da Sefaz
+    # 3. Ler Retorno
+    
+    # SIMULAÇÃO DE ENVIO (Delay de rede)
+    time.sleep(1.5) 
+    
+    # Simulação de Regras de Negócio da Sefaz
+    sucesso = random.choice([True, True, True, False]) # 75% de chance de sucesso
+    
+    if sucesso:
+        nota.status = "autorizada"
+        nota.cstat = "100"
+        nota.xmotivo = "Autorizado o uso da NF-e"
+        nota.protocolo = f"13523000{random.randint(100000,999999)}"
+        # nota.xml_retorno = "..."
+    else:
+        nota.status = "rejeitada"
+        nota.cstat = "703" # Erro comum de data
+        nota.xmotivo = "Rejeição: Data-Hora de Emissão atrasada"
+    
+    db.add(nota)
+    db.commit()
+    db.refresh(nota)
+    
+    return nota
