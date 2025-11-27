@@ -19,7 +19,7 @@ import { toast } from "sonner"
 import { Skeleton } from "@/components/ui/skeleton";
 
 // As props que o componente espera receber da página principal
-export default function MetaEnvio({ totalPurchased, totalIssued, config, onConfigChange,onConfigSave,onEmitirMeta,isLoading}) {
+export default function MetaEnvio({ totalPurchased, totalIssued, config, onConfigChange,onConfigSave, onEmitirMeta, isLoading}) {
 
   if (totalPurchased === undefined || totalIssued === undefined) {
       return <div>Carregando dados fiscais...</div>; // Ou um componente de Skeleton
@@ -190,7 +190,7 @@ export default function MetaEnvio({ totalPurchased, totalIssued, config, onConfi
                 <Save className="h-4 w-4 mr-2" />
                 Atualizar Meta
               </Button>
-              {/* ✅ Chama handleEmitirMetaClick */}
+
               <Button 
                 variant="secondary" 
                 disabled={progressPercentage >= 100} 

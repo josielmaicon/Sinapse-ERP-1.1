@@ -217,29 +217,113 @@ def trigger_emitir_lote(request_data: schemas.EmitirLoteRequest, db: Session = D
 
     return schemas.ActionResponse(message=f"Lote processado. {sucessos} OK, {falhas} Falhas.")
 
-
-# ✅ ROTA META (Atualizada para não usar status_fiscal da venda)
 @router.post("/emitir-meta", response_model=schemas.ActionResponse)
 def trigger_emitir_meta(db: Session = Depends(get_db)):
-    # 1. Config e Totais (Mesma lógica do get_fiscal_summary)
+    """
+    O GOVERNADOR FISCAL:
+    1. Calcula a meta financeira baseada nas compras.
+    2. Verifica o quanto já foi emitido.
+    3. Se faltar valor, busca vendas pendentes/sem nota.
+    4. Emite sequencialmente até atingir o valor necessário.
+    """
+    
+    # 1. Busca Configuração e Totais
     config = get_fiscal_config(db)
     if config.autopilot_enabled:
-        return schemas.ActionResponse(message="Piloto automático ativo.")
-        
-    # ... (Lógica de cálculo da meta igual ao anterior) ...
-    # Vamos simplificar: Encontra Vendas pendentes até atingir valor
+        return schemas.ActionResponse(message="O Piloto Automático está ativo. O sistema fará isso sozinho à noite.")
+
+    # Calcula Totais (Mesma lógica do Dashboard)
+    start_of_month = datetime.utcnow().replace(day=1, hour=0, minute=0, second=0)
     
-    # Busca Vendas que NÃO têm nota Autorizada
+    total_comprado = db.query(func.sum(models.NotaFiscalEntrada.valor_total)).filter(
+        models.NotaFiscalEntrada.data_emissao >= start_of_month.date()
+    ).scalar() or 0.0
+
+    total_emitido = db.query(func.sum(models.Venda.valor_total))\
+        .join(models.NotaFiscalSaida)\
+        .filter(
+            models.NotaFiscalSaida.status_sefaz.in_(['Autorizada', 'Emitida']),
+            models.NotaFiscalSaida.data_hora_autorizacao >= start_of_month
+        ).scalar() or 0.0
+
+    # 2. Calcula a Meta Alvo
+    calculated_goal = 0.0
+    if config.strategy == "coeficiente":
+        calculated_goal = total_comprado * config.goal_value
+    elif config.strategy == "porcentagem":
+        calculated_goal = total_comprado * (1 + config.goal_value / 100.0)
+    elif config.strategy == "valor_fixo":
+        calculated_goal = config.goal_value
+    
+    # 3. Calcula o GAP (O que falta emitir)
+    valor_necessario = calculated_goal - total_emitido
+    
+    if valor_necessario <= 0:
+        return schemas.ActionResponse(message="A meta fiscal já foi atingida! Nenhuma emissão necessária.")
+
+    print(f"--- GOVERNADOR FISCAL ATIVADO ---")
+    print(f"Meta: {calculated_goal:.2f} | Emitido: {total_emitido:.2f} | Falta: {valor_necessario:.2f}")
+
+    # 4. Busca Vendas Candidatas (Órfãs ou Pendentes)
+    #    Ordena por data ASC (mais antigas primeiro) para "limpar a fila"
     vendas_candidatas = db.query(models.Venda).outerjoin(models.NotaFiscalSaida).filter(
         or_(
-            models.NotaFiscalSaida.id == None,
-            models.NotaFiscalSaida.status_sefaz.in_(['Pendente', 'Rejeitada', 'Erro'])
-        )
+            models.NotaFiscalSaida.id == None, # Sem nota
+            models.NotaFiscalSaida.status_sefaz.in_(['Pendente', 'Rejeitada', 'Erro', 'pendente', 'rejeitada', 'erro'])
+        ),
+        models.Venda.status == 'concluida' # Apenas vendas finalizadas
     ).order_by(models.Venda.data_hora.asc()).all()
+
+    if not vendas_candidatas:
+        return schemas.ActionResponse(message="Não há vendas pendentes disponíveis para atingir a meta.")
+
+    # 5. O Loop de Emissão (O Motor)
+    valor_acumulado_neste_lote = 0.0
+    sucessos = 0
+    falhas = 0
     
-    # ... (Lógica de seleção e emissão igual ao trigger_emitir_lote) ...
-    
-    return schemas.ActionResponse(message="Lógica de meta atualizada para nova estrutura.")
+    for venda in vendas_candidatas:
+        # Verifica se já batemos a meta com as emissões deste loop
+        if valor_acumulado_neste_lote >= valor_necessario:
+            print(">>> Meta atingida durante o processamento. Parando.")
+            break
+
+        print(f"  > Processando Venda #{venda.id} (R$ {venda.valor_total:.2f})...")
+        
+        try:
+            # A. Garante que a nota existe
+            if not venda.nota_fiscal_saida:
+                nota = fiscal_service.inicializar_nota_para_venda(venda.id, db)
+                db.add(nota)
+                db.commit()
+                db.refresh(nota)
+            else:
+                nota = venda.nota_fiscal_saida
+
+            # B. Transmite (Usa o serviço real)
+            nota_atualizada = fiscal_service.transmitir_nota(nota.id, db)
+
+            # C. Verifica Sucesso
+            if nota_atualizada.status_sefaz.lower() in ['autorizada', 'emitida']:
+                valor_acumulado_neste_lote += venda.valor_total
+                sucessos += 1
+                print(f"    ✅ Autorizada! Acumulado: {valor_acumulado_neste_lote:.2f}")
+            else:
+                falhas += 1
+                print(f"    ❌ Falha: {nota_atualizada.xmotivo}")
+
+        except Exception as e:
+            print(f"    ❌ Erro crítico na venda {venda.id}: {e}")
+            falhas += 1
+
+    # 6. Relatório Final
+    msg_final = f"Processamento finalizado. Emitidos R$ {valor_acumulado_neste_lote:.2f} em {sucessos} notas."
+    if valor_acumulado_neste_lote >= valor_necessario:
+        msg_final += " META ATINGIDA! 🎯"
+    else:
+        msg_final += f" Ainda faltam R$ {(valor_necessario - valor_acumulado_neste_lote):.2f} (Sem mais vendas pendentes)."
+
+    return schemas.ActionResponse(message=msg_final)
 
 
 # ... (dentro de app/routers/fiscal.py)

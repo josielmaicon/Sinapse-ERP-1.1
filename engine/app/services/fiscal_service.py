@@ -7,39 +7,40 @@ import random
 def inicializar_nota_para_venda(venda_id: int, db: Session):
     """
     Cria o registro inicial da Nota Fiscal para uma venda concluída.
-    Chamado automaticamente quando a venda é finalizada no PDV.
     """
     # 1. Verifica se já existe
     existing = db.query(models.NotaFiscalSaida).filter(models.NotaFiscalSaida.venda_id == venda_id).first()
     if existing:
         return existing
 
-    # 2. Busca configurações para saber a numeração
-    # (Num cenário real, teríamos uma tabela de Sequência Fiscal para não pular números)
-    # Simplificação: Pega a última nota + 1
+    # 2. Busca número sequencial
     ultima_nota = db.query(models.NotaFiscalSaida).order_by(models.NotaFiscalSaida.numero.desc()).first()
-    proximo_numero = (ultima_nota.numero + 1) if ultima_nota and ultima_nota.numero else 1
+    proximo_numero = (ultima_nota.numero + 1) if (ultima_nota and ultima_nota.numero) else 1
     
+    # 3. Busca a empresa para pegar o ID
     config = db.query(models.Empresa).first()
-    serie = 1 # Padrão, ou ler de config
+    
+    # ✅ BLINDAGEM: Se não houver empresa, usa ID 1 e avisa
+    if not config:
+        print("⚠️ AVISO: Tabela 'Empresa' vazia. Usando ID 1 como fallback para a Nota Fiscal.")
+        empresa_id = 1 
+    else:
+        empresa_id = config.id
 
-    # 3. Cria o registro "Pendente"
+    # 4. Cria o registro "Pendente"
     nova_nota = models.NotaFiscalSaida(
         venda_id=venda_id,
-        empresa_id=config.id,
+        empresa_id=empresa_id,
         numero=proximo_numero,
-        serie=serie,
-        modelo="65", # NFC-e
-        status_sefaz="pendente", 
-        xmotivo="Aguardando processamento",
+        serie=1,
+        modelo="65", 
+        status_sefaz="Pendente", 
+        xmotivo="Nota gerada, aguardando transmissão",
         data_emissao=datetime.utcnow()
-
     )
     
     db.add(nova_nota)
-    
-    # Aqui chamaríamos a função assíncrona (Background Task) para tentar transmitir
-    # processar_emissao(nova_nota.id)
+    db.flush() # Garante que a nota ganhe um ID imediatamente
     
     return nova_nota
 
@@ -50,30 +51,28 @@ def transmitir_nota(nota_id: int, db: Session):
     nota = db.query(models.NotaFiscalSaida).get(nota_id)
     
     if not nota:
-        raise ValueError("Nota não encontrada")
+        raise ValueError(f"Nota ID {nota_id} não encontrada.")
     
-    print(f"  > Processando Nota {nota.id} (Status Atual: {nota.status_sefaz})...")
+    print(f"  > Transmitindo Nota {nota.id} (Status Atual: {nota.status_sefaz})...")
 
-    time.sleep(1.0) # Simula delay de rede
+    time.sleep(0.5) # Simula delay de rede (reduzido para testes)
     
-    # Sorteio do destino (Simulação SEFAZ)
+    # Simulação de sucesso aleatório
     sucesso = random.choice([True, True, False]) 
     
     if sucesso:
-        nota.status_sefaz = "Autorizada" # ✅ Nome correto
+        nota.status_sefaz = "Autorizada"
         nota.cstat = "100"
         nota.xmotivo = "Autorizado o uso da NF-e"
         nota.protocolo = f"1352300{random.randint(100000,999999)}"
         nota.data_hora_autorizacao = datetime.utcnow()
     else:
-        nota.status_sefaz = "Rejeitada" # ✅ Nome correto
+        nota.status_sefaz = "Rejeitada"
         nota.cstat = "703"
         nota.xmotivo = "Rejeição: Data-Hora de Emissão atrasada"
     
     db.add(nota)
     db.commit()
     db.refresh(nota)
-    
-    print(f"  > Nota {nota.id} atualizada para: {nota.status_sefaz}")
     
     return nota
