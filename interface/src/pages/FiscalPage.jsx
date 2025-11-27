@@ -11,6 +11,19 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import NotaEntradaDataTable from "@/components/fiscal/TabelaEntrada";
 import { notaEntradaColumns } from "@/components/fiscal/ColunasFiscalEntrada";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
+
+const API_URL = "http://localhost:8000";
 
 export default function FiscalPage() {
 
@@ -26,7 +39,7 @@ export default function FiscalPage() {
 
     const [activeTab, setActiveTab] = React.useState("saida"); // 'saida' ou 'entrada'
     const [batchLoadingType, setBatchLoadingType] = React.useState(null);
-
+    const [pendingBatchType, setPendingBatchType] = React.useState(null);
     const [summaryData, setSummaryData] = React.useState({
         total_comprado_mes: 0,
         total_emitido_mes: 0,
@@ -127,21 +140,27 @@ export default function FiscalPage() {
             fetchData();
         }, []);
 
-    const handleBatchAction = async (tipo) => {
-        if (batchLoadingType) return;
-        
+const requestBatchAction = (tipo) => {
+        if (batchLoadingType) return; // Proteção contra clique duplo
+        setPendingBatchType(tipo); // Isso abre o <AlertDialog> automaticamente
+    };
+
+    // 2. EXECUTOR: Chamado pelo botão "Confirmar" do AlertDialog
+    const executeBatchAction = async () => {
+        const tipo = pendingBatchType; // Recupera o tipo que estava pendente
+        setPendingBatchType(null);     // Fecha o modal
+
         const labels = {
             'nao_geradas': "Gerar e Emitir Notas Faltantes",
             'pendentes': "Forçar Envio de Pendentes",
             'rejeitadas': "Retentar Rejeitadas"
         };
 
-        if (!confirm(`Iniciar operação: ${labels[tipo]}?`)) return;
-
-        setBatchLoadingType(tipo); // Ativa spinner
+        setBatchLoadingType(tipo); // Ativa o spinner no botão correspondente
         
         try {
-            const response = await fetch(`http://localhost:8000/fiscal/emitir/pendentes?tipo=${tipo}`, { 
+            // Chama a API
+            const response = await fetch(`${API_URL}/fiscal/emitir/pendentes?tipo=${tipo}`, { 
                 method: 'POST',
             });
             const result = await response.json();
@@ -150,17 +169,31 @@ export default function FiscalPage() {
             
             toast.success("Operação concluída!", { description: result.message });
             
-            // ✅ RECARREGA A TABELA PARA MOSTRAR O RESULTADO REAL DO BANCO
+            // Recarrega a tabela
             await fetchData(false); 
 
         } catch (err) {
             toast.error("Erro na operação", { description: err.message });
         } finally {
-            setBatchLoadingType(null); // Desativa spinner
+            setBatchLoadingType(null); // Desativa o spinner
+        }
+    };
+
+    // Helper para o texto dinâmico do Modal
+    const getDialogContent = () => {
+        switch(pendingBatchType) {
+            case 'nao_geradas': 
+                return { title: "Gerar Notas Faltantes?", desc: "O sistema irá gerar e tentar transmitir notas para todas as vendas que ainda não possuem registro fiscal." };
+            case 'pendentes': 
+                return { title: "Forçar Envio?", desc: "O sistema tentará retransmitir todas as notas que pararam no status 'Pendente'." };
+            case 'rejeitadas': 
+                return { title: "Retentar Rejeitadas?", desc: "O sistema reenviará as notas rejeitadas. Certifique-se de que os dados cadastrais foram corrigidos." };
+            default: return { title: "Confirmar?", desc: "Deseja prosseguir com esta ação em lote?" };
         }
     };
 
   return (
+    <>
     <FiscalPageLayout
         MetaEnvio={
             <MetaEnvio 
@@ -193,7 +226,7 @@ export default function FiscalPage() {
                             totalPurchased={summaryData.total_comprado_mes}
                             totalIssued={summaryData.total_emitido_mes} // ✅ ADICIONAR ESTA PROP
                             onEmitirMeta={handleEmitirMeta} // ✅ Passar a função do pai (se já não estiver)
-                            onBatchAction={handleBatchAction} 
+                            onBatchAction={requestBatchAction} 
                             batchLoadingType={batchLoadingType}
                         />
                     )}
@@ -222,5 +255,23 @@ export default function FiscalPage() {
                 isLoading={isLoading}
             />
         }/>
+        <AlertDialog open={!!pendingBatchType} onOpenChange={(open) => !open && setPendingBatchType(null)}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>{getDialogContent().title}</AlertDialogTitle>
+          <AlertDialogDescription>
+            {getDialogContent().desc}
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancelar</AlertDialogCancel>
+          {/* O botão Confirmar chama o Executor */}
+          <AlertDialogAction onClick={executeBatchAction}>
+              Confirmar Ação
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+    </>
     );
 }

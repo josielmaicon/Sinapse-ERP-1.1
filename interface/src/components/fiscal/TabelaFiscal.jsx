@@ -9,11 +9,13 @@ import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Pagination, PaginationLink, PaginationContent, PaginationItem, PaginationNext, PaginationPrevious, PaginationEllipsis } from "@/components/ui/pagination"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { toast } from "sonner"
 import { Loader2,
-    FilePlus, // Para Não Geradas
-    RefreshCw, // Para Pendentes
-    AlertTriangle // Para Rejeitadas
+    FilePlus,
+    RefreshCw,
+    AlertTriangle,
+    FunnelIcon
 } from "lucide-react"
 import { ButtonGroup } from "@/components/ui/button-group"
 
@@ -132,25 +134,57 @@ const handleEmitSingleNote = async (notaId) => { // Recebe o ID da NOTA, não da
   return (
     <div className="w-full h-full flex flex-col">
       <div className="flex items-center gap-4 py-4">
-        <Input
-          placeholder="Buscar por Nº da Nota..."
-          value={(table.getColumn("nfNumber")?.getFilterValue()) ?? ""}
-          onChange={(event) => table.getColumn("nfNumber")?.setFilterValue(event.target.value)}
-          className="max-w-fit"
-        />
-        <Select onValueChange={(value) => table.getColumn("status")?.setFilterValue(value === 'todos' ? '' : value)}>
-          <SelectTrigger className="w-[180px]">
-            <SelectValue placeholder="Filtrar por Status" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="todos">Todos os Status</SelectItem>
-            <SelectItem value="pendente">Pendentes</SelectItem>
-            <SelectItem value="emitida">Emitidas</SelectItem>
-            <SelectItem value="rejeitada">Rejeitadas</SelectItem>
-            <SelectItem value="nao_declarar">Não Declarar</SelectItem>
-          </SelectContent>
-        </Select>
+        <ButtonGroup>
+          <Input
+            placeholder="Buscar por Nº da Nota..."
+            value={table.getColumn("nfNumber")?.getFilterValue() ?? ""}
+            onChange={(e) => table.getColumn("nfNumber")?.setFilterValue(e.target.value)}
+            className="flex-1"
+          />
 
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="outline" aria-label="Filtro">
+                <FunnelIcon className="h-4 w-4" />
+              </Button>
+            </PopoverTrigger>
+
+            <PopoverContent className="w-[180px] p-0">
+              <div className="flex flex-col">
+                <button
+                  className="px-3 py-2 text-left hover:bg-accent"
+                  onClick={() => table.getColumn("status")?.setFilterValue("")}
+                >
+                  Todos os Status
+                </button>
+                <button
+                  className="px-3 py-2 text-left hover:bg-accent"
+                  onClick={() => table.getColumn("status")?.setFilterValue("pendente")}
+                >
+                  Pendentes
+                </button>
+                <button
+                  className="px-3 py-2 text-left hover:bg-accent"
+                  onClick={() => table.getColumn("status")?.setFilterValue("emitida")}
+                >
+                  Emitidas
+                </button>
+                <button
+                  className="px-3 py-2 text-left hover:bg-accent"
+                  onClick={() => table.getColumn("status")?.setFilterValue("rejeitada")}
+                >
+                  Rejeitadas
+                </button>
+                <button
+                  className="px-3 py-2 text-left hover:bg-accent"
+                  onClick={() => table.getColumn("status")?.setFilterValue("nao_declarar")}
+                >
+                  Não Declarar
+                </button>
+              </div>
+            </PopoverContent>
+          </Popover>
+        </ButtonGroup>
           <div className="ml-auto flex items-center gap-3">
             <span className="text-sm font-medium text-muted-foreground hidden sm:inline-block">
                 Reenviar:
