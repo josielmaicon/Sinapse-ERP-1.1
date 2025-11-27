@@ -1,6 +1,7 @@
 import bcrypt # Mantenha a importação se ainda usar para o hash inicial
 from datetime import date, datetime, timedelta
 from random import choice, randint, uniform
+import random
 from app.database import SessionLocal, engine
 # Garanta que todos os modelos necessários estão importados
 from app.models import (
@@ -110,35 +111,39 @@ try:
 
     status_fiscais_possiveis = ["Autorizada", "Rejeitada", "Pendente"] # Para NotaFiscalSaida.status_sefaz
 
-    vendas_criadas = [] # Guarda as vendas para referência
+    print("-> Criando histórico de vendas e notas...")
+
+    vendas_criadas = [] 
+    
+    # Opções de status para as notas que existem
+    status_possiveis = ["Autorizada", "Autorizada", "Autorizada", "Rejeitada", "Pendente"]
+
     for dia_venda, pdv, cliente, itens, forma_pgto in vendas_info:
-        # Usa o ID do operador correto
         operador_venda_id = user_operador.id if pdv.operador_atual_id == user_operador.id else user_admin.id 
 
-        # Cria uma data/hora aleatória dentro do dia da venda
         hora_aleatoria = datetime.min.time().replace(hour=randint(10, 18), minute=randint(0, 59), second=randint(0, 59))
         data_hora_venda = datetime.combine(dia_venda, hora_aleatoria)
         
-        # ✅ ADICIONA O CODIGO_VENDA (NOVO)
         timestamp_str = data_hora_venda.strftime("%Y%m%d%H%M%S")
-        codigo_venda_str = f"VENDA_{timestamp_str}_{pdv.nome.upper().replace(' ', '')}"
+        # Adiciona um random curto para garantir unicidade no seed rápido
+        codigo_venda_str = f"VENDA_{timestamp_str}_{pdv.id}_{randint(100,999)}"
 
+        # 1. Cria a VENDA (Sem se preocupar com status fiscal aqui)
         venda = Venda(
-            codigo_venda=codigo_venda_str, # ✅ ADICIONADO
+            codigo_venda=codigo_venda_str,
             valor_total=sum(q * p for p_idx, q, p in itens),
             status="concluida",
-            status_fiscal="pendente",
             forma_pagamento=forma_pgto,
             pdv_id=pdv.id,
             operador_id=operador_venda_id,
             cliente_id=cliente.id,
-            data_hora=data_hora_venda # ✅ USA A DATA/HORA DINÂMICA
+            data_hora=data_hora_venda 
         )
         db.add(venda)
-        db.flush() # Garante que venda.id está disponível
+        db.flush() # Pega o ID da venda
         vendas_criadas.append(venda)
 
-        # Itens da venda
+        # 2. Cria os ITENS
         for produto_idx, quantidade, preco in itens:
             db.add(VendaItem(
                 venda_id=venda.id,
@@ -147,51 +152,87 @@ try:
                 preco_unitario_na_venda=preco
             ))
         
-        # --- Adiciona a nota fiscal de saída ---
-        status_sefaz = choice(status_fiscais_possiveis)
-        
-        if status_sefaz != "Pendente":
-             if status_sefaz in ["Autorizada", "Rejeitada"]:
-                 venda.status_fiscal = status_sefaz.lower() 
-                 db.add(venda)
+        # 3. DECISÃO DE MESTRE: Esta venda terá nota?
+        # Vamos simular que 20% das vendas ficaram "Órfãs" (Sem nota gerada)
+        tem_nota = random.random() > 0.2 
+
+        if tem_nota:
+             status_sefaz = choice(status_possiveis)
+             
+             # Dados fictícios para parecer real
+             chave = f"35{randint(10,99)}00000000000000{randint(1000000000,9999999999)}"
+             
+             # Se autorizada, tem protocolo e data de autorização
+             if status_sefaz == "Autorizada":
+                 data_auto = venda.data_hora + timedelta(seconds=randint(5, 120))
+                 protocolo = f"1352300{randint(100000, 999999)}"
+                 xmotivo = "Autorizado o uso da NF-e"
+                 cstat = "100"
+             elif status_sefaz == "Rejeitada":
+                 data_auto = None
+                 protocolo = None
+                 xmotivo = "Rejeição: Erro na validação dos dados do destinatário"
+                 cstat = "703"
+             else: # Pendente
+                 data_auto = None
+                 protocolo = None
+                 xmotivo = "Nota gerada, aguardando transmissão"
+                 cstat = None
 
              nota_fiscal = NotaFiscalSaida(
                  venda_id=venda.id,
-                 status_sefaz=status_sefaz,
+                 empresa_id=1, # Vincula à empresa principal
+                 numero=venda.id, # Simplificação para o seed
+                 serie=1,
+                 status_sefaz=status_sefaz, # A Fonte da Verdade
                  data_emissao=venda.data_hora,
-                 data_hora_autorizacao=venda.data_hora + timedelta(minutes=randint(5, 60)) if status_sefaz == "Autorizada" else None, 
-                 chave_acesso=f"NFe{randint(10**43, (10**44)-1)}",
-                 protocolo=f"Proto{randint(100000, 999999)}" if status_sefaz == "Autorizada" else None
+                 data_hora_autorizacao=data_auto,
+                 chave_acesso=chave,
+                 protocolo=protocolo,
+                 xmotivo=xmotivo,
+                 cstat=cstat
              )
              db.add(nota_fiscal)
 
+    print("-> Criando Notas Fiscais de Entrada...")
+    
+    notas_entrada = []
+    fornecedores = [fornecedor_laticinios, fornecedor_hortifruti, fornecedor_bebidas]
+    
+    # Gera compras nos últimos 30 dias
+    for dias_atras in range(30): 
+        # Data da nota
+        data_nota = datetime.utcnow() - timedelta(days=dias_atras)
+        
+        # Simula 1 a 3 compras por dia
+        num_compras = randint(1, 3)
+        
+        for _ in range(num_compras):
+            fornecedor = choice(fornecedores)
+            valor = round(uniform(150.0, 1500.0), 2) # Compras de valor variado
+            chave = f"NFe{randint(10**43, (10**44)-1)}"
+            numero = randint(1000, 99999)
+
+            nota_entrada = NotaFiscalEntrada(
+                fornecedor_id=fornecedor.id,
+                numero_nota=str(numero),
+                serie="1",
+                chave_acesso=chave,
+                data_emissao=data_nota.date(), # Importante ser date ou datetime
+                valor_total=valor,
+                xml_conteudo=None # (Opcional)
+            )
+            db.add(nota_entrada)
+            notas_entrada.append(nota_entrada)
+
+    db.commit()
+    print(f"-> {len(notas_entrada)} Notas de Entrada criadas.")
+
+    print("\nBanco de dados populado com sucesso!")
+
     # Commit VENDAS, ITENS e NOTAS FISCAIS DE SAÍDA
     db.commit() 
-    print(f"-> {len(vendas_criadas)} Vendas (dinâmicas), Itens e NF-Saída criadas.")
-
-    # Notas Fiscais de Entrada - Datas agora são dinâmicas (últimos 15 dias)
-    notas_entrada_criadas = 0
-    for fornecedor in [fornecedor_laticinios, fornecedor_hortifruti, fornecedor_bebidas]:
-        for dias_atras in range(15): # Gera notas para os últimos 15 dias
-            num_notas_dia = randint(0, 2)
-            for _ in range(num_notas_dia):
-                 numero_aleatorio = randint(1000, 9999)
-                 chave_aleatoria = f"{randint(10**43, (10**44)-1)}"
-                 data_emissao_nota = HOJE - timedelta(days=dias_atras) # ✅ DATA DINÂMICA
-
-                 nota = NotaFiscalEntrada(
-                     fornecedor_id=fornecedor.id,
-                     numero_nota=f"{numero_aleatorio}-{dias_atras}",
-                     chave_acesso=chave_aleatoria,
-                     data_emissao=data_emissao_nota, # ✅ USA DATA DINÂMICA
-                     valor_total=round(uniform(50.0, 500.0), 2)
-                 )
-                 db.add(nota)
-                 notas_entrada_criadas += 1
-    # Commit NOTAS FISCAIS DE ENTRADA
-    db.commit()
-    print(f"-> {notas_entrada_criadas} Notas Fiscais de Entrada (dinâmicas) criadas.")
-
+    print(f"-> {len(vendas_criadas)} Vendas criadas.")
     # Movimentações de Caixa (sem datas fixas, está OK)
     mov1 = MovimentacaoCaixa(tipo="abertura", valor=200.0, pdv_id=pdv1.id, operador_id=user_operador.id, autorizado_por_id=user_admin.id)
     mov2 = MovimentacaoCaixa(tipo="sangria", valor=500.0, pdv_id=pdv1.id, operador_id=user_operador.id, autorizado_por_id=user_admin.id)

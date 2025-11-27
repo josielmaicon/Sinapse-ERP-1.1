@@ -1,7 +1,7 @@
 // src/components/fiscal/FiscalDataTable.jsx
 
 "use client"
-
+import { cn } from "@/lib/utils"
 import * as React from "react"
 import { useReactTable, getCoreRowModel, getFilteredRowModel, getPaginationRowModel, getSortedRowModel, flexRender } from "@tanstack/react-table"
 import { Button } from "@/components/ui/button"
@@ -10,7 +10,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Pagination, PaginationLink, PaginationContent, PaginationItem, PaginationNext, PaginationPrevious, PaginationEllipsis } from "@/components/ui/pagination"
 import { toast } from "sonner"
-import { Loader2 } from "lucide-react";
+import { Loader2,
+    FilePlus, // Para Não Geradas
+    RefreshCw, // Para Pendentes
+    AlertTriangle // Para Rejeitadas
+} from "lucide-react"
+import { ButtonGroup } from "@/components/ui/button-group"
 
 const API_URL = "http://localhost:8000";
 const DOTS = '...';
@@ -44,38 +49,11 @@ const usePaginationRange = ({ totalPageCount, siblingCount = 1, currentPage }) =
   }, [totalPageCount, siblingCount, currentPage]);
 };
 
-export default function FiscalDataTable({ columns, data, refetchData, fiscalConfig, totalPurchased }) {
+export default function FiscalDataTable({ columns, data, refetchData, batchLoadingType, onBatchAction}) {
   const [sorting, setSorting] = React.useState([]);
   const [columnFilters, setColumnFilters] = React.useState([]);
   const [rowSelection, setRowSelection] = React.useState({});
   const [sendingIds, setSendingIds] = React.useState(new Set());
-  const [isBatchLoading, setIsBatchLoading] = React.useState(false);
-
-  const calculateCurrentGoal = () => {
-    if (!fiscalConfig || totalPurchased === undefined) return 0; // Retorna 0 se dados não carregaram
-    
-    let goal = 0;
-    const numericGoalValue = fiscalConfig.goal_value || 0;
-    switch (fiscalConfig.strategy) {
-      case "coeficiente": goal = totalPurchased * numericGoalValue; break;
-      case "porcentagem": goal = totalPurchased * (1 + numericGoalValue / 100); break;
-      case "valor_fixo": goal = numericGoalValue; break;
-      default: goal = 0;
-    }
-    return goal;
-  };
-
-  // ✅ FUNÇÃO AUXILIAR para calcular o total já emitido (baseado nos dados da tabela)
-  const calculateTotalIssued = () => {
-    // Usa a mesma lógica do backend/frontend para status final
-    return data.reduce((acc, venda) => {
-        const statusSefaz = venda.nota_fiscal_saida?.status_sefaz?.toLowerCase();
-        if (statusSefaz === 'autorizada' || statusSefaz === 'emitida') {
-            return acc + (venda.valor_total || 0);
-        }
-        return acc;
-    }, 0);
-  }
 
 const handleEmitSingleNote = async (notaId) => { // Recebe o ID da NOTA, não da venda (veja abaixo)
     if (sendingIds.has(notaId)) return; 
@@ -144,111 +122,15 @@ const handleEmitSingleNote = async (notaId) => { // Recebe o ID da NOTA, não da
     currentPage,
   });
 
-  const handleEmitSelected = () => {
-    if (isBatchLoading) return; // Não faz nada se já estiver processando um lote
-    if (selectedRowsData.length === 0) {
-      toast.info("Nenhuma nota selecionada para emitir.");
-      return;
-    }
-    
-    // Pega apenas os IDs das linhas selecionadas
-    const idsToEmit = selectedRowsData.map(row => row.id);
-    
-    // Lógica de verificação da meta (AGORA USA DADOS DINÂMICOS)
-    const calculatedGoal = calculateCurrentGoal();
-    const totalIssued = calculateTotalIssued();
-    // Soma apenas o valor das vendas selecionadas (usa valor_total que vem da API)
-    const totalToIssue = selectedRowsData.reduce((acc, row) => acc + (row.valor_total || 0), 0);
-    
-    // Verifica se a emissão ultrapassará a meta (se houver meta e não for piloto automático)
-    if (calculatedGoal > 0 && !fiscalConfig?.autopilot_enabled && (totalIssued + totalToIssue > calculatedGoal)) {
-      if (!confirm(`Atenção: A emissão de ${totalToIssue.toLocaleString('pt-BR', {style: 'currency', currency: 'BRL'})} irá ultrapassar sua meta de ${calculatedGoal.toLocaleString('pt-BR', {style: 'currency', currency: 'BRL'})}. Deseja continuar?`)) {
-        return; // Usuário cancelou
-      }
-    }
-    
-    // Chama a API de lote
-    setIsBatchLoading(true);
-    const apiPromise = fetch(`${API_URL}/fiscal/emitir/lote`, { 
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ venda_ids: idsToEmit })
-    })
-    .then(async (response) => {
-        const result = await response.json();
-        if (!response.ok) {
-            throw new Error(result.detail || "Erro ao emitir notas selecionadas.");
-        }
-        return result; 
-    });
-    
-    toast.promise(apiPromise, {
-        loading: `Enviando ${idsToEmit.length} nota(s) selecionada(s) para emissão...`,
-        success: (result) => {
-            refetchData(false); // Recarrega dados
-            table.resetRowSelection(); // Limpa seleção
-            return result.message; // Mostra msg do backend
-        },
-        error: (err) => err.message, 
-        finally: () => {
-            setIsBatchLoading(false); // Libera o loading do lote
-        }
-    });
-  };
-
-  const handleEmitAllPending = () => {
-   if (isBatchLoading) return; 
-  
-   // NÃO precisamos filtrar aqui, o backend fará a lógica correta
-   // const pendingSales = data.filter(d => ...); 
-   
-   // AVISO: A verificação de META aqui é complexa, pois não sabemos AINDA
-   // quais notas o backend VAI selecionar. Idealmente, o backend deveria
-   // retornar um AVISO se a emissão ultrapassou a meta, ou ter um parâmetro
-   // na API tipo "?ignorar_meta=true".
-   // Por simplicidade, vamos remover a confirmação de meta daqui por enquanto,
-   // confiando que o usuário sabe o que está fazendo ao clicar em "Emitir Todas".
-   
-   // if (totalAlreadyIssued + totalToIssue > calculatedGoal) { ... } // REMOVIDO
-  
-   // Chama a API de emitir todas as pendentes
-   setIsBatchLoading(true);
-   const apiPromise = fetch(`${API_URL}/fiscal/emitir/pendentes`, { 
-       method: 'POST',
-   })
-   .then(async (response) => {
-       const result = await response.json();
-       if (!response.ok) {
-           throw new Error(result.detail || "Erro ao emitir todas as notas pendentes.");
-       }
-       return result; 
-   });
-  
-   toast.promise(apiPromise, {
-       loading: `Solicitando emissão de todas as notas pendentes...`,
-       success: (result) => {
-           refetchData(false); 
-           return result.message; 
-       },
-       error: (err) => err.message, 
-       finally: () => {
-           setIsBatchLoading(false); 
-       }
-   });
-  };
-
-    // Dentro do componente NotaEntradaDataTable, antes do return
     React.useEffect(() => {
         if (table) { // Garante que a tabela já foi inicializada
             const paginationState = table.getState().pagination;
 
         }
-    // Adiciona dependências para rodar quando a página mudar
     }, [table, table?.getState().pagination.pageIndex, table?.getPageCount()]);
 
   return (
     <div className="w-full h-full flex flex-col">
-      {/* Barra de Ferramentas */}
       <div className="flex items-center gap-4 py-4">
         <Input
           placeholder="Buscar por Nº da Nota..."
@@ -268,25 +150,62 @@ const handleEmitSingleNote = async (notaId) => { // Recebe o ID da NOTA, não da
             <SelectItem value="nao_declarar">Não Declarar</SelectItem>
           </SelectContent>
         </Select>
-        {/* Aqui entraria um Date Picker para o filtro de data */}
 
-        {/* Botões de Ação em Massa */} 
-      <div className="ml-auto flex items-center gap-2">
-          {numSelected > 0 ? (
-            // ✅ Botão agora desabilitado se um lote estiver carregando
-            <Button onClick={handleEmitSelected} disabled={isBatchLoading}>
-              {isBatchLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} 
-              Emitir {numSelected} Selecionada(s)
-            </Button>
-          ) : (
-            // ✅ Botão agora desabilitado se um lote estiver carregando
-            <Button onClick={handleEmitAllPending} className="min-h-0 min-w-0" disabled={isBatchLoading}>
-              {isBatchLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Emitir Todas Pendentes
-            </Button>
-          )}
-        </div>
-      </div>
+          <div className="ml-auto flex items-center gap-3">
+            <span className="text-sm font-medium text-muted-foreground hidden sm:inline-block">
+                Reenviar:
+            </span>
+              <ButtonGroup>
+                <Button 
+                    variant="outline" 
+                    className="rounded-r-none focus:z-10" // Remove borda direita arredondada
+                    onClick={() => onBatchAction('nao_geradas')} // Chama o Pai
+                    disabled={batchLoadingType !== null}
+                    title="Gerar notas para vendas que ficaram sem registro"
+                >
+                    {/* Lógica do Ícone/Spinner */}
+                    {batchLoadingType === 'nao_geradas' ? (
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                        <FilePlus className="mr-2 h-4 w-4 text-muted-foreground" />
+                    )}
+                    Faltantes
+                </Button>
+
+                {/* 2. Pendentes */}
+                <Button 
+                    variant="outline" 
+                    className="rounded-none focus:z-10 border-l-0" // Quadrado, sem borda esquerda
+                    onClick={() => onBatchAction('pendentes')}
+                    disabled={batchLoadingType !== null}
+                    title="Tentar retransmitir notas paradas"
+                >
+                    {batchLoadingType === 'pendentes' ? (
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                        <RefreshCw className="mr-2 h-4 w-4 text-blue-600" />
+                    )}
+                    Pendentes
+                </Button>
+                
+                {/* 3. Rejeitadas */}
+                <Button 
+                    variant="outline" 
+                    className="rounded-l-none focus:z-10 border-l-0" // Remove borda esquerda arredondada
+                    onClick={() => onBatchAction('rejeitadas')}
+                    disabled={batchLoadingType !== null}
+                    title="Retentar envio de notas com erro"
+                >
+                    {batchLoadingType === 'rejeitadas' ? (
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                        <AlertTriangle className="mr-2 h-4 w-4 text-amber-600" />
+                    )}
+                    Rejeitadas
+                </Button>
+              </ButtonGroup>
+            </div>
+            </div>
 
       <div className="flex-grow rounded-md border overflow-y-auto">
         <Table>

@@ -41,7 +41,6 @@ class Venda(VendaBase):
     valor_total: float
     data_hora: datetime
     status: str
-    status_fiscal: str
     itens: List[VendaItem] = []
     nota_fiscal_saida: Optional[NotaFiscalSaida] = None
 

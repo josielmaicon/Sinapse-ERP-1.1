@@ -30,9 +30,10 @@ def inicializar_nota_para_venda(venda_id: int, db: Session):
         numero=proximo_numero,
         serie=serie,
         modelo="65", # NFC-e
-        status="pendente",
+        status_sefaz="pendente", 
         xmotivo="Aguardando processamento",
         data_emissao=datetime.utcnow()
+
     )
     
     db.add(nova_nota)
@@ -44,37 +45,35 @@ def inicializar_nota_para_venda(venda_id: int, db: Session):
 
 def transmitir_nota(nota_id: int, db: Session):
     """
-    Tenta transmitir uma nota pendente/rejeitada para a SEFAZ.
-    Retorna um dicionário com o resultado.
+    Simula a transmissão e FORÇA o salvamento.
     """
-    nota = db.query(models.NotaFiscalSaida).filter(models.NotaFiscalSaida.id == nota_id).first()
+    nota = db.query(models.NotaFiscalSaida).get(nota_id)
+    
     if not nota:
         raise ValueError("Nota não encontrada")
     
-    # --- AQUI ENTRARIA A LIB 'PyNFe' ou similar ---
-    # 1. Gerar XML Assinado
-    # 2. Enviar para URL da Sefaz
-    # 3. Ler Retorno
+    print(f"  > Processando Nota {nota.id} (Status Atual: {nota.status_sefaz})...")
+
+    time.sleep(1.0) # Simula delay de rede
     
-    # SIMULAÇÃO DE ENVIO (Delay de rede)
-    time.sleep(1.5) 
-    
-    # Simulação de Regras de Negócio da Sefaz
-    sucesso = random.choice([True, True, True, False]) # 75% de chance de sucesso
+    # Sorteio do destino (Simulação SEFAZ)
+    sucesso = random.choice([True, True, False]) 
     
     if sucesso:
-        nota.status = "autorizada"
+        nota.status_sefaz = "Autorizada" # ✅ Nome correto
         nota.cstat = "100"
         nota.xmotivo = "Autorizado o uso da NF-e"
-        nota.protocolo = f"13523000{random.randint(100000,999999)}"
-        # nota.xml_retorno = "..."
+        nota.protocolo = f"1352300{random.randint(100000,999999)}"
+        nota.data_hora_autorizacao = datetime.utcnow()
     else:
-        nota.status = "rejeitada"
-        nota.cstat = "703" # Erro comum de data
+        nota.status_sefaz = "Rejeitada" # ✅ Nome correto
+        nota.cstat = "703"
         nota.xmotivo = "Rejeição: Data-Hora de Emissão atrasada"
     
     db.add(nota)
     db.commit()
     db.refresh(nota)
+    
+    print(f"  > Nota {nota.id} atualizada para: {nota.status_sefaz}")
     
     return nota

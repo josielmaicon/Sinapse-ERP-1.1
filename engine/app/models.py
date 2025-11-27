@@ -1,4 +1,4 @@
-from sqlalchemy import (Column, Integer, String, Date, Float, DateTime, ForeignKey, Boolean, Enum, LargeBinary, Table)
+from sqlalchemy import (Column, Integer, String, Date, Float, DateTime, ForeignKey, Boolean, Enum, LargeBinary, Text, Table)
 from sqlalchemy.orm import relationship
 from .database import Base
 from datetime import datetime
@@ -180,7 +180,6 @@ class Venda(Base):
     valor_total = Column(Float, nullable=False, default=0.0)
     data_hora = Column(DateTime, default=datetime.utcnow)
     status = Column(String(50), default="em_andamento", nullable=False) # em_andamento, concluida, cancelada
-    status_fiscal = Column(String(50), default="pendente") # pendente, emitida, nao_declarar
     
     # Chaves Estrangeiras para conectar com o resto do sistema
     pdv_id = Column(Integer, ForeignKey("pdvs.id"))
@@ -233,27 +232,60 @@ class MovimentacaoCaixa(Base):
     
 class NotaFiscalEntrada(Base):
     __tablename__ = "notas_fiscais_entrada"
-    id = Column(Integer, primary_key=True)
+    
+    id = Column(Integer, primary_key=True, index=True)
+    
+    # Dados Fiscais Essenciais
     numero_nota = Column(String(50), index=True, nullable=False)
+    serie = Column(String(10), nullable=False, default="1") # ✅ ADICIONADO
     chave_acesso = Column(String(44), unique=True, nullable=False)
-    data_emissao = Column(Date, nullable=False)
+    
+    # Valores e Datas
+    data_emissao = Column(Date, nullable=False) # Data da nota
+    data_entrada = Column(DateTime, default=datetime.utcnow) # Data que chegou no sistema
     valor_total = Column(Float, nullable=False)
     
+    # Auditoria / Arquivo
+    xml_conteudo = Column(Text, nullable=True) # ✅ ADICIONADO (Bom para ter)
+    
+    # Relacionamentos
     fornecedor_id = Column(Integer, ForeignKey("fornecedores.id"))
-    fornecedor = relationship("Fornecedor") # Relação simples
+    fornecedor = relationship("Fornecedor")
 
 class NotaFiscalSaida(Base):
     __tablename__ = "notas_fiscais_saida"
-    id = Column(Integer, primary_key=True)
-    chave_acesso = Column(String(44), unique=True)
-    protocolo = Column(String(50))
-    status_sefaz = Column(String(50), default="Em Processamento") # Ex: "Autorizada", "Cancelada", "Rejeitada"
-    data_emissao = Column(DateTime, nullable=False)
-    data_hora_autorizacao = Column(DateTime)
     
-    # A conexão com a venda original
+    id = Column(Integer, primary_key=True, index=True)
+    
+    # Relacionamentos Principais
     venda_id = Column(Integer, ForeignKey("vendas.id"), unique=True)
+    empresa_id = Column(Integer, ForeignKey("empresa_config.id"))
+    
+    # ✅ Dados da Nota (O que estava faltando)
+    numero = Column(Integer) # <--- A CAUSA DO ERRO
+    serie = Column(Integer, default=1)
+    chave_acesso = Column(String(44), unique=True, index=True)
+    modelo = Column(String(2), default="65") # 65=NFC-e, 55=NF-e
+    
+    # Status
+    status_sefaz = Column(String(20), default="Pendente") 
+    
+    # Retorno da SEFAZ (Protocolos e Erros)
+    cstat = Column(String(5))
+    xmotivo = Column(String(255))
+    protocolo = Column(String(50))
+    
+    # Datas
+    data_emissao = Column(DateTime, default=datetime.utcnow)
+    data_hora_autorizacao = Column(DateTime, nullable=True)
+    
+    # Arquivos
+    xml_envio = Column(Text, nullable=True)
+    xml_retorno = Column(Text, nullable=True)
+    
+    # Navegação
     venda = relationship("Venda", back_populates="nota_fiscal_saida")
+    empresa = relationship("Empresa")
 
 class Configuracao(Base):
     __tablename__ = "configuracoes"
@@ -342,6 +374,9 @@ class Empresa(Base):
     timeout_sefaz = Column(Integer, default=8) # Segundos
     tempo_rejeicao = Column(Integer, default=5) # Minutos
     certificados = relationship("CertificadoDigital", back_populates="empresa")
+    fiscal_strategy = Column(String(20), default="coeficiente") # coeficiente, porcentagem, valor_fixo
+    fiscal_goal_value = Column(Float, default=2.1)
+    fiscal_autopilot = Column(Boolean, default=False)
 
     api_produtos_ativo = Column(Boolean, default=True)
     api_produtos_provider = Column(String(50), default="Cosmos Bluesoft")

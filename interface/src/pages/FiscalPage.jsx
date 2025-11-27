@@ -25,6 +25,7 @@ export default function FiscalPage() {
     const [isEntradaLoading, setIsEntradaLoading] = React.useState(true); // Loading específico
 
     const [activeTab, setActiveTab] = React.useState("saida"); // 'saida' ou 'entrada'
+    const [batchLoadingType, setBatchLoadingType] = React.useState(null);
 
     const [summaryData, setSummaryData] = React.useState({
         total_comprado_mes: 0,
@@ -73,6 +74,7 @@ export default function FiscalPage() {
                 setIsEntradaLoading(false); // ✅ Finaliza loading da entrada
             }
         };
+
 
     const handleConfigSave = async (newConfig) => {
         const apiPromise = fetch('http://localhost:8000/fiscal/config', {
@@ -125,6 +127,39 @@ export default function FiscalPage() {
             fetchData();
         }, []);
 
+    const handleBatchAction = async (tipo) => {
+        if (batchLoadingType) return;
+        
+        const labels = {
+            'nao_geradas': "Gerar e Emitir Notas Faltantes",
+            'pendentes': "Forçar Envio de Pendentes",
+            'rejeitadas': "Retentar Rejeitadas"
+        };
+
+        if (!confirm(`Iniciar operação: ${labels[tipo]}?`)) return;
+
+        setBatchLoadingType(tipo); // Ativa spinner
+        
+        try {
+            const response = await fetch(`http://localhost:8000/fiscal/emitir/pendentes?tipo=${tipo}`, { 
+                method: 'POST',
+            });
+            const result = await response.json();
+            
+            if (!response.ok) throw new Error(result.detail || "Erro no lote.");
+            
+            toast.success("Operação concluída!", { description: result.message });
+            
+            // ✅ RECARREGA A TABELA PARA MOSTRAR O RESULTADO REAL DO BANCO
+            await fetchData(false); 
+
+        } catch (err) {
+            toast.error("Erro na operação", { description: err.message });
+        } finally {
+            setBatchLoadingType(null); // Desativa spinner
+        }
+    };
+
   return (
     <FiscalPageLayout
         MetaEnvio={
@@ -156,6 +191,10 @@ export default function FiscalPage() {
                             refetchData={fetchData}
                             fiscalConfig={fiscalConfig}
                             totalPurchased={summaryData.total_comprado_mes}
+                            totalIssued={summaryData.total_emitido_mes} // ✅ ADICIONAR ESTA PROP
+                            onEmitirMeta={handleEmitirMeta} // ✅ Passar a função do pai (se já não estiver)
+                            onBatchAction={handleBatchAction} 
+                            batchLoadingType={batchLoadingType}
                         />
                     )}
                 </TabsContent>

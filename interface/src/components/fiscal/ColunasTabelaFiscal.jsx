@@ -1,6 +1,6 @@
 "use client"
 
-import { ArrowUpDown, MoreHorizontal, Loader2 } from "lucide-react"
+import { ArrowUpDown, MoreHorizontal, Loader2, AlertCircle, FilePlus, Send } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Badge } from "@/components/ui/badge"
@@ -8,66 +8,44 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
 import { format } from "date-fns"
 import { cn } from "@/lib/utils"
 
-// --- COMPONENTE DE STATUS CORRIGIDO ---
+// --- COMPONENTE DE STATUS (Sem alterações) ---
 const StatusBadge = ({ status }) => {
-  if (!status) return null;
-  const statusNormalizado = status.toLowerCase();
-
+  if (!status) return <Badge variant="outline" className="text-muted-foreground border-dashed border-slate-400">Não Gerada</Badge>; // Fallback visual
+  
+  const s = status.toLowerCase();
   let variant = "secondary";
   let text = status;
-  let spin = false; // Loading padrão é FALSO
+  let spin = false; 
 
-  switch (statusNormalizado) {
+  switch (s) {
     case "autorizada":
     case "emitida":
-      variant = "success";
-      text = "Emitida";
-      break;
-    case "pendente": // ✅ Loading REMOVIDO daqui
-      // variant = "secondary"; // Pode manter ou mudar para outline
-      variant = "outline"; // Exemplo: Deixar mais sutil
-      text = "Pendente";
-      // spin = false; // Já é o padrão
-      break;
-    case "enviando": // ✅ NOVO STATUS TEMPORÁRIO com loading
+      variant = "success"; text = "Emitida"; break; // Ajuste se tiver cor 'success' no theme ou use 'default' e className bg-green
+    case "pendente":
+      variant = "outline"; text = "Pendente"; break;
+    case "enviando":
     case "processando":
-       variant = "info"; // Ex: Azul para indicar ação em progresso
-       text = "Enviando...";
-       spin = true; // ✅ Loading ATIVO aqui
-       break;
+       variant = "secondary"; text = "Enviando..."; spin = true; break;
     case "nao_declarar":
-    case "não declarar":
-      variant = "outline";
-      text = "Não Declarar";
-      break;
+      variant = "outline"; text = "Não Declarar"; break;
     case "rejeitada":
-      variant = "destructive";
-      text = "Rejeitada";
-      break;
+      variant = "destructive"; text = "Rejeitada"; break;
     case "cancelada":
-      variant = "destructive";
-      text = "Cancelada";
-      break;
-    case "erro": // Opcional: Status para erro na emissão
-       variant = "destructive";
-       text = "Erro Emissão";
-       spin = false;
-       break;
-    // Adicione um default case se quiser tratar status inesperados
-     default:
-       text = status // Mostra o status original se não reconhecido
-       variant = "secondary"
+      variant = "destructive"; text = "Cancelada"; break;
+    case "erro": 
+       variant = "destructive"; text = "Erro Emissão"; spin = false; break;
+    default:
+       text = status; variant = "secondary";
   }
 
   return (
-    <Badge variant={variant} className={cn(spin && "flex items-center gap-1")}>
+    <Badge variant={variant} className={cn(spin && "gap-1", variant === 'success' && "bg-green-100 text-green-800 hover:bg-green-200 border-transparent")}>
       {spin && <Loader2 className="h-3 w-3 animate-spin" />}
       {text}
     </Badge>
   );
 };
 
-// --- DEFINIÇÃO DAS COLUNAS CORRIGIDA ---
 export const fiscalColumns = [
   {
     id: "select",
@@ -75,91 +53,87 @@ export const fiscalColumns = [
     cell: ({ row }) => ( <Checkbox checked={row.getIsSelected()} onCheckedChange={(value) => row.toggleSelected(!!value)} aria-label="Select row" /> ),
   },
   {
-    accessorKey: "status_fiscal", // O accessor continua lendo o campo base
-    header: "Status Fiscal",
+    id: "status_real",
+    header: "Situação",
     cell: ({ row, table }) => {
       const venda = row.original;
-      const statusSefaz = venda.nota_fiscal_saida?.status_sefaz;
-      const statusInterno = venda.status_fiscal;
-      // Lógica para determinar o status "real" (como antes)
-      const finalStatus = statusSefaz || statusInterno;
-
-      // Verifica se esta venda está sendo enviada (lendo do meta)
-      const isSending = table.options.meta?.sendingIds?.has(venda.id);
-
-      // Determina qual status mostrar: "enviando" ou o status real
-      const displayStatus = isSending ? "enviando" : finalStatus;
-
-      // Renderiza o Badge com o status correto (que terá ou não o loading)
-      return <StatusBadge status={displayStatus} />;
+      const nota = venda.nota_fiscal_saida;
+      
+      // Se não tem nota, é "Não Gerada". Se tem, usa o status dela.
+      const statusReal = nota ? nota.status_sefaz : null;
+      
+      // Verifica se está enviando (pelo ID da nota ou da venda)
+      const isSending = table.options.meta?.sendingIds?.has(nota?.id || `venda-${venda.id}`);
+      
+      return <StatusBadge status={isSending ? "enviando" : statusReal} />;
     },
   },
   {
-    accessorKey: "nota_fiscal_saida",
-    header: "Nº da Nota",
+    id: "identificacao",
+    header: "Nº Nota", // Mudei de "Ref." para ser mais específico
     cell: ({ row }) => {
-      const nota = row.original.nota_fiscal_saida;
-      // Mostra o ID da nota OU a chave de acesso, se preferir
-      // return nota ? (nota.chave_acesso ? nota.chave_acesso.slice(-9) : nota.id) : "---"; // Exemplo com chave
-      return nota ? nota.id : "---"; // Mantendo ID por enquanto
-    },
+        const venda = row.original;
+        const nota = venda.nota_fiscal_saida;
+
+        if (nota) {
+            // ✅ CASO 1: Tem Nota -> Mostra só o número, fonte padrão
+            // Usamos 'font-medium' para alinhar com o peso visual das outras colunas importantes
+            return <span className="font-medium">{nota.numero || 'S/N'}</span>;
+        }
+
+        // ✅ CASO 2: Sem Nota -> Mantemos o ícone de alerta, mas na mesma linha
+        return (
+            <span className="flex items-center gap-2 text-amber-600 font-medium">
+                <AlertCircle className="h-4 w-4" /> Sem Nota
+            </span>
+        );
+    }
   },
   {
     accessorKey: "data_hora",
-    header: ({ column }) => ( <Button variant="ghost" onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}>Data da Venda<ArrowUpDown className="ml-2 h-4 w-4" /></Button> ),
+    header: ({ column }) => ( <Button variant="ghost" onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}>Data Venda<ArrowUpDown className="ml-2 h-4 w-4" /></Button> ),
     cell: ({ row }) => {
-       try {
-         // Adiciona try-catch para datas inválidas
-         return format(new Date(row.getValue("data_hora")), "dd/MM/yy HH:mm");
-       } catch (e) {
-         return "Data inválida";
-       }
+       try { return format(new Date(row.getValue("data_hora")), "dd/MM/yy HH:mm"); } 
+       catch (e) { return "Data inválida"; }
     }
   },
   {
     id: "data_emissao",
-    header: "Data de Emissão",
+    header: "Data Emissão",
     cell: ({ row }) => {
-      const issueDate = row.original.nota_fiscal_saida?.data_hora_autorizacao;
-      try {
-        return issueDate ? format(new Date(issueDate), "dd/MM/yy HH:mm") : "---";
-      } catch (e) {
-        return "Data inválida";
-      }
+      const issueDate = row.original.nota_fiscal_saida?.data_emissao; // Usa data_emissao ou data_hora_autorizacao
+      try { return issueDate ? format(new Date(issueDate), "dd/MM/yy HH:mm") : "---"; } 
+      catch (e) { return "---"; }
     },
   },
   {
     accessorKey: "valor_total",
-    header: () => <div className="text-right">Valor da Venda</div>,
+    header: () => <div className="text-right">Valor</div>,
     cell: ({ row }) => {
       const amount = parseFloat(row.getValue("valor_total"));
-      const formatted = new Intl.NumberFormat("pt-BR", {
-          style: "currency",
-          currency: "BRL",
-      }).format(isNaN(amount) ? 0 : amount);
+      const formatted = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(isNaN(amount) ? 0 : amount);
       return <div className="text-right font-medium">{formatted}</div>;
     },
   },
   {
     id: "actions",
-    cell: ({ row, table }) => { // Recebe 'table' para acessar o 'meta'
+    cell: ({ row, table }) => { 
       const sale = row.original;
-      const statusSefaz = sale.nota_fiscal_saida?.status_sefaz;
-      const statusInterno = sale.status_fiscal;
-      const finalStatus = statusSefaz || statusInterno;
+      // ✅ 1. DEFININDO A VARIÁVEL 'NOTA' (O que faltava)
+      const nota = sale.nota_fiscal_saida;
+      
+      const statusSefaz = nota?.status_sefaz;
+      const finalStatus = statusSefaz || 'pendente';
 
-      // Lógica MAIS PRECISA para saber se PODE emitir
-      // Uma venda só pode ser emitida se seu status final NÃO for um dos status terminais.
-      const statusFinais = ['autorizada', 'emitida', 'cancelada', 'rejeitada', 'nao_declarar', 'não declarar'];
+      const statusFinais = ['autorizada', 'emitida', 'cancelada', 'nao_declarar'];
+      // Pode emitir se NÃO for um status final. Se não tem nota, pode emitir (gerar).
       const podeEmitir = !statusFinais.includes(finalStatus?.toLowerCase());
-
-      // Lógica para saber se PODE cancelar/imprimir/baixar (status emitido com sucesso)
       const isIssuedSuccessfully = ['autorizada', 'emitida'].includes(finalStatus?.toLowerCase());
 
-      // Pega a função handleEmit do meta
       const handleEmit = table.options.meta?.handleEmitSingleNote;
-      // Verifica se esta linha está sendo enviada
-      const isSending = table.options.meta?.sendingIds?.has(sale.id);
+      
+      // Verifica envio (usando ID da nota ou da venda para garantir match)
+      const isSending = table.options.meta?.sendingIds?.has(nota?.id) || table.options.meta?.sendingIds?.has(`venda-${sale.id}`);
 
       return (
         <DropdownMenu>
@@ -168,31 +142,56 @@ export const fiscalColumns = [
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
             <DropdownMenuLabel>Ações</DropdownMenuLabel>
-            {/* ✅ CORREÇÃO AQUI: onClick chama handleEmit, disabled verifica 'podeEmitir' e 'isSending' */}
+            
+            {/* ✅ 2. LÓGICA HÍBRIDA: GERAR OU TRANSMITIR */}
+            {nota ? (
+                <DropdownMenuItem
+                  disabled={!podeEmitir || isSending}
+                  // Chama transmitir passando o ID da Nota
+                  onClick={() => handleEmit?.(nota.id, 'transmitir')} 
+                >
+                  {isSending ? <><Loader2 className="mr-2 h-3 w-3 animate-spin"/> Enviando...</> : <><Send className="mr-2 h-4 w-4" /> Transmitir SEFAZ</>}
+                </DropdownMenuItem>
+            ) : (
+                <DropdownMenuItem
+                  disabled={isSending}
+                  // Chama gerar passando o ID da Venda
+                  onClick={() => handleEmit?.(sale.id, 'gerar')} 
+                >
+                   {isSending ? <><Loader2 className="mr-2 h-3 w-3 animate-spin"/> Gerando...</> : <><FilePlus className="mr-2 h-4 w-4" /> Gerar NFe</>}
+                </DropdownMenuItem>
+            )}
+
             <DropdownMenuItem
-              disabled={!podeEmitir || isSending} // Só pode emitir se o status final permitir E não estiver enviando
-              onClick={() => handleEmit?.(nota.id)} // Chama a função real
-            >
-              {isSending ? "Enviando..." : "Emitir NFe"} {/* Muda o texto */}
-            </DropdownMenuItem>
-            {/* Mantém a ação de 'Não Declarar' se ainda puder emitir */}
-             <DropdownMenuItem
                disabled={!podeEmitir || isSending}
-               onClick={() => alert(`Marcando venda ${nota.id} para não declarar`)}
+               onClick={() => alert(`Marcando venda ${sale.id} para não declarar`)}
              >
               Marcar como 'Não Declarar'
             </DropdownMenuItem>
+            
             <DropdownMenuSeparator />
-            {/* Habilita ações de cancelamento/download apenas se emitida com sucesso */}
-            <DropdownMenuItem disabled={!isIssuedSuccessfully} onClick={() => alert(`Cancelando NFe da venda ${nota.id}`)}>
+            
+            {/* Ações de Pós-Emissão */}
+            <DropdownMenuItem disabled={!isIssuedSuccessfully} onClick={() => alert("Cancelamento Fiscal em breve")}>
               Cancelar NFe
             </DropdownMenuItem>
-            <DropdownMenuItem disabled={!isIssuedSuccessfully} onClick={() => alert(`Baixando DANFE da venda ${nota.id}`)}>
+            <DropdownMenuItem disabled={!isIssuedSuccessfully} onClick={() => alert("Download PDF em breve")}>
               Imprimir DANFE
             </DropdownMenuItem>
-            <DropdownMenuItem disabled={!isIssuedSuccessfully} onClick={() => alert(`Baixando XML da venda ${nota.id}`)}>
+            <DropdownMenuItem disabled={!isIssuedSuccessfully} onClick={() => alert("Download XML em breve")}>
               Baixar XML
             </DropdownMenuItem>
+
+             {/* Visualizar Erro (Se houver) */}
+             {nota?.xmotivo && !isIssuedSuccessfully && (
+                 <>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={() => alert(nota.xmotivo)} className="text-destructive">
+                        <AlertCircle className="mr-2 h-4 w-4" /> Ver Erro
+                    </DropdownMenuItem>
+                 </>
+             )}
+
           </DropdownMenuContent>
         </DropdownMenu>
       )
