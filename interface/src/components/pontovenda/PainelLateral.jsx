@@ -18,6 +18,7 @@ const hotkeys = [
   { key: "F3", description: "Identificar Cliente" },
   { key: "F4", description: "Aplicar Desconto" },
   { key: "ESC", description: "Cancelar Venda" },
+  { key: "Alt+S", description: "Sair do PDV" },
 ]
 
 export default function PosSidePanel({ lastItem }) {

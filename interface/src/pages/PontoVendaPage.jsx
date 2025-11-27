@@ -336,12 +336,25 @@ const handleOpenCloseModalToggle = async () => {
             } else { toast.warning("Caixa Fechado", { description: "Abra o caixa para realizar recebimentos." }); }
             return;
         }
+        if (e.altKey && (e.key === 's' || e.key === 'S' || e.key === 'F7')) {
+            e.preventDefault();
+            console.log("Comando de Saída detectado");
+
+            if (cartItems.length > 0) {
+                const confirmExit = window.confirm("Há uma venda em andamento. Se sair agora, ela será perdida. Deseja realmente sair?");
+                if (!confirmExit) return;
+            }
+            
+            toast.info("Saindo do PDV...");
+            navigate('/pdvs'); // Garanta que 'navigate' está importado do 'useNavigate'
+            return;
+        }
     };
 
     document.addEventListener('keydown', handleKeyPress);
     return () => document.removeEventListener('keydown', handleKeyPress);
   
-  }, [barcodeBuffer, isAddingItem, isCashModalOpen, saleToRecover, isQtyModalOpen, saleStatus, isManualItemModalOpen, pdvSession, isRecebimentoModalOpen, isModalOpen, isPaymentModalOpen, cartItems, handleCancelItem, handleCancelSale]);
+  }, [barcodeBuffer, isAddingItem, isCashModalOpen, saleToRecover, isQtyModalOpen, saleStatus, isManualItemModalOpen, pdvSession, isRecebimentoModalOpen, isModalOpen, isPaymentModalOpen, cartItems, navigate, handleCancelItem, handleCancelSale]);
 
   React.useEffect(() => {
       const handleOnline = () => setPdvSession(prev => (prev ? { ...prev, isOnline: true } : null));
