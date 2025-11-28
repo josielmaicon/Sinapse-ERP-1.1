@@ -85,3 +85,6 @@ class LabelPrintData(BaseModel):
 class ProdutoComPromocao(Produto):
     preco_final: float
     promocao_ativa: Optional[str] = None # Nome da promoção aplicada (se houver)
+
+class ImportarChaveRequest(BaseModel):
+    chave_acesso: str
