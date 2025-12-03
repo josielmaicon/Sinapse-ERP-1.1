@@ -4,6 +4,8 @@ from sqlalchemy.orm import Session,joinedload
 from .. import models, schemas
 from ..database import get_db
 from typing import List
+from cryptography.hazmat.primitives.serialization import pkcs12
+from cryptography.hazmat.backends import default_backend
 
 router = APIRouter(prefix="/configuracoes", tags=["Configurações"])
 
@@ -149,49 +151,68 @@ def update_fiscal_rules(regras: dict, db: Session = Depends(get_db)):
     db.refresh(config)
     return config
 
-# ✅ UPLOAD DE CERTIFICADO (SIMULADO)
 @router.post("/fiscal/certificado", response_model=schemas.CertificadoInfo)
 async def upload_certificado(
     file: UploadFile = File(...),
-    senha: str = Form(...), # Recebe via Form-Data
+    senha: str = Form(...),
     db: Session = Depends(get_db)
 ):
     """
-    Recebe o arquivo .pfx, salva no banco e simula a leitura dos dados.
-    (Futuro: Usar biblioteca 'cryptography' para ler validade real)
+    Recebe um arquivo .pfx, valida a senha, extrai dados reais
+    e salva no banco de dados.
     """
-    
-    # 1. Ler o arquivo
+
+    # 1. Ler o arquivo binário
     conteudo = await file.read()
-    
-    # 2. Simulação de Leitura (Mock)
-    # Vamos fingir que lemos o certificado e ele vence em 1 ano
-    validade_simulada = datetime.utcnow() + timedelta(days=365)
-    titular_simulado = "MINHA EMPRESA LTDA (Simulado)"
-    emissor_simulado = "Autoridade Certificadora Raiz"
-    
-    # 3. Salvar no Banco
+
+    # 2. Validar e carregar o certificado real
+    try:
+        private_key, certificate, additional_certs = pkcs12.load_key_and_certificates(
+            data=conteudo,
+            password=senha.encode(),
+            backend=default_backend()
+        )
+    except Exception:
+        raise HTTPException(
+            status_code=400,
+            detail="Certificado inválido ou senha incorreta."
+        )
+
+    # 3. Extrair metadados reais do certificado
+    subject = certificate.subject
+    issuer = certificate.issuer
+
+    titular = subject.rfc4514_string()        # Nome da empresa/proprietário
+    emissor = issuer.rfc4514_string()         # Autoridade Certificadora
+    validade = certificate.not_valid_after     # Validade real
+    serial_number = certificate.serial_number  # Número de série
+
+    # 4. Desativar outros certificados ativos (regra de negócio)
+    db.query(models.CertificadoDigital).filter(
+        models.CertificadoDigital.empresa_id == 1,
+        models.CertificadoDigital.ativo == True
+    ).update({"ativo": False})
+
+    # 5. Criar registro no banco
     db_cert = models.CertificadoDigital(
         empresa_id=1,
         nome_arquivo=file.filename,
-        senha_arquivo=senha, # Cuidado: Em prod, criptografar!
+        senha_arquivo=senha,     # Em produção, criptografar!
         arquivo_binario=conteudo,
-        
-        # Dados extraídos (Simulados)
-        titular=titular_simulado,
-        emissor=emissor_simulado,
-        data_validade=validade_simulada,
-        serial_number="12345678900",
+
+        # Dados extraídos
+        titular=titular,
+        emissor=emissor,
+        data_validade=validade,
+        serial_number=str(serial_number),
+
         ativo=True
     )
-    
-    # Desativar outros certificados da mesma empresa? (Regra de negócio: só 1 ativo)
-    # db.query(models.CertificadoDigital).update({"ativo": False})
-    
+
     db.add(db_cert)
     db.commit()
     db.refresh(db_cert)
-    
+
     return db_cert
 
 @router.get("/fiscal/certificados", response_model=List[schemas.CertificadoInfo])

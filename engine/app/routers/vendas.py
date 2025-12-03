@@ -173,6 +173,7 @@ def finalizar_venda_pdv(
     request: schemas.PdvVendaRequest,
     db: Session = Depends(get_db)
 ):
+    # --- VALIDAÇÕES INICIAIS (Fora da transação) ---
     valor_total_pago = sum(p.valor for p in request.pagamentos)
     
     if round(valor_total_pago, 2) < round(request.total_calculado, 2):
@@ -184,127 +185,138 @@ def finalizar_venda_pdv(
     valor_troco = max(0, valor_total_pago - request.total_calculado)
 
     try:
-        with db.begin():
-            venda = db.query(models.Venda).filter(
-                models.Venda.pdv_id == request.pdv_db_id,
-                models.Venda.operador_id == request.operador_db_id,
-                models.Venda.status == "em_andamento"
-            ).with_for_update().first()
+        # ❌ REMOVIDO: with db.begin(): (O piloto automático)
+        # ✅ AGORA: Controle Manual
+        
+        # 1. Busca e trava a venda
+        venda = db.query(models.Venda).filter(
+            models.Venda.pdv_id == request.pdv_db_id,
+            models.Venda.operador_id == request.operador_db_id,
+            models.Venda.status == "em_andamento"
+        ).with_for_update().first()
 
-            if not venda:
-                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Nenhuma venda 'em andamento' encontrada.")
+        if not venda:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Nenhuma venda 'em andamento' encontrada para este operador/PDV.")
 
-            venda.status = "concluida"
-            venda.cliente_id = request.cliente_db_id
-            db.add(venda)
+        # 2. Atualiza status da venda
+        venda.status = "concluida"
+        venda.cliente_id = request.cliente_db_id
+        
+        # Salva alterações parciais (sem commitar ainda)
+        db.add(venda)
+        
+        # 3. Processa os pagamentos
+        for pagamento in request.pagamentos:
             
-            for pagamento in request.pagamentos:
-                if pagamento.tipo == 'crediario':
-                    if not request.cliente_db_id:
-                        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cliente não identificado.")
-                    
-                    db_cliente = db.query(models.Cliente).filter(
-                        models.Cliente.id == request.cliente_db_id
-                    ).with_for_update().first()
-                    
-                    if not db_cliente:
-                        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cliente do crediário não encontrado.")
+            # --- Pagamento Crediário ---
+            if pagamento.tipo == 'crediario':
+                if not request.cliente_db_id:
+                    raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cliente não identificado para venda em crediário.")
+                
+                db_cliente = db.query(models.Cliente).filter(
+                    models.Cliente.id == request.cliente_db_id
+                ).with_for_update().first()
+                
+                if not db_cliente:
+                    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cliente do crediário não encontrado.")
+                
+                # Validação de Status
+                if db_cliente.status_conta != 'ativo':
+                        raise HTTPException(
+                            status_code=status.HTTP_403_FORBIDDEN, 
+                            detail=f"Compra negada: A conta de {db_cliente.nome} não está ativa (Status: {db_cliente.status_conta})."
+                        )
+                
+                # Validação de Limite
+                limite_disponivel = (db_cliente.limite_credito - db_cliente.saldo_devedor)
+                if not db_cliente.trust_mode and pagamento.valor > limite_disponivel:
                         
-                    # --- ✅ A LÓGICA DE OVERRIDE CORRIGIDA ---
-                    
-                    autorizado_por_override = False
-                    admin_autorizador = None
-                    
-                    # 1. O GERENTE APRESENTA O CRACHÁ?
-                    if request.override_auth and request.override_auth.admin_senha:
-                        try:
+                        # Lógica de Override (Autorização)
+                        autorizado_por_override = False
+                        if request.override_auth and request.override_auth.admin_senha:
+                            # Reutiliza a função de dependência manualmente
+                            # Precisamos passar um objeto compatível com o schema AdminAuthRequest
                             admin_autorizador = get_admin_by_password_only(request.override_auth, db)
                             if admin_autorizador:
                                 autorizado_por_override = True
-                                print(f"AUDITORIA: Override de limite/status para Cliente {db_cliente.id} AUTORIZADO por Admin {admin_autorizador.id}")
-                        except HTTPException as e:
-                            # Se a senha do crachá estiver ERRADA, retorna 401
-                            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=f"Senha de autorização inválida: {e.detail}")
+                                print(f"AUDITORIA: Override autorizado por Admin ID {admin_autorizador.id}")
 
-                    # 2. SE O GERENTE NÃO AUTORIZOU, o Porteiro (Status) e o Gerente (Limite) entram
-                    if not autorizado_por_override:
-                        
-                        # 2a. Verificação de Status (O Porteiro)
-                        if db_cliente.status_conta != 'ativo':
-                             raise HTTPException(
-                                 status_code=status.HTTP_403_FORBIDDEN, # 403 (Bloqueado)
-                                 detail=f"Conta de {db_cliente.nome} não está ativa (Status: {db_cliente.status_conta.upper()})."
-                             )
-                        
-                        # 2b. Verificação de Limite (O Gerente de Limite)
-                        limite_disponivel = (db_cliente.limite_credito - db_cliente.saldo_devedor)
-                        if not db_cliente.trust_mode and pagamento.valor > limite_disponivel:
-                             raise HTTPException(
-                                 status_code=status.HTTP_402_PAYMENT_REQUIRED, # 402 (Sem Limite)
-                                 detail=f"Limite insuficiente. Disponível: R$ {limite_disponivel:.2f}"
-                             )
-                    
-                    # 3. Processa a transação (agora seguro, pois foi validado OU autorizado)
-                    db_cliente.saldo_devedor += pagamento.valor
-                    db.add(db_cliente)
-                    
-                    db_transacao = models.TransacaoCrediario(
-                        cliente_id=request.cliente_db_id,
-                        tipo='compra',
-                        valor=pagamento.valor,
-                        # Adiciona a auditoria na descrição da transação
-                        descricao=f"Venda #{venda.id}" + (" (AUTORIZADA)" if autorizado_por_override else ""),
-                        venda_id=venda.id
-                    )
-                    db.add(db_transacao)
+                        if not autorizado_por_override:
+                            raise HTTPException(
+                                status_code=status.HTTP_402_PAYMENT_REQUIRED, 
+                                detail=f"Limite insuficiente. Disponível: R$ {limite_disponivel:.2f}"
+                            )
                 
-                if pagamento.tipo == 'dinheiro':
-                    db_mov = models.MovimentacaoCaixa(
-                        tipo='suprimento',
-                        valor=pagamento.valor,
-                        pdv_id=request.pdv_db_id,
-                        operador_id=request.operador_db_id
-                    )
-                    db.add(db_mov)
-
-            # 4. Registra Troco (se houver)
-            if valor_troco > 0:
-                db_troco_mov = models.MovimentacaoCaixa(
-                    tipo='sangria',
-                    valor=valor_troco,
-                    # descricao=f"Troco Venda #{venda.id}", # REMOVIDO pois não existe na tabela
+                # Efetiva a transação
+                db_cliente.saldo_devedor += pagamento.valor
+                db.add(db_cliente)
+                
+                db_transacao = models.TransacaoCrediario(
+                    cliente_id=request.cliente_db_id,
+                    tipo='compra',
+                    valor=pagamento.valor,
+                    descricao=f"Referente à Venda #{venda.id}",
+                    venda_id=venda.id,
+                    data_hora=datetime.utcnow()
+                )
+                db.add(db_transacao)
+            
+            # --- Pagamento Dinheiro ---
+            if pagamento.tipo == 'dinheiro':
+                db_mov = models.MovimentacaoCaixa(
+                    tipo='suprimento',
+                    valor=pagamento.valor,
                     pdv_id=request.pdv_db_id,
                     operador_id=request.operador_db_id
                 )
-                db.add(db_troco_mov)
+                db.add(db_mov)
 
-            # 5. Finaliza metadados
-            venda.forma_pagamento = "misto" if len(request.pagamentos) > 1 else request.pagamentos[0].tipo
-            db.add(venda)
-
-            try:
-                fiscal_service.inicializar_nota_para_venda(venda.id, db)
-                db.commit() # Salva a nota pendente
-            except Exception as e:
-                print(f"ERRO AO INICIAR NOTA FISCAL: {e}")
-            return schemas.PdvVendaResponse(
-                venda_id=venda.id,
-                mensagem=f"Venda #{venda.id} finalizada com sucesso!",
-                troco=valor_troco
+        # 4. Registra Troco (se houver)
+        if valor_troco > 0:
+            db_troco_mov = models.MovimentacaoCaixa(
+                tipo='sangria',
+                valor=valor_troco,
+                pdv_id=request.pdv_db_id,
+                operador_id=request.operador_db_id
             )
+            db.add(db_troco_mov)
+
+        # 5. Finaliza metadados da venda
+        # Proteção contra lista vazia de pagamentos
+        if request.pagamentos:
+            venda.forma_pagamento = "misto" if len(request.pagamentos) > 1 else request.pagamentos[0].tipo
+        else:
+            venda.forma_pagamento = "indefinido"
+
+        db.add(venda)
+
+        # ✅ COMMIT MANUAL: Aqui é onde salvamos tudo de uma vez
+        db.commit()
+        
+        # Recarrega para garantir dados frescos no retorno
+        db.refresh(venda)
+
+        return schemas.PdvVendaResponse(
+            venda_id=venda.id,
+            mensagem=f"Venda #{venda.id} finalizada com sucesso!",
+            troco=valor_troco
+        )
             
-    except HTTPException as e:
-        raise e
+    except HTTPException as he:
+        # ✅ ROLLBACK MANUAL: Se der erro HTTP (400, 402, 403), desfaz tudo
+        db.rollback()
+        raise he
+        
     except Exception as e:
+        # ✅ ROLLBACK MANUAL: Se der erro de código, desfaz tudo
+        db.rollback()
         print(f"ERRO DE TRANSAÇÃO: {e}") 
-        # traceback.print_exc() # Útil para depuração
+        # traceback.print_exc() # Útil para ver a linha exata do erro no terminal
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Erro interno ao processar a venda: {str(e)}"
         )
     
-
-
 @router.post("/adicionar-item-smart", response_model=schemas.Venda)
 def adicionar_item_smart(request: schemas.AdicionarItemSmartRequest, db: Session = Depends(get_db)):
     config = db.query(models.Empresa).filter(models.Empresa.id == 1).first()
