@@ -1,27 +1,34 @@
+# Python (consultar_nfe_por_chave)
 import os
 import subprocess
 import tempfile
 import json
+import shutil
 from fastapi import HTTPException
-
+from base64 import b64decode
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 PHP_SCRIPT = os.path.join(BASE_DIR, "sefaz_service", "consulta_dfe.php")
 
 
 def consultar_nfe_por_chave(chave_nfe, certificado_binario, senha, cnpj_empresa, homologacao=False):
-
     if not os.path.exists(PHP_SCRIPT):
-        raise HTTPException(status_code=500, detail="Script PHP não encontrado no servidor.")
+        raise HTTPException(status_code=500, detail="Script PHP não encontrado.")
 
-    # ---- CRIAÇÃO DE ARQUIVO PFX CORRETA NO MACOS ----
     fd, temp_pfx_path = tempfile.mkstemp(suffix=".pfx")
-    os.close(fd)  # IMPORTANTE: evita lock e garante que PHP consiga acessar
+    os.close(fd)
 
-    with open(temp_pfx_path, "wb") as f:
-        f.write(certificado_binario)
+    runtime_tmp = tempfile.mkdtemp(prefix="nfephp_runtime_")
 
     try:
+        with open(temp_pfx_path, "wb") as f:
+            f.write(certificado_binario)
+
+        env = os.environ.copy()
+        env["TMPDIR"] = runtime_tmp
+        env["TEMP"] = runtime_tmp
+        env["TMP"] = runtime_tmp
+
         cmd = [
             "php",
             PHP_SCRIPT,
@@ -32,37 +39,49 @@ def consultar_nfe_por_chave(chave_nfe, certificado_binario, senha, cnpj_empresa,
             "1" if homologacao else "0"
         ]
 
-        print("DEBUG CMD:", cmd)
-
         process = subprocess.run(
             cmd,
             stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True
+            stderr=subprocess.DEVNULL,
+            text=True,
+            check=False,
+            env=env
         )
 
-        if process.returncode != 0:
+        raw_output = process.stdout.strip()
+
+        if not raw_output:
             raise HTTPException(
                 status_code=500,
-                detail=f"Erro PHP: {process.stderr}"
+                detail="PHP retornou vazio (erro fatal antes do catch)."
             )
 
-        output = process.stdout.strip()
-        data = json.loads(output)
+        try:
+            data = json.loads(raw_output)
+            print("\n=== XML CRU DA SEFAZ ===\n")
+            print(data.get("raw_xml", "<< SEM raw_xml >>"))
+            print("\n=========================\n")
+        except:
+            raise HTTPException(
+                status_code=500,
+                detail=f"PHP retornou conteúdo não-JSON: {raw_output[:200]}..."
+            )
 
         if "error" in data:
-            raise HTTPException(status_code=500, detail=f"Erro NFePHP: {data['error']}")
+            raise HTTPException(
+                status_code=500,
+                detail=f"Erro NFePHP: {data['error']}"
+            )
 
-        if "xml" not in data:
-            raise HTTPException(status_code=500, detail="Retorno inválido do script PHP.")
+        if "xml_base64" not in data:
+            raise HTTPException(
+                status_code=500,
+                detail="Campo 'xml_base64' ausente no retorno da consulta."
+            )
 
-        from base64 import b64decode
-        return b64decode(data["xml"]).decode("utf-8")
+        return b64decode(data["xml_base64"]).decode("utf-8")
 
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Erro ao executar script PHP: {e}")
     finally:
         if os.path.exists(temp_pfx_path):
             os.remove(temp_pfx_path)
+        shutil.rmtree(runtime_tmp, ignore_errors=True)
