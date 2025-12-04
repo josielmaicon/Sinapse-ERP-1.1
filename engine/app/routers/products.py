@@ -11,10 +11,9 @@ from ..models import NotaFiscalEntrada # Certifique-se de importar
 from fastapi import UploadFile, File
 from sqlalchemy.exc import IntegrityError
 from ..services.xml_service import parse_nfe_xml
-from ..services.sefaz_query_service import get_xml_from_sefaz # Contém a lógica com pynfe
+from ..services.sefaz_query_service import consultar_nfe_por_chave # Contém a lógica com pynfe
 from ..schemas import ImportarChaveRequest # Assumindo que o schema está definido
 from ..database import get_db # Função para obter a sessão do banco
-from ..services.sefaz_query_service import get_xml_from_sefaz 
 from ..services.xml_service import parse_nfe_xml 
 
 from ..import models, schemas
@@ -256,8 +255,7 @@ def preview_nfe_por_chave(
     # 1. Busca Certificado e Dados da Empresa
     try:
         certificado_db = get_certificado_ativo(db)
-        cnpj_empresa = certificado_db.cnpj_titular 
-        uf_empresa = certificado_db.uf
+        cnpj_empresa = certificado_db.empresa.cnpj 
         
     except HTTPException:
         raise HTTPException(status_code=400, detail="Certificado Digital e/ou dados da empresa não encontrados. Configure a SEFAZ.")
@@ -274,13 +272,12 @@ def preview_nfe_por_chave(
 
     # 3. BAIXAR O XML COMPLETO (Usando DF-e ERP Brasil)
     try:
-        xml_content_string = get_xml_from_sefaz(
+        xml_content_string = consultar_nfe_por_chave(
             chave_nfe=chave,
             certificado_binario=certificado_db.arquivo_binario,
             senha=certificado_db.senha_arquivo,
-            uf_empresa=uf_empresa,
-            cnpj_destinatario=cnpj_empresa,
-            homologacao=False # Altere conforme o ambiente
+            cnpj_empresa=cnpj_empresa,
+            homologacao=True # Altere conforme o ambiente
         )
     except HTTPException as e:
         raise e # Propaga erros de DF-e (404, 500)
