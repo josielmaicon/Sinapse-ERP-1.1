@@ -15,7 +15,7 @@ from ..services.sefaz_query_service import consultar_nfe_por_chave # Contém a l
 from ..schemas import ImportarChaveRequest # Assumindo que o schema está definido
 from ..database import get_db # Função para obter a sessão do banco
 from ..services.xml_service import parse_nfe_xml 
-
+from ..utils import extrair_proc_nfe 
 from ..import models, schemas
 
 models.Base.metadata.create_all(bind=engine)
@@ -244,147 +244,205 @@ async def preview_nfe_por_arquivo(
     
     return { "data": nfe_data_enriched, "aviso": None }
 
+
 @router.post("/nfe/preview/chave", response_model=Dict[str, Any])
-def preview_nfe_por_chave(
-    request: ImportarChaveRequest,
-    db: Session = Depends(get_db)
-):
+def preview_nfe_por_chave(request: ImportarChaveRequest, db: Session = Depends(get_db)):
     chave = request.chave_acesso.strip()
-    # ... (Validação da chave) ...
 
-    # 1. Busca Certificado e Dados da Empresa
-    try:
-        certificado_db = get_certificado_ativo(db)
-        cnpj_empresa = certificado_db.empresa.cnpj 
-        
-    except HTTPException:
-        raise HTTPException(status_code=400, detail="Certificado Digital e/ou dados da empresa não encontrados. Configure a SEFAZ.")
-
-    # 2. Verifica se a nota JÁ FOI IMPORTADA (Alerta)
+    # 1. Dados do Certificado
+    certificado_db = get_certificado_ativo(db)
+    
+    # 2. Verifica Duplicidade (Regra de Negócio do ERP)
     nota_existe = db.query(models.NotaFiscalEntrada).filter(
         models.NotaFiscalEntrada.chave_acesso == chave
     ).first()
     
     aviso = None
     if nota_existe:
-        # ... (Formatação do aviso) ...
-        pass
+        aviso = f"A NF-e {chave} já foi importada anteriormente."
 
-    # 3. BAIXAR O XML COMPLETO (Usando DF-e ERP Brasil)
-    try:
-        xml_content_string = consultar_nfe_por_chave(
-            chave_nfe=chave,
-            certificado_binario=certificado_db.arquivo_binario,
-            senha=certificado_db.senha_arquivo,
-            cnpj_empresa=cnpj_empresa,
-            homologacao=True # Altere conforme o ambiente
-        )
-    except HTTPException as e:
-        raise e # Propaga erros de DF-e (404, 500)
+    # 3. Chamada ao Serviço (Agora ele resolve tudo da SEFAZ)
+    dados_sefaz = consultar_nfe_por_chave(
+        chave_nfe=chave,
+        certificado_binario=certificado_db.arquivo_binario,
+        senha=certificado_db.senha_arquivo,
+        cnpj_empresa=certificado_db.empresa.cnpj,
+        producao=True
+    )
 
-    # 4. Parsear o XML em Objeto Python
-    try:
-        # O XML da ERP Brasil virá limpo (<procNFe>), o parser deve funcionar!
-        nfe_data_parsed = parse_nfe_xml(xml_content_string) 
-    except ValueError as e:
-        raise HTTPException(status_code=422, detail=f"Erro de processamento: O XML baixado tem formato inesperado. ({str(e)})")
+    # 4. Cruzamento com Banco de Dados (Regra de Negócio do ERP)
+    # O service devolveu a lista bruta, agora enriquecemos com dados do nosso sistema
+    itens_processados = []
+    
+    for item_xml in dados_sefaz["produtos"]:
+        
+        ean = item_xml.get("ean")
+        if ean == "SEM GTIN": ean = ""
+        
+        # Tenta achar no banco
+        produto_db = None
+        if ean:
+            produto_db = db.query(models.Produto).filter(
+                models.Produto.codigo_barras == ean
+            ).first()
+            
+        # Monta objeto para o Frontend
+        novo_item = {
+            # Dados da Nota
+            "codigo_fornecedor": item_xml["codigo"],
+            "ean": ean,
+            "nome": item_xml["descricao"],
+            "ncm": item_xml["ncm"],
+            "cfop": item_xml["cfop"],
+            "unidade": item_xml["unidade"],
+            "quantidade": item_xml["quantidade"],
+            "valor_unitario": item_xml["valor_unitario"],
+            "valor_total": item_xml["valor_total"],
+            
+            # Dados do Sistema (Cruzamento)
+            "produto_existente_id": produto_db.id if produto_db else None,
+            "nome_sistema": produto_db.nome if produto_db else item_xml["descricao"],
+            
+            # Sugestão de Preço
+            "preco_venda_atual": float(produto_db.preco_venda) if produto_db else round(item_xml["valor_unitario"] * 1.5, 2)
+        }
+        itens_processados.append(novo_item)
 
-    # 5. Enriquece os dados
-    nfe_data_enriched = _enriquecer_dados_nfe(nfe_data_parsed, db)
-
-    return { "data": nfe_data_enriched, "aviso": aviso }
+    return {
+        "data": {
+            "header": {
+                "emitente": {
+                    "nome": dados_sefaz["header"]["emitente_nome"],
+                    "cnpj": dados_sefaz["header"]["emitente_cnpj"]
+                },
+                # Dados Fiscais Cruciais para o Banco
+                "numero_nota": dados_sefaz["header"]["numero_nota"] or chave[25:34],
+                "serie": dados_sefaz["header"]["serie"] or "1", # <--- ADICIONADO (Padrão 1 se falhar)
+                "chave_acesso": chave,                          # <--- ADICIONADO (O confirm precisa disso)
+                "valor_total_nota": float(dados_sefaz["header"]["valor_total"] or 0), # <--- ADICIONADO
+                "data_emissao": dados_sefaz["header"]["data_emissao"]
+            },
+            "itens": itens_processados,
+            "aviso": aviso,
+            "xml_processado": dados_sefaz["xml_nfe"]
+        },
+        "aviso": aviso
+    }
 
 @router.post("/nfe/confirmar", response_model=dict)
 def confirmar_entrada_nfe(
     dados_confirmados: dict, 
     db: Session = Depends(get_db)
 ):
-    """
-    Recebe o JSON final (após revisão do usuário) e salva tudo atomicamente.
-    """
-    header = dados_confirmados['header']
-    itens = dados_confirmados['itens']
+    header = dados_confirmados.get('header', {})
+    itens = dados_confirmados.get('itens', [])
     logs = []
     
+    if not header or not itens:
+        raise HTTPException(400, detail="Dados da nota incompletos.")
+
     try:
         with db.begin():
+            # =========================================
             # A. Salva a Nota Fiscal de Entrada
-            # Tenta converter data ISO
+            # =========================================
             try:
-                data_emissao = datetime.fromisoformat(header['data_emissao'].split('+')[0]).date()
+                raw_date = header.get('data_emissao', '')
+                if raw_date and 'T' in raw_date:
+                    data_emissao = datetime.fromisoformat(raw_date.split('+')[0]).date()
+                elif raw_date:
+                    data_emissao = datetime.strptime(raw_date, "%Y-%m-%d").date()
+                else:
+                    data_emissao = datetime.now().date()
             except:
-                data_emissao = datetime.utcnow().date()
+                data_emissao = datetime.now().date()
 
             nova_nota = models.NotaFiscalEntrada(
-                numero_nota=str(header['numero_nota']),
-                serie=str(header['serie']),
-                chave_acesso=header['chave_acesso'],
+                numero_nota=str(header.get('numero_nota', '0')),
+                serie=str(header.get('serie', '1')),
+                chave_acesso=header.get('chave_acesso', ''),
                 data_emissao=data_emissao,
-                valor_total=header['valor_total_nota'],
-                xml_conteudo="Importação via Sistema"
+                valor_total=float(header.get('valor_total_nota', header.get('valor_total', 0))),
+                xml_conteudo=dados_confirmados.get('xml_processado', "Importação via Sistema")
             )
             db.add(nova_nota)
+            db.flush() 
 
-            # B. Processa cada produto (Atualiza ou Cria)
+            # =========================================
+            # B. Processa Itens
+            # =========================================
             for item in itens:
-                ean = item['codigo_barras']
+                ean = item.get('ean') or item.get('codigo_barras')
+                if ean == "SEM GTIN": ean = None
                 
-                # Tenta buscar pelo ID se o front mandou (mais seguro)
                 produto = None
+                
+                # 1. Tenta pelo ID
                 if item.get('produto_existente_id'):
                     produto = db.query(models.Produto).get(item['produto_existente_id'])
                 
-                # Se não achou pelo ID, tenta pelo EAN (caso seja novo cadastro que coincide)
-                if not produto and ean and ean != "SEM GTIN":
+                # 2. Tenta pelo EAN
+                if not produto and ean:
                     produto = db.query(models.Produto).filter(models.Produto.codigo_barras == ean).first()
                 
+                # Conversão de Valores
+                # ATENÇÃO: Convertendo para int() porque seu banco é Integer, mas o ideal seria Float no banco.
+                qtd_nota = float(item.get('quantidade', 0))
+                custo_nota = float(item.get('valor_unitario', 0))
+                
+                nome_final = item.get('nome_sistema') or item.get('nome') or item.get('descricao') or "Produto Sem Nome"
+
                 if produto:
                     # --- ATUALIZAR ---
-                    qtd_antiga = produto.quantidade_estoque
-                    produto.quantidade_estoque += item['quantidade']
-                    produto.preco_custo = item['valor_unitario']
+                    # Se seu banco é Integer, precisamos somar como float e converter depois ou assumir perda decimal
+                    qtd_atual = float(produto.quantidade_estoque or 0)
+                    produto.quantidade_estoque = int(qtd_atual + qtd_nota) # Cast para Integer
                     
-                    # Opcional: Atualizar nome/preço venda se o usuário editou na tabela
+                    produto.preco_custo = custo_nota
+                    
                     if item.get('nome_sistema'):
-                        produto.nome = item['nome_sistema']
+                        produto.nome = nome_final
                     if item.get('preco_venda_atual'):
-                        produto.preco_venda = item['preco_venda_atual']
+                        produto.preco_venda = float(item['preco_venda_atual'])
                         
                     db.add(produto)
-                    logs.append(f"✅ Atualizado: {produto.nome} (Estoque: {qtd_antiga} -> {produto.quantidade_estoque})")
+                    logs.append(f"✅ Atualizado: {produto.nome}")
                 else:
                     # --- CRIAR NOVO ---
                     novo_prod = models.Produto(
-                        nome=item.get('nome_sistema', item['nome']), # Usa o nome editado ou original
-                        codigo_barras=ean or "SEM GTIN",
-                        quantidade_estoque=item['quantidade'],
-                        preco_custo=item['valor_unitario'],
-                        preco_venda=item.get('preco_venda_atual', item['valor_unitario'] * 1.5),
-                        ncm=item['ncm'],
-                        # Defina valores padrão para campos obrigatórios que não vêm na nota
-                        categoria="Geral" 
+                        nome=nome_final,
+                        codigo_barras=ean,
+                        quantidade_estoque=int(qtd_nota), # Cast para Integer conforme seu model
+                        preco_custo=custo_nota,
+                        preco_venda=float(item.get('preco_venda_atual', custo_nota * 1.5)),
+                        
+                        # --- CORREÇÃO AQUI ---
+                        unidade_medida=item.get('unidade', 'UN'), # Mudei de 'unidade' para 'unidade_medida'
+                        
+                        ncm=str(item.get('ncm', '')),
+                        cfop=str(item.get('cfop', '')),
+                        # cst=str(item.get('cst', '')), # Descomente se vier do XML
+                        categoria="Geral"
                     )
                     db.add(novo_prod)
                     logs.append(f"🆕 Cadastrado: {novo_prod.nome}")
 
         return {
             "status": "sucesso",
-            "mensagem": "Entrada de mercadoria processada com sucesso!",
+            "mensagem": "Entrada realizada com sucesso!",
             "logs": logs
         }
 
-    except IntegrityError:
-        print("Tentativa de duplicidade barrada pelo Banco de Dados.")
-        raise HTTPException(
-            status_code=400, 
-            # Usamos a mesma frase chave "já foi importada" para o frontend ativar o toast amarelo
-            detail=f"Erro de Integridade: Esta nota fiscal já foi importada e consta no banco de dados."
-        )
+    except IntegrityError as e:
+        error_msg = str(e.orig) if hasattr(e, 'orig') else str(e)
+        if "chave_acesso" in error_msg:
+             raise HTTPException(400, detail="Esta Nota Fiscal já foi lançada no sistema.")
+        raise HTTPException(400, detail=f"Erro de duplicidade (EAN ou Chave): {error_msg}")
 
     except Exception as e:
         print(f"Erro ao confirmar NFe: {e}")
         raise HTTPException(status_code=500, detail=f"Erro técnico ao salvar: {str(e)}")
-
+        
 def _enriquecer_dados_nfe(nfe_data: dict, db: Session):
     """
     Percorre os itens da nota e verifica se já existem no banco.

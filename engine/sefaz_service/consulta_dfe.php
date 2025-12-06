@@ -9,59 +9,64 @@ require __DIR__ . '/vendor/autoload.php';
 use NFePHP\NFe\Tools;
 use NFePHP\Common\Certificate;
 
-$storageDir = __DIR__ . "/storage";
-if (!is_dir($storageDir)) {
-    mkdir($storageDir, 0777, true);
-}
-
-$tmp = sys_get_temp_dir();
-if (!is_dir($tmp)) {
-    mkdir($tmp, 0777, true);
-}
-
-$chave     = $argv[1] ?? null;
-$pfxPath   = $argv[2] ?? null;
-$senha     = $argv[3] ?? null;
-$cnpj      = $argv[4] ?? null;
-$homolog   = ($argv[5] ?? "1") === "1";
+$chave   = $argv[1] ?? null;
+$pfxPath = $argv[2] ?? null;
+$senha   = $argv[3] ?? null;
+$cnpj    = $argv[4] ?? null;
+$prod    = ($argv[5] ?? "1") === "1";
 
 try {
-
     if (!$chave || !$pfxPath || !$senha || !$cnpj) {
         throw new Exception("Parâmetros insuficientes");
     }
 
-    $certContent = @file_get_contents($pfxPath);
-    if (!$certContent) {
-        throw new Exception("Falha ao ler certificado PFX");
+    if (!file_exists($pfxPath)) {
+        throw new Exception("Certificado PFX não encontrado no caminho recebido.");
     }
 
+    $certContent = @file_get_contents($pfxPath);
+    if (!$certContent) {
+        throw new Exception("Falha ao ler certificado PFX.");
+    }
+
+    // Lê certificado
     $certificate = Certificate::readPfx($certContent, $senha);
 
+    // Config NFePHP
     $config = [
         "atualizacao" => "2024-01-01",
-        "tpAmb" => $homolog ? 2 : 1,
+        "tpAmb" => $prod ? 1 : 2,
         "razaosocial" => "EMPRESA",
         "cnpj" => $cnpj,
         "siglaUF" => "PR",
         "schemes" => "PL_009_V4",
         "versao" => "4.00",
         "tokenIBPT" => "",
-        "pathCerts" => $storageDir
+        "pathCerts" => __DIR__ . "/storage"
     ];
 
+    if (!is_dir($config["pathCerts"])) {
+        mkdir($config["pathCerts"], 0777, true);
+    }
+
     $tools = new Tools(json_encode($config), $certificate);
+
+    // Consulta por chave
     $response = $tools->sefazConsultaChave($chave);
 
     echo json_encode([
+        "status" => "ok",
         "raw_xml" => $response,
         "xml_base64" => base64_encode($response)
     ]);
     exit(0);
 
 } catch (Exception $e) {
+
     echo json_encode([
-        "error" => $e->getMessage()
+        "status" => "error",
+        "error" => $e->getMessage(),
+        "trace" => $e->getTraceAsString()
     ]);
     exit(1);
 }
