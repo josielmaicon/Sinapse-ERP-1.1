@@ -1,5 +1,5 @@
 from typing import Optional
-from pydantic import BaseModel
+from pydantic import BaseModel, EmailStr
 
 class UsuarioBase(BaseModel):
     nome: str
@@ -27,3 +27,13 @@ class UsuarioPerformance(UsuarioBase):
 
     class Config:
         from_attributes = True
+class LoginRequest(BaseModel):
+    email: EmailStr
+    senha: str
+
+# Schema para resposta do Token
+class Token(BaseModel):
+    access_token: str
+    token_type: str
+    nome_usuario: str
+    funcao: str

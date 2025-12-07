@@ -22,6 +22,8 @@ import { ManualItemModal } from "@/components/pontovenda/ModalDiverso"
 import { RecebimentoModal } from "@/components/pontovenda/ModalRecebimento"
 import { StoreLogo } from "@/components/storelogo"
 import { CashManagementModal } from "@/components/pdvs/modalGestaoMonetaria"
+import { useHardwareScanner } from "@/lib/useHardwareScanner"
+import { WeightDetectedModal } from "@/components/pontovenda/pesodetectado"
 
 const API_URL = "http://localhost:8000"; 
 
@@ -41,7 +43,7 @@ export default function PontoVenda() {
   const [isAddingItem, setIsAddingItem] = React.useState(false); 
   const [activeSale, setActiveSale] = React.useState(null);
   const navigate = useNavigate();
-  
+  const [pesoPendente, setPesoPendente] = React.useState(null);  
   const [isModalOpen, setIsModalOpen] = React.useState(false);
   const [operatorData, setOperatorData] = React.useState([]);
   const [isLoadingOperators, setIsLoadingOperators] = React.useState(false);
@@ -367,11 +369,9 @@ const handleOpenCloseModalToggle = async () => {
       };
   }, []);
   
-const handleBarcodeSubmit = async (codigo) => {
+const handleBarcodeSubmit = async (codigo, qtdEspecifica = null) => {
     setIsAddingItem(true);
-    
-    // Pega a quantidade do estado (Ex: 1, ou 15 do F4)
-    const quantityToUse = nextQuantity; 
+    const quantityToUse = qtdEspecifica !== null ? qtdEspecifica : nextQuantity;
 
     try {
       if (!pdvSession || !pdvSession.operador_atual || !pdvSession.operador_atual.id) {
@@ -379,14 +379,14 @@ const handleBarcodeSubmit = async (codigo) => {
         throw new Error("Operador não encontrado na sessão.");
       }
 
-      const response = await fetch(`${API_URL}/vendas/adicionar-item-smart`, {
+    const response = await fetch(`${API_URL}/vendas/adicionar-item-smart`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           codigo_barras: codigo,
           pdv_id: pdvSession.id,
           operador_id: pdvSession.operador_atual.id,
-          quantidade: quantityToUse,
+          quantidade: quantityToUse, // Envia float ou int
         }),
       });
 
@@ -396,20 +396,43 @@ const handleBarcodeSubmit = async (codigo) => {
         throw new Error(updatedSale.detail || "Erro ao adicionar item.");
       }
       setActiveSale(updatedSale);
+      
+      // SUCESSO: Limpa gatilhos
+      if (pesoPendente) setPesoPendente(null);
+      if (nextQuantity !== 1) setNextQuantity(1);
 
     } catch (error) {
-      console.error("Erro em handleBarcodeSubmit:", error);
+      console.error("Erro:", error);
       toast.error(error.message);
     } finally {
       setIsAddingItem(false);
       setBarcodeBuffer("");
-      
-      if (quantityToUse !== 1) {
-          toast.info(`Quantidade ${quantityToUse} aplicada. Próxima Qtd. resetada para 1.`);
-      }
-      setNextQuantity(1); 
     }
   };
+
+  const onWeightDetected = (peso) => {
+    setPesoPendente(peso);
+    toast.info(`Peso Recebido: ${peso}kg`, {
+        description: "Bipe o produto correspondente agora.",
+        duration: 5000
+    });
+  };
+
+  const onBarcodeDetected = (codigo) => {
+    if (pesoPendente) {
+        // MODO PESAGEM: Vende com o peso que estava esperando
+        handleBarcodeSubmit(codigo, pesoPendente);
+    } else {
+        // MODO NORMAL: Vende com a quantidade do modal (ou 1)
+        handleBarcodeSubmit(codigo, null); // Passa null para usar o nextQuantity
+    }
+  };
+
+  // --- 3. ATIVA O HOOK ---
+  useHardwareScanner({
+    onWeightDetected,
+    onBarcodeDetected
+  });
 
   React.useEffect(() => {
     if (isAddingItem) setSaleStatus("loading");
@@ -582,6 +605,10 @@ const handleBarcodeSubmit = async (codigo) => {
     onOpenChange={setIsCashModalOpen}
     pdvSession={pdvSession}
     onSuccess={() => fetchPdvSession(false)}
+    />
+    <WeightDetectedModal 
+    weight={pesoPendente} 
+    onCancel={() => {setPesoPendente(null);toast("Modo pesagem cancelado.");}}
     />
     </>
   );

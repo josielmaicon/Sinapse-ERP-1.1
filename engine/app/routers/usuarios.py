@@ -1,12 +1,13 @@
 # app/routers/usuarios.py
 
 from typing import List
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from .. import models, schemas
 from ..database import get_db
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
+from ..utils.security import get_password_hash, verify_password, criar_token_acesso, ACCESS_TOKEN_EXPIRE_MINUTES
 
 router = APIRouter(prefix="/usuarios", tags=["Usuarios"])
 
@@ -109,3 +110,43 @@ def get_operador_performance(db: Session = Depends(get_db)):
         )
 
     return resultados_performance
+
+@router.post("/auth/login", response_model=schemas.Token)
+def login(login_data: schemas.LoginRequest, db: Session = Depends(get_db)):
+    # 1. Busca o usuário pelo email
+    usuario = db.query(models.Usuario).filter(models.Usuario.email == login_data.email).first()
+
+    # 2. Verifica se existe e se a senha bate
+    if not usuario:
+        # Padrão de segurança: Não dizer se o erro é email ou senha para evitar enumeration attacks
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Credenciais inválidas",
+        )
+    
+    if not verify_password(login_data.senha, usuario.senha_hash):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Credenciais inválidas",
+        )
+
+    # 3. Verifica se está ativo
+    if usuario.status != 'ativo':
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Usuário inativo.",
+        )
+
+    # 4. Gera o Token
+    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    access_token = criar_token_acesso(
+        data={"sub": usuario.email, "funcao": usuario.funcao, "id": usuario.id},
+        expires_delta=access_token_expires
+    )
+
+    return {
+        "access_token": access_token,
+        "token_type": "bearer",
+        "nome_usuario": usuario.nome,
+        "funcao": usuario.funcao
+    }

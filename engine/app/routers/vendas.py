@@ -332,6 +332,17 @@ def adicionar_item_smart(request: schemas.AdicionarItemSmartRequest, db: Session
     if not produto:
         raise HTTPException(status_code=404, detail=f"Produto com código '{request.codigo_barras}' não encontrado.")
 
+    if request.quantidade % 1 != 0: 
+        unidades_fracionaveis = ['KG', 'MT', 'LT', 'M', 'L'] 
+        
+        unidade_prod = (produto.unidade_medida or "UN").upper()
+
+        if unidade_prod not in unidades_fracionaveis:
+             raise HTTPException(
+                status_code=400, 
+                detail=f"ERRO: O produto '{produto.nome}' é vendido por '{unidade_prod}' e não aceita quantidade quebrada ({request.quantidade})."
+            )
+
     preco_final = produto.preco_venda
     melhor_promocao_nome = None
     

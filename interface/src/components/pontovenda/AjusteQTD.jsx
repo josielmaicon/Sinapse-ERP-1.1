@@ -21,24 +21,36 @@ export function SetNextQuantityModal({
   currentNextQuantity,
   onQuantitySet,
 }) {
+  // Inicializa o valor. Se for > 0 mostra, senão 1.
   const [inputValue, setInputValue] = React.useState(
     currentNextQuantity > 0 ? String(currentNextQuantity) : "1"
   )
   const inputRef = React.useRef(null)
 
+  // Foca e seleciona o texto ao abrir o modal
   React.useEffect(() => {
     if (open) {
+      setInputValue(currentNextQuantity > 0 ? String(currentNextQuantity) : "1")
+      // Pequeno delay para garantir que o Dialog renderizou
       setTimeout(() => inputRef.current?.select(), 50)
     }
-  }, [open])
+  }, [open, currentNextQuantity])
 
   const handleConfirm = (e) => {
     e.preventDefault()
-    const quantity = parseInt(inputValue, 10)
+    
+    // 1. Sanitização: Troca vírgula por ponto (caso o usuário digite "1,5")
+    const sanitizedValue = inputValue.replace(',', '.')
+    
+    // 2. Conversão para Float (agora aceita decimais)
+    const quantity = parseFloat(sanitizedValue)
+
+    // 3. Validação
     if (isNaN(quantity) || quantity <= 0) {
-      toast.error("A quantidade deve ser um número inteiro e positivo.")
+      toast.error("A quantidade deve ser um número válido maior que zero.")
       return
     }
+
     onQuantitySet(quantity)
     onOpenChange(false)
   }
@@ -78,14 +90,15 @@ export function SetNextQuantityModal({
               ref={inputRef}
               id="next-qty"
               type="number"
-              step="1"
-              min="1"
+              // step="any" ou "0.001" permite digitar decimais (ex: 1.500)
+              step="0.001" 
+              min="0.001"
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value)}
               className={cn(
                 "bg-transparent border-none text-center text-6xl font-bold tracking-tighter outline-none",
-                "focus:ring-0 focus:outline-none w-[120px]",
-                "appearance-none [-moz-appearance:textfield]",
+                "focus:ring-0 focus:outline-none w-[180px]", // Aumentei um pouco a largura para caber decimais
+                "appearance-none [-moz-appearance:textfield]", // Remove setinhas laterais
                 "[&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
               )}
             />
