@@ -338,17 +338,24 @@ const handleOpenCloseModalToggle = async () => {
             } else { toast.warning("Caixa Fechado", { description: "Abra o caixa para realizar recebimentos." }); }
             return;
         }
-        if (e.altKey && (e.key === 's' || e.key === 'S' || e.key === 'F7')) {
-            e.preventDefault();
-            console.log("Comando de Saída detectado");
+        if (e.key === 'F10') {
+            e.preventDefault(); // Tenta impedir o "Salvar" do navegador
+            console.log("Comando de Saída detectado"); // Se isso não aparecer no console, é culpa do Electron (veja Solução 2)
 
             if (cartItems.length > 0) {
-                const confirmExit = window.confirm("Há uma venda em andamento. Se sair agora, ela será perdida. Deseja realmente sair?");
-                if (!confirmExit) return;
+                // Pequeno delay para garantir que o confirm não bloqueie a UI thread antes do render
+                setTimeout(() => {
+                    const confirmExit = window.confirm("Há uma venda em andamento. Se sair agora, ela será perdida. Deseja realmente sair?");
+                    if (confirmExit) {
+                        toast.info("Saindo do PDV...");
+                        navigate('/pdvs');
+                    }
+                }, 10);
+                return;
             }
             
             toast.info("Saindo do PDV...");
-            navigate('/pdvs'); // Garanta que 'navigate' está importado do 'useNavigate'
+            navigate('/pdvs'); 
             return;
         }
     };

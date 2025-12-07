@@ -5,7 +5,6 @@ import { NavLink, useNavigate } from "react-router-dom";
 import {
   NavigationMenu,
   NavigationMenuItem,
-  NavigationMenuLink,
   NavigationMenuList,
 } from "@/components/ui/navigation-menu";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -19,15 +18,15 @@ import {
 } from "@/components/ui/dropdown-menu";
 import Logo from "@/components/Logo";
 import { Button } from "@/components/ui/button";
-import { CircleSlash, CircleDot, Settings } from "lucide-react";
+import { CircleSlash, CircleDot, Settings, LogOut, User } from "lucide-react"; // Importei ícones para o menu
 import routes from "@/routes.jsx";
 import { cn } from "@/lib/utils";
 
+// --- Hook de Tema (Mantido igual) ---
 function useTheme() {
     const [theme, setTheme] = React.useState("light");
 
     React.useEffect(() => {
-        // Checa o tema atual no HTML ou localStorage
         const isDark = document.documentElement.classList.contains("dark");
         setTheme(isDark ? "dark" : "light");
     }, []);
@@ -51,6 +50,38 @@ function useTheme() {
 export function TopBar() {
   const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
+  
+  // 1. Estado para guardar o nome do usuário
+  const [nomeUsuario, setNomeUsuario] = React.useState("Usuário");
+
+  // 2. Efeito para carregar o nome ao iniciar o componente
+  React.useEffect(() => {
+      const nomeSalvo = localStorage.getItem("sinapse_user_name");
+      if (nomeSalvo) {
+          setNomeUsuario(nomeSalvo);
+      }
+  }, []);
+
+  // 3. Função de Logout
+  const handleLogout = () => {
+      // Limpa as credenciais
+      localStorage.removeItem("sinapse_token");
+      localStorage.removeItem("sinapse_user_name");
+      localStorage.removeItem("sinapse_user_role");
+      
+      // Redireciona para o login
+      navigate("/login");
+  };
+
+  // Função auxiliar para pegar as iniciais (Ex: Josiel Maicon -> JM)
+  const getIniciais = (nome) => {
+      return nome
+        .split(' ')
+        .map((n) => n[0])
+        .join('')
+        .substring(0, 2)
+        .toUpperCase();
+  };
 
   return (
   <header className="w-full flex h-1/13 items-center justify-between px-4 md:px-6 ">
@@ -82,27 +113,48 @@ export function TopBar() {
     </NavigationMenu>
   </div>
 
-  <div className="flex items-center gap-4">
+  <div className="flex items-center gap-2">
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <button className="flex items-center gap-2 rounded-full">
+        <button className="flex items-center gap-2 rounded-full outline-none hover:opacity-80 transition-opacity">
+          {/* Mostra o nome dinâmico */}
           <span className="hidden text-[14px] font-medium sm:inline">
-            Usuário Teste
+            {nomeUsuario}
           </span>
           <Avatar className="h-8 w-8">
-            <AvatarImage src="https://github.com/shadcn.png" alt="Avatar" />
-            <AvatarFallback>UT</AvatarFallback>
+            <AvatarImage src="" alt="Avatar" /> {/* Removi a imagem do github para usar o fallback por enquanto */}
+            <AvatarFallback className="bg-primary text-primary-foreground text-xs">
+                {getIniciais(nomeUsuario)}
+            </AvatarFallback>
           </Avatar>
         </button>
       </DropdownMenuTrigger>
+      
+      {/* Menu Simplificado conforme seu pedido */}
       <DropdownMenuContent align="end" className="w-56">
         <DropdownMenuLabel>Minha Conta</DropdownMenuLabel>
         <DropdownMenuSeparator />
-        <DropdownMenuItem>Perfil</DropdownMenuItem>
-        <DropdownMenuItem>Faturamento</DropdownMenuItem>
-        <DropdownMenuItem>Configurações</DropdownMenuItem>
+        
+        {/* Opção Perfil */}
+        <DropdownMenuItem 
+            className="cursor-pointer" 
+            onClick={() => navigate("/configuracoes/perfil")}
+        >
+            <User className="mr-2 h-4 w-4" />
+            <span>Perfil</span>
+        </DropdownMenuItem>
+        
         <DropdownMenuSeparator />
-        <DropdownMenuItem>Sair</DropdownMenuItem>
+        
+        {/* Opção Sair */}
+        <DropdownMenuItem 
+            className="cursor-pointer text-red-600 focus:text-red-600 focus:bg-red-50 dark:focus:bg-red-950/50" 
+            onClick={handleLogout}
+        >
+            <LogOut className="mr-2 h-4 w-4" />
+            <span>Sair</span>
+        </DropdownMenuItem>
+
       </DropdownMenuContent>
     </DropdownMenu>
 
@@ -121,7 +173,6 @@ export function TopBar() {
         <span className="sr-only">Alternar Tema</span>
     </Button>
 
-    {/* C. Configurações (Botão Final) */}
     <Button 
         variant="ghost" 
         size="icon" 

@@ -5,6 +5,7 @@ import Logo from "@/components/Logo";
 import { LoginForm } from "@/components/login-form";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom"; // Assumindo react-router-dom
+import { toast } from "sonner";
 
 export default function LoginPage() {
   const navigate = useNavigate();
@@ -35,8 +36,9 @@ export default function LoginPage() {
         if (data.nome_usuario) {
             localStorage.setItem("sinapse_user_name", data.nome_usuario);
         }
+        navigate("/");
+        toast.info("Seja bem vindo!");
 
-        navigate("/dashboard");
       } else {
         const errorData = await response.json();
         setErro(errorData.detail || "Falha na autenticação.");
