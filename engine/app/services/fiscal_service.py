@@ -54,23 +54,50 @@ def inicializar_nota_para_venda(venda_id: int, db: Session):
 
 def transmitir_nota(nota_id: int, db: Session):
     """
-    Motor REAL de Emissão.
+    Motor REAL de Emissão NFC-e.
+    1. Prepara dados (Empresa, Venda, Cliente).
+    2. Decide a estratégia de identificação do destinatário.
+    3. Aciona o microserviço PHP para assinatura e envio.
+    4. Processa o retorno e atualiza o banco.
     """
+    
+    # 1. Busca a Nota e Validações Iniciais
     nota = db.query(models.NotaFiscalSaida).get(nota_id)
-    if not nota: raise ValueError("Nota não encontrada")
+    if not nota: 
+        raise ValueError(f"Nota ID {nota_id} não encontrada.")
     
-    # 1. Busca Dados Reais
     venda = nota.venda
+    if not venda:
+        raise ValueError("Venda vinculada não encontrada.")
+
     empresa = db.query(models.Empresa).first()
+    if not empresa: 
+        raise ValueError("Configurações da empresa não encontradas.")
     
-    # Busca certificado
+    # Busca certificado ativo
     certificado = db.query(models.CertificadoDigital).filter_by(empresa_id=empresa.id, ativo=True).first()
     if not certificado:
-        # Fallback: Se não tiver certificado real, mantemos a simulação para não travar o dev
-        print("⚠️ Sem certificado: Rodando simulação.")
+        # Se não tiver certificado, cai no modo simulação (para não travar seu desenvolvimento)
+        print("⚠️ Sem certificado: Rodando simulação de fallback.")
         return _simular_transmissao(nota, db)
 
-    # 2. Monta o Payload JSON
+    # 2. LÓGICA DO CLIENTE (A Hierarquia da Identidade)
+    destinatario_cpf = None
+    destinatario_nome = None
+
+    if venda.cliente:
+        # Prioridade 1: Cliente Cadastrado (Crediário/Fidelidade)
+        # Remove pontuação do CPF para evitar rejeição
+        raw_cpf = venda.cliente.cpf or ""
+        destinatario_cpf = "".join(filter(str.isdigit, raw_cpf))
+        destinatario_nome = venda.cliente.nome
+    elif venda.cpf_nota:
+        # Prioridade 2: CPF Avulso na Venda (O "CPF na nota" do caixa)
+        raw_cpf = venda.cpf_nota
+        destinatario_cpf = "".join(filter(str.isdigit, raw_cpf))
+        destinatario_nome = None # Na NFC-e, se for só CPF, nome não é obrigatório (ou usa 'CONSUMIDOR')
+
+    # 3. Monta o Payload JSON para o PHP
     payload = {
         "empresa": {
             "razao_social": empresa.razao_social,
@@ -78,6 +105,7 @@ def transmitir_nota(nota_id: int, db: Session):
             "cnpj": empresa.cnpj.replace(".", "").replace("/", "").replace("-", ""),
             "ie": empresa.inscricao_estadual,
             "regime": empresa.regime_tributario,
+            # Converte ambiente: 'homologacao' -> 2, 'producao' -> 1
             "ambiente": "2" if empresa.ambiente_sefaz == 'homologacao' else "1",
             "csc_id": empresa.csc_id,
             "csc_token": empresa.csc_token
@@ -85,29 +113,39 @@ def transmitir_nota(nota_id: int, db: Session):
         "venda": {
             "id": venda.id,
             "numero_nota": nota.numero,
-            "total_produtos": venda.valor_total,
+            "total_produtos": venda.valor_total, # Ajustar se tiver lógica de desconto/frete separada
             "total_nota": venda.valor_total,
             "forma_pagamento": venda.forma_pagamento or "dinheiro",
-            "cliente_cpf": venda.cliente.cpf if venda.cliente else None,
-            "cliente_nome": venda.cliente.nome if venda.cliente else None,
+            
+            # ✅ Dados do Cliente Processados
+            "cliente_cpf": destinatario_cpf,
+            "cliente_nome": destinatario_nome,
+            
             "itens": []
         }
     }
 
+    # Processa Itens
     for item in venda.itens:
+        # Garante valores numéricos seguros
+        qtd = float(item.quantidade)
+        preco = float(item.preco_unitario_na_venda)
+        
         payload["venda"]["itens"].append({
             "codigo": str(item.produto.id),
             "descricao": item.descricao_manual or item.produto.nome,
+            # Fallback para NCM genérico se o cadastro estiver incompleto (Evita Rejeição 778)
             "ncm": item.produto.ncm or empresa.padrao_ncm or "00000000",
             "cfop": empresa.padrao_cfop_dentro,
             "csosn": empresa.padrao_csosn,
-            "unidade": "UN",
-            "quantidade": item.quantidade,
-            "valor_unitario": item.preco_unitario_na_venda,
-            "valor_total": item.quantidade * item.preco_unitario_na_venda
+            "unidade": item.produto.unidade_medida or "UN",
+            "quantidade": qtd,
+            "valor_unitario": preco,
+            "valor_total": qtd * preco
         })
 
-    # 3. Prepara Arquivos Temporários
+    # 4. Prepara Arquivos Temporários (JSON e PFX)
+    # O PFX é extraído do banco e salvo temporariamente para o PHP ler
     fd_json, path_json = tempfile.mkstemp(suffix=".json")
     with os.fdopen(fd_json, 'w') as f:
         json.dump(payload, f)
@@ -117,52 +155,103 @@ def transmitir_nota(nota_id: int, db: Session):
         f.write(certificado.arquivo_binario)
 
     try:
-        print(f"🚀 Chamando PHP para emitir Nota #{nota.numero}...")
+        print(f"🚀 [Python] Acionando PHP para emitir Nota #{nota.numero}...")
         
-        # 4. Executa PHP
+        # 5. Execução do Microserviço
         result = subprocess.run(
             [PHP_EXEC, SCRIPT_PATH, path_json, path_pfx, certificado.senha_arquivo],
-            capture_output=True, text=True, encoding='utf-8' # Encoding importante!
+            capture_output=True, 
+            text=True, 
+            encoding='utf-8',
+            # timeout=30 # Opcional: timeout de segurança para não travar a thread
         )
         
-        # Parse da Resposta
+        # Log de erro do PHP (se houver crash)
+        if result.stderr:
+            print(f"⚠️ [PHP STDERR]: {result.stderr}")
+
+        # 6. Parse da Resposta
         try:
+            # Tenta decodificar o JSON retornado pelo PHP
             resposta = json.loads(result.stdout)
         except json.JSONDecodeError:
-            print("❌ Erro JSON PHP:", result.stdout)
-            raise Exception("Resposta inválida do emissor fiscal.")
+            print("❌ Erro ao ler JSON do PHP. Saída bruta:", result.stdout)
+            # Retorna um erro amigável para o front
+            nota.status_sefaz = "Erro"
+            nota.xmotivo = "Falha interna no motor de emissão (PHP)."
+            db.add(nota)
+            db.commit()
+            return nota
 
-        # 5. Atualiza o Banco
+        # 7. Atualiza o Banco com o Resultado SEFAZ
         if resposta['status'] == 'autorizada':
             nota.status_sefaz = "Autorizada"
-            nota.cstat = str(resposta['cstat'])
-            nota.xmotivo = resposta['motivo']
-            nota.protocolo = resposta['protocolo']
-            nota.chave_acesso = resposta.get('chave', nota.chave_acesso)
+            nota.cstat = str(resposta.get('cstat', '100'))
+            nota.xmotivo = resposta.get('motivo', 'Autorizado o uso da NF-e')
+            nota.protocolo = resposta.get('protocolo')
+            nota.chave_acesso = resposta.get('chave', nota.chave_acesso) # Atualiza a chave se o PHP gerou uma nova
             nota.data_hora_autorizacao = datetime.utcnow()
-        else:
+            
+            # Salva o XML Protocolado (Base64) se disponível
+            if 'xml_protocolado' in resposta:
+                nota.xml_retorno = resposta['xml_protocolado'] 
+                
+        elif resposta['status'] == 'rejeitada':
             nota.status_sefaz = "Rejeitada"
             nota.cstat = str(resposta.get('cstat', '0'))
-            nota.xmotivo = resposta.get('motivo', 'Erro desconhecido')
+            nota.xmotivo = resposta.get('motivo', 'Rejeição desconhecida')
+            # Se o PHP devolveu o XML de envio (para debug), salvamos
+            if 'xml_envio' in resposta:
+                nota.xml_envio = resposta['xml_envio']
+                
+        else:
+            # Erros de validação local (antes de enviar) ou exceções
+            nota.status_sefaz = "Erro"
+            nota.xmotivo = resposta.get('motivo', 'Erro desconhecido durante emissão')
 
         db.add(nota)
         db.commit()
         db.refresh(nota)
+        
+        print(f"✅ Processamento concluído. Status: {nota.status_sefaz}")
+        return nota
+
+    except Exception as e:
+        print(f"❌ Erro crítico no Python: {e}")
+        # Não deixa o erro explodir para o usuário, salva o estado de erro na nota
+        nota.status_sefaz = "Erro"
+        nota.xmotivo = f"Erro sistêmico: {str(e)}"
+        db.add(nota)
+        db.commit()
         return nota
 
     finally:
+        # 8. Limpeza (Segurança)
+        # Apaga os arquivos temporários com a senha e dados
         if os.path.exists(path_json): os.remove(path_json)
         if os.path.exists(path_pfx): os.remove(path_pfx)
 
-# Função de fallback para testes sem certificado
+# --- FALLBACK DE SIMULAÇÃO ---
 def _simular_transmissao(nota, db):
+    """Usado quando não há certificado configurado"""
     import time, random
     time.sleep(1)
-    if random.choice([True, True, False]):
+    
+    # 80% de chance de sucesso simulado
+    sucesso = random.random() > 0.2
+    
+    if sucesso:
         nota.status_sefaz = "Autorizada"
-        nota.xmotivo = "Autorizado (Simulado)"
+        nota.cstat = "100"
+        nota.xmotivo = "Autorizado o uso da NF-e (SIMULADO)"
+        nota.protocolo = f"14123{random.randint(100000,999999)}"
+        nota.data_hora_autorizacao = datetime.utcnow()
     else:
         nota.status_sefaz = "Rejeitada"
-        nota.xmotivo = "Rejeição Simulada"
+        nota.cstat = "703"
+        nota.xmotivo = "Rejeição: Data-Hora de Emissão atrasada (SIMULADO)"
+    
+    db.add(nota)
     db.commit()
+    db.refresh(nota)
     return nota

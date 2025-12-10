@@ -28,6 +28,7 @@ class PdvVendaRequest(BaseModel):
     pagamentos: List[PdvPagamento]
     total_calculado: float 
     override_auth: Optional[AdminAuthRequest] = None
+    cpf_nota: Optional[str] = None
 
 class SolicitacaoBase(BaseModel):
     tipo: str

@@ -180,12 +180,14 @@ class Venda(Base):
     valor_total = Column(Float, nullable=False, default=0.0)
     data_hora = Column(DateTime, default=datetime.utcnow)
     status = Column(String(50), default="em_andamento", nullable=False) # em_andamento, concluida, cancelada
+    forma_pagamento = Column(String(50), nullable=True, default="dinheiro")
+    cpf_nota = Column(String(14), nullable=True)
     
     # Chaves Estrangeiras para conectar com o resto do sistema
     pdv_id = Column(Integer, ForeignKey("pdvs.id"))
     cliente_id = Column(Integer, ForeignKey("clientes.id"), nullable=True)
     operador_id = Column(Integer, ForeignKey("usuarios.id"))
-
+        
     # Relacionamentos (Atalhos do SQLAlchemy)
     pdv = relationship("Pdv", back_populates="vendas")
     cliente = relationship("Cliente", back_populates="vendas")
@@ -194,7 +196,6 @@ class Venda(Base):
     # Uma venda tem muitos itens. 'cascade' garante que se uma venda for deletada, seus itens também sejam.
     itens = relationship("VendaItem", back_populates="venda", cascade="all, delete-orphan")
     nota_fiscal_saida = relationship("NotaFiscalSaida", back_populates="venda", uselist=False)
-    forma_pagamento = Column(String(50), nullable=True, default="dinheiro")
 
 class VendaItem(Base):
     __tablename__ = "venda_itens"

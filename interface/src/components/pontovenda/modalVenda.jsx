@@ -18,6 +18,7 @@ import {
   User, 
   CreditCard, 
   Smartphone, 
+  UserPlus,
   Banknote, 
   X, 
   Search, 
@@ -29,6 +30,7 @@ import { CurrencyInput } from "../ui/input-monetario"
 import { Kbd } from "@/components/ui/kbd"
 import { ClientSelectionModal } from "@/components/pontovenda/ModalSelecaoCliente"
 import { LimitOverrideModal } from "./QuebraLimiteModal"
+import { Input } from "@/components/ui/input"
 
 const API_URL = "http://localhost:8000"; 
 
@@ -43,10 +45,82 @@ const getMethodIcon = (tipo) => {
   }
 };
 
+const CpfPrompt = ({ onConfirm, onSkip }) => {
+    const [cpf, setCpf] = React.useState("");
+    const inputRef = React.useRef(null);
+
+    // Foco automático ao abrir
+    React.useEffect(() => {
+        setTimeout(() => inputRef.current?.focus(), 50);
+    }, []);
+
+    const handleChange = (e) => {
+        // Aceita apenas números e limita a 14 (CPF formatado ou não)
+        const value = e.target.value.replace(/[^0-9]/g, "").slice(0, 11);
+        setCpf(value);
+    };
+
+    const handleKeyDown = (e) => {
+            // ✅ AQUI ESTÁ A CHAVE: Impede que o Enter suba para o modal global
+            e.stopPropagation(); 
+
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                if (cpf.length === 11) onConfirm(cpf);
+                else if (cpf.length === 0) onSkip(); 
+            }
+            if (e.key === 'Escape') {
+                e.preventDefault();
+                onSkip();
+            }
+        };
+
+    return (
+        <div className="flex flex-col items-center justify-center py-10 gap-6 animate-in zoom-in-95 duration-200">
+            <div className="bg-primary/10 p-4 rounded-full">
+                <UserPlus className="h-10 w-10 text-primary" />
+            </div>
+            
+            <div className="text-center space-y-1">
+                <h3 className="text-2xl font-bold tracking-tight">CPF na Nota?</h3>
+                <p className="text-muted-foreground text-sm">Digite o CPF do cliente ou prossiga sem identificar.</p>
+            </div>
+
+            <div className="w-full max-w-xs space-y-4">
+                <Input 
+                    ref={inputRef}
+                    value={cpf}
+                    onChange={handleChange}
+                    onKeyDown={handleKeyDown}
+                    placeholder="000.000.000-00"
+                    className="text-center text-2xl h-14 tracking-widest font-mono"
+                    maxLength={11}
+                />
+                
+                <div className="grid grid-cols-2 gap-3">
+                    <Button variant="outline" size="lg" onClick={onSkip} className="text-muted-foreground hover:text-foreground">
+                        Sem CPF <Kbd className="ml-2 text-xs">Esc</Kbd>
+                    </Button>
+                    <Button 
+                        size="lg" 
+                        onClick={() => onConfirm(cpf)} 
+                        disabled={cpf.length !== 11}
+                        className={cn(cpf.length === 11 ? "animate-pulse" : "")}
+                    >
+                        Confirmar <Kbd className="ml-2 text-xs">Enter</Kbd>
+                    </Button>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+
 export function PaymentModal({ open, onOpenChange, cartItems, pdvSession, onSaleSuccess, activeSale }) {
   // --- ESTADOS DE DADOS ---
   const [availableMethods, setAvailableMethods] = React.useState([]); // Lista de métodos vindos da API
   const [selectedMethodId, setSelectedMethodId] = React.useState(null); // ID do método selecionado (aba atual)
+  const [step, setStep] = React.useState('cpf');
 
   // --- ESTADOS DE CONTROLE ---
   const [isLoading, setIsLoading] = React.useState(false);
@@ -54,6 +128,7 @@ export function PaymentModal({ open, onOpenChange, cartItems, pdvSession, onSale
   const [isClientModalOpen, setIsClientModalOpen] = React.useState(false);
   
   // --- ESTADOS DO INPUT E PAGAMENTOS ---
+  const [cpfNota, setCpfNota] = React.useState("");
   const [currentInputValue, setCurrentInputValue] = React.useState(0); 
   const [paymentsList, setPaymentsList] = React.useState([]); 
   const [selectedClient, setSelectedClient] = React.useState(null); 
@@ -64,6 +139,9 @@ export function PaymentModal({ open, onOpenChange, cartItems, pdvSession, onSale
   const [isAwaitingOverride, setIsAwaitingOverride] = React.useState(false);
 
   const inputRef = React.useRef(null);
+  const currentMethod = React.useMemo(() => 
+      availableMethods.find(m => String(m.id) === selectedMethodId) || {}
+  , [availableMethods, selectedMethodId]);
 
   // --- MEMOS E CÁLCULOS ---
 
@@ -139,7 +217,37 @@ export function PaymentModal({ open, onOpenChange, cartItems, pdvSession, onSale
     }
   }, [open, isClientModalOpen, isOverrideModalOpen, selectedMethodId, totalPago, valorRestante]);
 
-  // --- LÓGICA DE AÇÕES ---
+const resetModalState = React.useCallback(() => {
+      setStep('cpf'); // Força etapa 1
+      setCpfNota(null);
+      setErrorMessage("");
+      setPaymentsList([]);
+      setIsAwaitingOverride(false);
+      setSelectedClient(null);
+      
+      const restante = parseFloat(totalVenda.toFixed(2)); // Usa totalVenda aqui pois paymentsList foi zerada
+      setCurrentInputValue(restante > 0 ? restante : 0);
+  }, [totalVenda]);
+
+  // ✅ 2. EFEITO DE ABERTURA (Garante o Reset sempre que 'open' virar true)
+  React.useEffect(() => {
+    if (open) {
+        // Limpa tudo ao abrir
+        resetModalState();
+
+        // Busca métodos atualizados
+        fetch(`${API_URL}/configuracoes/financeiro/metodos`)
+        .then(res => res.json())
+        .then(data => {
+            const ativos = data.filter(m => m.ativo);
+            setAvailableMethods(ativos);
+            // Seleciona dinheiro por padrão
+            const defaultMethod = ativos.find(m => m.tipo === 'dinheiro' || m.tipo === 'especie') || ativos[0];
+            if (defaultMethod) setSelectedMethodId(String(defaultMethod.id));
+        })
+        .catch(err => console.error("Erro ao carregar métodos:", err));
+    }
+  }, [open, resetModalState]);
 
   const handleRemovePayment = (index) => {
     setPaymentsList(prev => prev.filter((_, i) => i !== index));
@@ -188,6 +296,24 @@ export function PaymentModal({ open, onOpenChange, cartItems, pdvSession, onSale
     };
     
     setPaymentsList(prev => [...prev, newPayment]);
+  };
+
+    const handleCpfConfirm = (cpf) => {
+      setCpfNota(cpf);
+      setStep('payment'); // Avança para pagamento
+  };
+
+    const handleCpfSkip = () => {
+      setCpfNota(null);
+      setStep('payment'); // Avança sem CPF
+  };
+
+const handleOnOpenChange = (isOpen) => {
+      if (isLoading) return; 
+      if (!isOpen) {
+          resetModalState(); // Limpa ao fechar manualmente também
+      }
+      onOpenChange(isOpen);
   };
 
   const handleConfirmSale = React.useCallback(async (adminPassword = null) => {
@@ -247,9 +373,10 @@ export function PaymentModal({ open, onOpenChange, cartItems, pdvSession, onSale
         })),
         
         total_calculado: totalVenda,
-        override_auth: adminPassword ? { admin_senha: adminPassword } : null
+        override_auth: adminPassword ? { admin_senha: adminPassword } : null,
+        cpf_nota: cpfNota 
     };
-    
+
     try {
         const response = await fetch(`${API_URL}/vendas/finalizar`, {
             method: 'POST',
@@ -328,56 +455,45 @@ export function PaymentModal({ open, onOpenChange, cartItems, pdvSession, onSale
       };
   }, [selectedMethod, selectedClient, currentInputValue, valorRestante, isLoading, handleAddPayment, handleConfirmSale]);
 
-  // --- ESCUTAR TECLADO (HOTKEYS DINÂMICAS) ---
-  React.useEffect(() => {
+React.useEffect(() => {
     const handleKeyDown = (e) => {
-      // Guards: Não executar atalhos se modais secundários estiverem abertos ou carregando
+      // ✅ 1. GUARDA ABSOLUTA: Se não for etapa de pagamento, o pai fica SURDO.
+      // Isso impede que o ESC do CPF feche o modal inteiro ou o Enter finalize a venda.
+      if (step !== 'payment') return;
+      
+      // ✅ 2. GUARDAS DE OUTROS MODAIS
       if (!open || isLoading || isClientModalOpen || isOverrideModalOpen) return; 
 
-      const pressedKey = e.key.toUpperCase();
-      
-      // 1. Atalhos Dinâmicos de Métodos (F5, F6, etc, definidos no Banco)
-      const methodMatch = availableMethods.find(m => 
-        m.hotkey && m.hotkey.toUpperCase() === pressedKey
-      );
+      // --- Daqui para baixo, lógica normal de pagamento ---
 
-      if (methodMatch) {
-        e.preventDefault();
-        setSelectedMethodId(String(methodMatch.id));
-        return;
-      }
-      
-      // 2. Atalho de Override (F8) - Se estiver aguardando liberação
-      if (pressedKey === 'F8' && isAwaitingOverride) { 
+      const methodWithHotkey = availableMethods.find(m => m.hotkey === e.key);
+      if (methodWithHotkey) {
           e.preventDefault();
-          setIsOverrideModalOpen(true);
+          if (methodWithHotkey.tipo === 'crediario' && isAwaitingOverride) {
+              setIsOverrideModalOpen(true);
+              setIsAwaitingOverride(false);
+              return;
+          }
+          setSelectedMethodId(String(methodWithHotkey.id));
           return;
       }
 
-      // 3. Fechar Modal
-      if (e.key === 'Escape') { 
-          e.preventDefault(); 
-          onOpenChange(false); 
-          return;
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        handleOnOpenChange(false); // Só aqui o ESC fecha o modal de venda
       }
       
-      // 4. Ação Principal (Enter ou F1)
-      // Normaliza para comparar corretamente
-      const isMainHotkey = e.key.toLowerCase() === mainButtonConfig.hotkey?.toLowerCase();
-      const isEnterAlias = e.key === 'Enter' && (mainButtonConfig.hotkey === 'F1' || mainButtonConfig.hotkey === 'Enter');
-
-      if (isMainHotkey || isEnterAlias) {
+      if (e.key === 'Enter' || e.key === 'F1') {
          e.preventDefault();
-         if (!mainButtonConfig.disabled) {
-             mainButtonConfig.action();
-         }
+         handlePrimaryAction();
       }
     };
 
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  
-  }, [open, isLoading, mainButtonConfig, isAwaitingOverride, availableMethods, isClientModalOpen, isOverrideModalOpen, onOpenChange]);
+    
+    // As dependências garantem que o listener se atualize quando o 'step' mudar
+  }, [open, step, isLoading, isClientModalOpen, isOverrideModalOpen, availableMethods, isAwaitingOverride, currentInputValue, selectedMethodId]);
 
   // --- SUB-COMPONENTE DE STATUS DO CREDIÁRIO ---
   const CrediarioStatus = ({ client, onRemove }) => {
@@ -427,195 +543,117 @@ export function PaymentModal({ open, onOpenChange, cartItems, pdvSession, onSale
       );
   };
 
+    const handlePrimaryAction = () => {
+      if (currentMethod.tipo === 'crediario' && !selectedClient) { setIsClientModalOpen(true); return; }
+      const valorInput = parseFloat(currentInputValue) || 0;
+      if (valorInput < (valorRestante - 0.001)) { handleAddPayment(); } 
+      else { handleConfirmSale(); }
+  };
+
   return (
     <>
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={handleOnOpenChange}>
       <DialogContent className="sm:max-w-lg p-0" onOpenAutoFocus={(e) => e.preventDefault()}>
         
-        {/* CABEÇALHO DO MODAL */}
-        <DialogHeader className="p-6 pb-2">
-          <DialogTitle className="text-2xl">Finalizar Venda</DialogTitle>
-          <div className="flex justify-between items-baseline pt-2">
-             <DialogDescription className="text-lg">Total da Venda:</DialogDescription>
-             <p className="text-2xl font-bold text-muted-foreground">
-                 {totalVenda.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-             </p>
-          </div>
-          <div className={cn(
-             "flex justify-between items-baseline",
-             valorRestante <= 0 && "text-green-600" 
-          )}>
-             <DialogDescription className="text-lg font-semibold">
-                {valorRestante <= 0 ? "Troco:" : "Restante:"}
-             </DialogDescription>
-             <p className="text-4xl font-bold">
-                 {Math.abs(valorRestante).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-             </p>
-          </div>
-        </DialogHeader>
-
-        {/* LISTA DE PAGAMENTOS REGISTRADOS */}
-        {paymentsList.length > 0 && (
-            <div className="px-6 space-y-2">
-                <Label>Pagamentos Registrados:</Label>
-                <div className="space-y-1 max-h-24 overflow-y-auto p-2 bg-muted rounded-md custom-scrollbar">
-                    {paymentsList.map((p, index) => (
-                        <div key={index} className="flex justify-between items-center text-sm animate-in fade-in slide-in-from-left-2">
-                            <div className="flex items-center gap-2">
-                                {/* Ícone baseado no tipo */}
-                                {getMethodIcon(p.tipo)}
-                                
-                                <span className="capitalize font-medium">{p.nome_exibicao}</span>
-                                {p.cliente_nome && <span className="text-xs text-muted-foreground">({p.cliente_nome})</span>}
-                            </div>
-                            <div className="flex items-center gap-2">
-                                <span className="font-mono">{p.valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
-                                <Button variant="ghost" size="icon" className="h-6 w-6 hover:bg-destructive/10 hover:text-destructive" onClick={() => handleRemovePayment(index)}>
-                                    <X className="h-4 w-4" />
-                                </Button>
-                            </div>
-                        </div>
-                    ))}
-                </div>
-            </div>
-        )}
-
-        <div className="px-6">
-            {/* ABAS DINÂMICAS */}
-            {/* O value da Tab é controlado pelo selectedMethodId (string) */}
-            <Tabs value={String(selectedMethodId || "")} onValueChange={setSelectedMethodId} className="w-full">
-                
-                {/* Lista de Abas gerada dinamicamente */}
-                <TabsList 
-                    className="w-full grid h-auto p-1 bg-muted/50" 
-                    style={{ 
-                        gridTemplateColumns: `repeat(${Math.max(1, availableMethods.length)}, minmax(0, 1fr))` 
-                    }}
-                >
-                    {availableMethods.map((method) => (
-                        <TabsTrigger 
-                            key={method.id} 
-                            value={String(method.id)}
-                            className="flex flex-col sm:flex-row items-center justify-center gap-1 py-2 sm:py-1.5"
-                        >
-                            <span className="truncate text-xs sm:text-sm">{method.nome}</span>
-                            {method.hotkey && (
-                                <Kbd className="text-[10px] h-5 px-1 bg-background/50 text-muted-foreground font-normal">
-                                    {method.hotkey}
-                                </Kbd>
-                            )}
-                        </TabsTrigger>
-                    ))}
-                </TabsList>
-                
-                <div className="space-y-4 py-6">
-                    {/* Input de Valor */}
-                    <div className="space-y-2">
-                        <Label htmlFor="valor-pagamento" className="text-lg flex justify-between items-center">
-                            <span>
-                                {selectedMethod?.tipo === 'crediario' ? 'Valor a Lançar' : `Valor (${selectedMethod?.nome || '...'})`}
+        {/* ✅ RENDERIZAÇÃO CONDICIONAL */}
+        {step === 'cpf' ? (
+            <CpfPrompt onConfirm={handleCpfConfirm} onSkip={handleCpfSkip} />
+        ) : (
+            // Fragmento envolvendo toda a UI de Pagamento
+            <> 
+                <DialogHeader className="p-6 pb-2">
+                    <DialogTitle className="text-2xl">Finalizar Venda</DialogTitle>
+                    <div className="flex justify-between items-baseline pt-2">
+                        <DialogDescription className="text-lg">Total da Venda:</DialogDescription>
+                        <p className="text-2xl font-bold text-muted-foreground">{totalVenda.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
+                    </div>
+                    {cpfNota && (
+                        <div className="flex justify-end mt-1 animate-in fade-in">
+                            <span className="text-xs bg-muted px-2 py-1 rounded text-muted-foreground font-mono flex items-center gap-1">
+                                <User className="h-3 w-3" /> CPF: {cpfNota}
                             </span>
-                            {selectedMethod?.taxa > 0 && (
-                                <span className="text-xs text-amber-600 bg-amber-100 px-2 py-0.5 rounded-full">
-                                    Taxa: {selectedMethod.taxa}%
-                                </span>
-                            )}
-                        </Label>
-                        <CurrencyInput 
-                            ref={inputRef}
-                            id="valor-pagamento"
-                            className="text-4xl h-16 p-4 text-right font-mono tracking-tight"
-                            value={currentInputValue}
-                            onChange={setCurrentInputValue} 
-                            onKeyDown={(e) => {
-                               if (e.key === 'Enter') {
-                                   e.preventDefault();
-                                   e.stopPropagation();
-                                   if (!mainButtonConfig.disabled) {
-                                       mainButtonConfig.action();
-                                   }
-                               }
-                            }}
-                            placeholder="R$ 0,00"
-                            disabled={isLoading}
-                        />
+                        </div>
+                    )}
+                    <div className={cn("flex justify-between items-baseline", valorRestante <= 0 && "text-green-600")}>
+                        <DialogDescription className="text-lg font-semibold">{valorRestante <= 0 ? "Troco:" : "Restante:"}</DialogDescription>
+                        <p className="text-4xl font-bold">{Math.abs(valorRestante).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
                     </div>
+                </DialogHeader>
 
-                    {/* Conteúdo Específico por TIPO (Renderização Condicional) */}
-                    <div className="min-h-[20px]">
-                        {selectedMethod?.tipo === 'crediario' && (
-                           <CrediarioStatus 
-                                client={selectedClient} 
-                                onRemove={() => setSelectedClient(null)}
-                           />
-                        )}
+                {paymentsList.length > 0 && (
+                    <div className="px-6 space-y-2">
+                        <Label>Pagamentos Registrados:</Label>
+                        <div className="space-y-1 max-h-24 overflow-y-auto p-2 bg-muted rounded-md">
+                            {paymentsList.map((p, index) => (
+                                <div key={index} className="flex justify-between items-center text-sm">
+                                    <div className="flex items-center gap-2">
+                                        <span className="capitalize font-semibold">{p.nome_exibicao || p.tipo}</span>
+                                        {p.cliente_nome && <span className="text-xs text-muted-foreground">({p.cliente_nome})</span>}
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <span>{p.valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
+                                        <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setPaymentsList(prev => prev.filter((_, i) => i !== index))}><X className="h-4 w-4 text-destructive" /></Button>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
+
+                <div className="px-6">
+                    <Tabs value={String(selectedMethodId || "")} onValueChange={setSelectedMethodId} className="w-full">
+                        <TabsList className="grid w-full grid-cols-4 mb-4 h-auto flex-wrap">
+                            {availableMethods.map(method => (
+                                <TabsTrigger key={method.id} value={String(method.id)} className="flex gap-1 items-center justify-center">
+                                    {getMethodIcon(method.tipo)}
+                                    <span className="ml-1">{method.nome}</span>
+                                    {method.hotkey && <Kbd className="ml-1">{method.hotkey}</Kbd>}
+                                </TabsTrigger>
+                            ))}
+                        </TabsList>
                         
-                        {selectedMethod?.tipo === 'pix' && (
-                             <div className="flex items-center justify-center gap-2 text-muted-foreground text-sm opacity-70">
-                                 <QrCode className="h-4 w-4" />
-                                 <span>QR Code será gerado na tela do cliente</span>
-                             </div>
-                        )}
-                    </div>
+                        <div className="space-y-2 py-4">
+                            <Label htmlFor="valor-pagamento" className="text-lg">
+                                {currentMethod.tipo === 'crediario' ? 'Valor a Lançar' : `Valor (${currentMethod.nome || ''})`}
+                            </Label>
+                            <CurrencyInput ref={inputRef} id="valor-pagamento" className="text-4xl h-16 p-4 text-right font-mono" value={currentInputValue} onChange={setCurrentInputValue} 
+                                onKeyDown={(e) => { if (e.key === 'Enter' && !isClientModalOpen && !isOverrideModalOpen) { e.preventDefault(); e.stopPropagation(); handlePrimaryAction(); } }}
+                                placeholder="R$ 0,00" disabled={isLoading || (valorRestante <= 0 && currentMethod.tipo !== 'outros')} />
+                        </div>
+                        
+                        {availableMethods.map(method => (
+                            <TabsContent key={method.id} value={String(method.id)}>
+                                {method.tipo === 'crediario' ? (
+                                    <CrediarioStatus selectedClient={selectedClient} onRemoveClient={() => setSelectedClient(null)} />
+                                ) : (method.tipo !== 'dinheiro' && method.tipo !== 'especie') ? (
+                                    <PlaceholderPayment method={method} onConfirm={() => { setCurrentInputValue(valorRestante); setTimeout(handleAddPayment, 0); }} />
+                                ) : null}
+                            </TabsContent>
+                        ))}
+                    </Tabs>
                 </div>
-            </Tabs>
-        </div>
+                
+                {errorMessage && ( <div className="px-6 pb-2"><p className="text-sm text-destructive text-center">{errorMessage}</p></div> )}
 
-        {/* MENSAGEM DE ERRO */}
-        {errorMessage && (
-             <div className="px-6 pb-4 animate-in slide-in-from-top-2">
-                 <div className="bg-destructive/10 border border-destructive/20 p-3 rounded-md text-center">
-                     <p className="text-sm text-destructive font-medium">{errorMessage}</p>
-                 </div>
-             </div>
-         )}
-        
-        {/* RODAPÉ E BOTÕES DE AÇÃO */}
-        <DialogFooter className="p-6 pt-2 bg-muted/50 rounded-b-lg">
-          <Button variant="outline" size="lg" disabled={isLoading} onClick={() => handleOnOpenChange(false)}>
-            Cancelar <Kbd className="ml-2">ESC</Kbd>
-          </Button>
-          
-          <Button 
-             type="button" 
-             size="lg" 
-             onClick={mainButtonConfig.action} 
-             disabled={mainButtonConfig.disabled} 
-             className="min-w-[200px]" // Garante um tamanho mínimo para não pular muito
-          >
-            
-              {isLoading ? (
-                  <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-              ) : (
-                  mainButtonConfig.icon
-              )}
-              {mainButtonConfig.text}
-              {mainButtonConfig.hotkey && (
-                  <Kbd className="ml-2 bg-primary-foreground/20 text-primary-foreground border-transparent">
-                      {mainButtonConfig.hotkey}
-                  </Kbd>
-              )}
-          </Button>
-        </DialogFooter>
+                <DialogFooter className="p-6 pt-2 bg-muted/50 rounded-b-lg">
+                  <Button variant="outline" size="lg" disabled={isLoading} onClick={() => handleOnOpenChange(false)}>Cancelar <Kbd className="ml-2">ESC</Kbd></Button>
+                  <Button 
+                     type="button" size="lg" onClick={handlePrimaryAction} 
+                     disabled={mainButtonConfig.disabled} 
+                     className="min-w-[200px]"
+                  >
+                     {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : mainButtonConfig.icon}
+                     {mainButtonConfig.text}
+                     <Kbd className="ml-2">{mainButtonConfig.hotkey}</Kbd>
+                 </Button>
+                </DialogFooter>
+            </>
+        )}
       </DialogContent>
     </Dialog>
     
-    <ClientSelectionModal 
-        open={isClientModalOpen}
-        onOpenChange={setIsClientModalOpen}
-        onClientSelect={(client) => {
-            setSelectedClient(client);
-            // Retorna o foco para o input após selecionar
-            setTimeout(() => inputRef.current?.focus(), 150);
-          }}
-      />
-      
-    <LimitOverrideModal
-        open={isOverrideModalOpen}
-        onOpenChange={setIsOverrideModalOpen}
-        message={overrideMessage}
-        onConfirmOverride={handleOverrideConfirm}
-    />
+    <ClientSelectionModal open={isClientModalOpen} onOpenChange={setIsClientModalOpen} onClientSelect={(client) => { setSelectedClient(client); setTimeout(() => inputRef.current?.focus(), 100); }} />
+    <LimitOverrideModal open={isOverrideModalOpen} onOpenChange={setIsOverrideModalOpen} message={overrideMessage} onConfirmOverride={handleOverrideConfirm} />
     </>
   )
 }
