@@ -102,6 +102,7 @@ def get_operador_performance(db: Session = Depends(get_db)):
                 nome=usuario.nome,
                 funcao=usuario.funcao,
                 status=usuario.status,
+                email=usuario.email,
                 total_vendas=vendas,
                 faturamento_total=faturamento,
                 ticket_medio=ticket_medio,

@@ -17,18 +17,24 @@ router = APIRouter(prefix="/vendas", tags=["Vendas"])
 def get_resumo_diario_dinamico(db: Session = Depends(get_db)):
     """
     Retorna o faturamento agrupado por dia e por PDV.
+    (Versão PostgreSQL Compatible)
     """
+    
+    campo_data = cast(models.Venda.data_hora, Date).label("sale_date")
+
     resultado_query = (
         db.query(
-            func.date(models.Venda.data_hora).label("sale_date"),
+            campo_data,
             models.Pdv.id.label("pdv_id"),
             models.Pdv.nome.label("pdv_name"),
             func.sum(models.Venda.valor_total).label("daily_total"),
         )
         .join(models.Pdv, models.Venda.pdv_id == models.Pdv.id)
         .filter(models.Venda.status == "concluida")
-        .group_by("sale_date", "pdv_id", "pdv_name")
-        .order_by("sale_date")
+        
+        .group_by(campo_data, models.Pdv.id, models.Pdv.nome)
+        
+        .order_by(campo_data)
         .all()
     )
 
@@ -70,16 +76,30 @@ def get_top_produtos(limit: int = 5, db: Session = Depends(get_db)):
         
     return top_produtos
 
+# Certifique-se de ter esses imports no topo do arquivo app/routers/vendas.py
+from sqlalchemy import func, cast, Date # ✅ Importar cast e Date é essencial para Postgres
+
 @router.get("/resumo-hoje-por-hora", response_model=List[schemas.ResumoPorHora])
 def get_resumo_hoje_por_hora(db: Session = Depends(get_db)):
     """
     Retorna o faturamento de HOJE, agrupado por hora e por PDV.
+    (Versão Compatível com PostgreSQL)
     """
     today = date.today()
     
+    # ✅ 1. CORREÇÃO: Formatação de Hora
+    # SQLite: func.strftime('%H:00', ...)
+    # Postgres: func.to_char(..., 'HH24:00')
+    campo_hora = func.to_char(models.Venda.data_hora, 'HH24:00').label("sale_hour")
+    
+    # ✅ 2. CORREÇÃO: Comparação de Data
+    # SQLite: func.date(...)
+    # Postgres: cast(..., Date)
+    data_venda_date = cast(models.Venda.data_hora, Date)
+
     resultado_query = (
         db.query(
-            func.strftime('%H:00', models.Venda.data_hora).label("sale_hour"),
+            campo_hora, # Usa a expressão definida acima
             models.Pdv.id.label("pdv_id"),
             models.Pdv.nome.label("pdv_name"),
             func.sum(models.Venda.valor_total).label("hourly_total"),
@@ -87,10 +107,10 @@ def get_resumo_hoje_por_hora(db: Session = Depends(get_db)):
         .join(models.Pdv, models.Venda.pdv_id == models.Pdv.id)
         .filter(
             models.Venda.status == "concluida",
-            func.date(models.Venda.data_hora) == today # Filtra apenas por HOJE
+            data_venda_date == today # ✅ Compara Date com Date (Seguro)
         )
-        .group_by("sale_hour", "pdv_id", "pdv_name")
-        .order_by("sale_hour")
+        .group_by(campo_hora, models.Pdv.id, models.Pdv.nome) # ✅ Agrupamento Explícito
+        .order_by(campo_hora)
         .all()
     )
 

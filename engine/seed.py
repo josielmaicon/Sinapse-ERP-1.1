@@ -6,7 +6,7 @@ from app.database import SessionLocal, engine
 # Garanta que todos os modelos necessários estão importados
 from app.models import (
     Base, Usuario, NotaFiscalEntrada, Fornecedor, Produto, Cliente, Pdv, 
-    Venda, VendaItem, MovimentacaoCaixa, NotaFiscalSaida, TransacaoCrediario,
+    Venda, VendaItem, MovimentacaoCaixa, Empresa, NotaFiscalSaida, TransacaoCrediario,
     ResumoDiarioEstoque, Configuracao 
 ) 
 from app.utils.security import get_password_hash, verify_password
@@ -25,6 +25,27 @@ db = SessionLocal()
 
 try:
     print("Populando o banco de dados com dados de teste...")
+
+    empresa = db.query(Empresa).filter(Empresa.id == 1).first()
+    if not empresa:
+        empresa = Empresa(
+            id=1,
+            nome_fantasia="Minha Loja Mestre",
+            razao_social="Loja do Mestre LTDA",
+            cnpj="12.345.678/0001-99",
+            cor_destaque="#3b82f6",
+            # Fiscal
+            regime_tributario="simples",
+            ambiente_sefaz="homologacao",
+            # Operacional
+            permitir_estoque_negativo=False,
+            # Financeiro
+            pix_chave_padrao="12.345.678/0001-99",
+            pix_tipo_chave="cnpj"
+        )
+        db.add(empresa)
+        db.commit() # <--- COMMIT OBRIGATÓRIO AQUI PARA O ID 1 EXISTIR
+        print("-> Configurações da Empresa criadas (ID 1).")
 
     # --- SENHAS ---
     senha_padrao_hash = get_password_hash("1234") # Para usuários comuns
@@ -218,7 +239,7 @@ try:
         for _ in range(num_compras):
             fornecedor = choice(fornecedores)
             valor = round(uniform(150.0, 1500.0), 2)
-            chave = f"NFe{randint(10**43, (10**44)-1)}"
+            chave = f"{randint(10**43, (10**44)-1)}"
             numero = randint(1000, 99999)
 
             nota_entrada = NotaFiscalEntrada(

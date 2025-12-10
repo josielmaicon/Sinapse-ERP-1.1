@@ -1,7 +1,7 @@
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session, joinedload,selectinload
-from sqlalchemy import func, extract, exists
+from sqlalchemy import func, extract, exists, cast, Date
 from .. import models, schemas
 from ..database import get_db
 from datetime import datetime, date, timedelta
@@ -137,46 +137,53 @@ def get_all_pdvs(status: Optional[str] = None, db: Session = Depends(get_db)):
 @router.get("/{pdv_id}/revenue", response_model=List[schemas.ChartDataPoint])
 def get_pdv_revenue_data(pdv_id: int, range: str = "today", db: Session = Depends(get_db)):
     """
-    Calcula o faturamento para um PDV específico,
-    agrupado por hora (para 'today'/'yesterday') ou por dia (para '7d').
-        """
+    Calcula o faturamento para um PDV específico.
+    Versão Otimizada para PostgreSQL (usa to_char).
+    """
         
     query = db.query(models.Venda).filter(
         models.Venda.pdv_id == pdv_id,
         models.Venda.status == "concluida"
     )
     
-    # 1. Filtra pelo intervalo de data
     end_date = datetime.utcnow()
+    
+    # --- LÓGICA DE INTERVALO E AGRUPAMENTO ---
+    
     if range == "today":
-        start_date = end_date.replace(hour=0, minute=0, second=0)
+        start_date = end_date.replace(hour=0, minute=0, second=0, microsecond=0)
         query = query.filter(models.Venda.data_hora >= start_date)
         
-        # Agrupa por hora
+        # ✅ POSTGRES: Agrupa por Hora ('HH24:00')
+        key_column = func.to_char(models.Venda.data_hora, 'HH24:00').label("key")
+        
         result = (
             query.with_entities(
-                func.strftime('%H:00', models.Venda.data_hora).label("key"),
+                key_column,
                 func.sum(models.Venda.valor_total).label("revenue")
             )
-            .group_by("key")
-            .order_by("key")
+            .group_by(key_column)
+            .order_by(key_column)
             .all()
         )
         
     elif range == "yesterday":
         yesterday = end_date - timedelta(days=1)
-        start_date = yesterday.replace(hour=0, minute=0, second=0)
-        end_date = yesterday.replace(hour=23, minute=59, second=59)
+        start_date = yesterday.replace(hour=0, minute=0, second=0, microsecond=0)
+        end_date = yesterday.replace(hour=23, minute=59, second=59, microsecond=999999)
+        
         query = query.filter(models.Venda.data_hora.between(start_date, end_date))
         
-        # Agrupa por hora
+        # ✅ POSTGRES: Agrupa por Hora ('HH24:00')
+        key_column = func.to_char(models.Venda.data_hora, 'HH24:00').label("key")
+        
         result = (
             query.with_entities(
-                func.strftime('%H:00', models.Venda.data_hora).label("key"),
+                key_column,
                 func.sum(models.Venda.valor_total).label("revenue")
             )
-            .group_by("key")
-            .order_by("key")
+            .group_by(key_column)
+            .order_by(key_column)
             .all()
         )
 
@@ -184,20 +191,24 @@ def get_pdv_revenue_data(pdv_id: int, range: str = "today", db: Session = Depend
         start_date = end_date - timedelta(days=7)
         query = query.filter(models.Venda.data_hora >= start_date)
         
-        # Agrupa por dia
+        # ✅ POSTGRES: Agrupa por Dia ('YYYY-MM-DD')
+        # Usamos to_char para garantir que a chave seja uma string pronta para o gráfico
+        key_column = func.to_char(models.Venda.data_hora, 'YYYY-MM-DD').label("key")
+        
         result = (
             query.with_entities(
-                func.date(models.Venda.data_hora).label("key"),
+                key_column,
                 func.sum(models.Venda.valor_total).label("revenue")
             )
-            .group_by("key")
-            .order_by("key")
+            .group_by(key_column)
+            .order_by(key_column)
             .all()
         )
+
     else:
         raise HTTPException(status_code=400, detail="Intervalo de tempo inválido")
             
-    # Formata para o schema (converte 'date' ou 'time' para string)
+    # Formata para o schema
     return [schemas.ChartDataPoint(key=str(row.key), revenue=float(row.revenue or 0)) for row in result]
 
 @router.get("/{pdv_id}/stats", response_model=schemas.PdvStats)

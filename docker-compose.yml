@@ -1,0 +1,30 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:15-alpine
+    container_name: sinapse_db_container
+    restart: always
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: password123
+      POSTGRES_DB: sinapse_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - sinapse_data:/var/lib/postgresql/data
+
+  pgadmin:
+    image: dpage/pgadmin4
+    container_name: sinapse_pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@sinapse.com
+      PGADMIN_DEFAULT_PASSWORD: admin
+    ports:
+      - "5050:80"
+    depends_on:
+      - db
+
+# ✅ Declaração do Volume
+volumes:
+  sinapse_data:
