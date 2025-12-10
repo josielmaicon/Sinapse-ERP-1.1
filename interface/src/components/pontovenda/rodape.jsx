@@ -22,9 +22,8 @@ export default function PosFooterStatus({ status = "livre", buffer = "" }) {
     let displayText = currentStatus.text;
     let showLoader = status === 'loading';
 
-    // ✅ Lógica da sua ideia: Se estiver digitando (ou livre com buffer), mostra o buffer!
-    if ((status === 'typing' || (status === 'livre' && buffer.length > 0))) {
-        displayText = buffer || "..."; // Mostra o buffer ou "..."
+    if (buffer && buffer.length > 0) {
+        displayText = buffer;
     }
 
     return (

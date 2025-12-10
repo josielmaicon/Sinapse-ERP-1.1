@@ -111,66 +111,60 @@ export default function PontoVenda() {
   };
 
 const handleConfirmSaleCancel = async (adminCreds) => {
-    if (!activeSale) {
-      toast.error("Erro Interno", { description: "Nenhuma venda ativa para cancelar." });
-      return;
-    }
-    setIsAddingItem(true);
-    let errorToThrow = null;
-    try {
-      const response = await fetch(`${API_URL}/vendas/${activeSale.id}/cancelar`, { 
-          method: "POST", // <-- MUDANÇA CRUCIAL
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(adminCreds) // O POST envia o body
-      });
-      
-      if (response.status === 204) {
-          setActiveSale(null);
-          setIsCancelItemModalOpen(false); // (Assume que é o modal de item que chama)
-          toast.info(`Venda #${activeSale.id} cancelada com sucesso.`);
-      
-      } else {
-          let errorData;
-          try {
-              errorData = await response.json();
-          } catch (parseError) {
-              throw new Error(`Erro ${response.status}: ${response.statusText}`);
-          }
-          
-          let detail = "Falha ao cancelar a venda.";
-          if (response.status === 422 && Array.isArray(errorData.detail)) {
-              detail = errorData.detail.map(err => `${err.loc[err.loc.length - 1]}: ${err.msg}`).join(", ");
-          } else {
-              detail = errorData.detail || "Falha ao cancelar a venda.";
-          }
+    if (!activeSale) {
+        toast.error("Erro Interno", { description: "Nenhuma venda ativa para cancelar." });
+        return;
+    }
+    setIsAddingItem(true);
+    let errorToThrow = null;
+    try {
+    const response = await fetch(`${API_URL}/vendas/${activeSale.id}/cancelar`, { 
+        method: "POST", // <-- MUDANÇA CRUCIAL
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(adminCreds) // O POST envia o body
+    });
+    if (response.status === 204) {
+        setActiveSale(null);
+        setIsCancelItemModalOpen(false); // (Assume que é o modal de item que chama)
+        toast.info(`Venda #${activeSale.id} cancelada com sucesso.`);
+    } else {
+        let errorData;
+        try {
+            errorData = await response.json();
+        } catch (parseError) {
+            throw new Error(`Erro ${response.status}: ${response.statusText}`);
+        }
 
-          if (response.status === 401) {
-              toast.warning("Autorização Falhou", { description: detail });
-          } else {
-              toast.error("Erro ao Cancelar Venda", { description: detail });
-          }
-          throw new Error(detail);
-      }
-      
-    } catch (error) {
-        console.error("Falha grave em handleConfirmSaleCancel:", error);
+        let detail = "Falha ao cancelar a venda.";
+        if (response.status === 422 && Array.isArray(errorData.detail)) {
+            detail = errorData.detail.map(err => `${err.loc[err.loc.length - 1]}: ${err.msg}`).join(", ");
+        } else {
+            detail = errorData.detail || "Falha ao cancelar a venda.";
+        }
+      
+        if (response.status === 401) {
+            toast.warning("Autorização Falhou", { description: detail });
+        } else {
+            toast.error("Erro ao Cancelar Venda", { description: detail });
+        }
+        throw new Error(detail);
+    }
+    } catch (error) {
+        console.error("Falha grave em handleConfirmSaleCancel:", error);
         
-        // ✅ CORREÇÃO 4: O bug do 'toast.isActive'
-        // 'sonner' não usa 'isActive'. Apenas mostramos o erro.
-        // Se quisermos evitar duplicatas, passamos o 'id'
-        toast.error("Erro de Comunicação", { 
+        toast.error("Erro de Comunicação", { 
             id: `err-cancel-${activeSale.id}`, // Evita toasts duplicados
             description: "Não foi possível conectar ao servidor para cancelar a venda." 
         });
-        
-        errorToThrow = error;
-    } finally {
-        setIsAddingItem(false);
-        if (errorToThrow) {
-            throw errorToThrow;
-        }
-    }
-  };
+        
+        errorToThrow = error;
+    } finally {
+        setIsAddingItem(false);
+        if (errorToThrow) {
+            throw errorToThrow;
+        }
+    }
+    };
 
   const handleItemCancelApi = async ({ item_db_id, quantidade_a_remover }, adminCreds) => {
       setIsAddingItem(true);
@@ -179,7 +173,7 @@ const handleConfirmSaleCancel = async (adminCreds) => {
       try {
           const requestBody = {
               auth: adminCreds ? adminCreds : {}, 
-              quantidade: quantidade_a_remover
+              quantidade: quantidade_a_remover
           };
           console.log(`Tentando remover item: ${item_db_id}, Qtd: ${quantidade_a_remover}, Venda: ${activeSale.id}`);
 
@@ -199,7 +193,7 @@ const handleConfirmSaleCancel = async (adminCreds) => {
                 throw new Error(`Erro de Validação: ${validationErrors}`);
               }
 
-              const detail = responseData.detail || "Erro desconhecido ao remover item.";              
+            const detail = responseData.detail || "Erro desconhecido ao remover item.";              
               if (response.status === 401) {
                   toast.warning("Autorização Falhou", { description: detail });
               } else if (response.status === 404) {
@@ -236,8 +230,8 @@ const cartItems = React.useMemo(() => {
         return ({
             id: item.id,
             name: isDiverse 
-                ? (item.descricao_manual || "Produto Diverso") // Usa a descrição do backend!
-                : item.produto.nome, // Ou o nome do produto normal
+                ? (item.descricao_manual || "Produto Diverso") // Usa a descrição do backend!
+                : item.produto.nome, // Ou o nome do produto normal
             barcode: item.produto?.codigo_barras || 'DIVERSOS', 
             quantity: item.quantidade,
             unitPrice: item.preco_unitario_na_venda,
@@ -333,7 +327,6 @@ const handleOpenCloseModalToggle = async () => {
         if (e.key === 'Enter') {e.preventDefault();if (barcodeBuffer.trim().length > 0) {handleBarcodeSubmit(barcodeBuffer.trim());}return; }
         if (e.key === 'Escape') { e.preventDefault(); setBarcodeBuffer(""); return; }
         if (e.key === 'Backspace') { e.preventDefault(); setBarcodeBuffer(prev => prev.slice(0, -1)); return; }
-        if (e.key.length === 1 && e.key.match(/^[a-zA-Z0-9-]$/)) { e.preventDefault(); setBarcodeBuffer(prev => prev + e.key); }
         if (e.key === 'F9') { e.preventDefault(); if (pdvSession?.status === 'aberto') {setIsRecebimentoModalOpen(true);
             } else { toast.warning("Caixa Fechado", { description: "Abra o caixa para realizar recebimentos." }); }
             return;
@@ -436,9 +429,27 @@ const handleBarcodeSubmit = async (codigo, qtdEspecifica = null) => {
   };
 
   // --- 3. ATIVA O HOOK ---
-  useHardwareScanner({
-    onWeightDetected,
-    onBarcodeDetected
+useHardwareScanner({
+    buffer: barcodeBuffer,       // Passa o valor atual
+    setBuffer: setBarcodeBuffer, // Passa o controle de escrita
+    
+    onBarcodeDetected: (codigo) => {
+        // Guardas de segurança
+        if (isModalOpen || isCashModalOpen || isPaymentModalOpen || isQtyModalOpen || saleToRecover || isAddingItem || isManualItemModalOpen || isCancelItemModalOpen || isRecebimentoModalOpen || isCancelSaleModalOpen) return;
+        
+        console.log("🔫 Input Processado:", codigo);
+        handleBarcodeSubmit(codigo);
+    },
+    
+    onWeightDetected: (peso) => {
+        if (isModalOpen || isCashModalOpen || isPaymentModalOpen || isQtyModalOpen || saleToRecover || isAddingItem || isManualItemModalOpen || isCancelItemModalOpen || isRecebimentoModalOpen || isCancelSaleModalOpen) return;
+
+        console.log("⚖️ Peso Detectado:", peso);
+        setNextQuantity(peso);
+        toast.info(`Peso capturado: ${peso.toFixed(3)}kg`, {
+            description: "Bipe o produto agora."
+        });
+    }
   });
 
   React.useEffect(() => {
@@ -530,7 +541,7 @@ const handleBarcodeSubmit = async (codigo, qtdEspecifica = null) => {
   return (
     <>
       <ComprasPageLayout
-    	  Header1={
+        Header1={
         <div className="w-full flex items-center justify-between px-2">
             <Logo variant="full" size="180px" />
             <StoreLogo className="h-14 w-auto max-w-[200px]" />
